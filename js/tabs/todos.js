@@ -187,8 +187,7 @@
       values: t,
       onSubmit: (v) => store.upsert('tasks', Object.assign({}, t, v, { doneAt: v.done ? t.doneAt || today() : '' })),
       onDelete: () => {
-        const rec = store.remove('tasks', id);
-        toast('Task deleted', { action: 'Undo', onAction: () => store.upsert('tasks', rec) });
+        store.remove('tasks', id);
       },
     });
   }

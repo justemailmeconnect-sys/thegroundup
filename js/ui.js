@@ -380,7 +380,7 @@
     const del = form.querySelector('[data-delete]');
     if (del) {
       del.addEventListener('click', async () => {
-        const ok = await confirmBox({ title: o.deleteTitle || 'Delete this?', message: o.deleteMessage || "This can't be undone.", confirmLabel: o.deleteLabel || 'Delete', danger: true });
+        const ok = await confirmBox({ title: o.deleteTitle || 'Delete this?', message: o.deleteMessage || 'You can undo it, and it stays in Settings → Recently deleted for 30 days.', confirmLabel: o.deleteLabel || 'Delete', danger: true });
         if (!ok) return;
         o.onDelete();
         d.close();

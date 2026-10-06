@@ -136,14 +136,13 @@
   function notABill(id) {
     const b = store.find('bills', id);
     if (!b) return;
+    let entry = null;
     store.commit((st) => {
       st.bills = st.bills.filter((x) => x.id !== id);
       if (b.foundKey) st.settings.ignoredBills = (st.settings.ignoredBills || []).concat([b.foundKey]);
+      entry = GU.trash.put(st, 'bills', b, b.name, b.foundKey ? { ignoredBill: b.foundKey } : null);
     });
-    toast('Removed ' + b.name + '. I won’t suggest it again.', { action: 'Undo', onAction: () => store.commit((st) => {
-      st.bills.push(b);
-      st.settings.ignoredBills = (st.settings.ignoredBills || []).filter((k) => k !== b.foundKey);
-    }) });
+    toast('Removed ' + b.name + '. I won’t suggest it again.', { timeout: 10000, action: 'Undo', onAction: () => GU.trash.restore(entry.id) });
   }
   /* A one-off or a cancelled bill: kept under stopped bills so it isn't suggested again. */
   function endBill(id, why) {
@@ -210,10 +209,9 @@
         save(v, b);
       },
       onDelete: () => {
-        store.remove('bills', id);
-        toast('Bill deleted');
+        store.remove('bills', id, b.name);
       },
-      deleteMessage: 'This removes the bill and its payment history. Transactions already in your bank list are kept.',
+      deleteMessage: 'This removes the bill and its payment history. Transactions already in your bank list are kept. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
     });
   }
 

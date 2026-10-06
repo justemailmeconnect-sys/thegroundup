@@ -142,8 +142,7 @@
       values: x,
       onSubmit: (v) => saveSource(v, x),
       onDelete: () => {
-        store.remove('incomeSources', id);
-        toast('Removed ' + x.name);
+        store.remove('incomeSources', id, x.name);
       },
     });
   }

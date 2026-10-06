@@ -46,6 +46,7 @@
       inbox: [],
       filedLog: [],
       remoteFiles: {},
+      trash: [],
     };
   }
 
@@ -114,13 +115,65 @@
         else list.push(record);
       });
     },
-    remove(collection, id) {
+    /* Deletes a record into Recently deleted (kept 30 days, files and all) and offers Undo. */
+    remove(collection, id, label) {
       const rec = this.find(collection, id);
+      if (!rec) return null;
+      let entry = null;
       this.commit((s) => {
         s[collection] = s[collection].filter((x) => x.id !== id);
+        entry = trash.put(s, collection, rec, label);
       });
-      if (rec && rec.files) rec.files.forEach((f) => files.remove(f.id));
+      trash.offerUndo(entry);
       return rec;
+    },
+  };
+
+  /* ---------- Recently deleted ---------- */
+  const KEEP_DAYS = 30;
+  const KIND = { bills: 'Bill', debts: 'Debt', paperwork: 'Receipt or invoice', documents: 'Document', visas: 'Visa application', incomeSources: 'Income', tasks: 'Task',
+    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item' };
+  const trash = {
+    KIND,
+    /* Adds a deleted record (and anything deleted along with it, in `extra`) to the bin. Call inside a commit. */
+    put(s, collection, record, label, extra) {
+      const entry = { id: 'del-' + uid(), c: collection, at: new Date().toISOString(), label: label || record.name || record.title || record.description || record.visaType || KIND[collection] || 'Item', record, extra: extra || null };
+      s.trash = [entry].concat(s.trash || []).slice(0, 200);
+      return entry;
+    },
+    offerUndo(entry) {
+      if (!entry || !GU.ui) return;
+      GU.ui.toast('Deleted ' + entry.label + '. It’s in Settings → Recently deleted for 30 days.', { timeout: 10000, action: 'Undo', onAction: () => trash.restore(entry.id) });
+    },
+    /* Puts a deleted record back, with anything that went with it. */
+    restore(id) {
+      const entry = (store.state.trash || []).find((e) => e.id === id);
+      if (!entry) return false;
+      store.commit((s) => {
+        const put = (c, rec) => {
+          s[c] = s[c] || [];
+          if (!s[c].some((x) => x.id === rec.id)) s[c].push(rec);
+        };
+        put(entry.c, entry.record);
+        const x = entry.extra || {};
+        for (const c of ['sectionItems', 'transactions', 'tasks']) (x[c] || []).forEach((r) => put(c, r));
+        if (x.ignoredBill) s.settings.ignoredBills = (s.settings.ignoredBills || []).filter((k) => k !== x.ignoredBill);
+        s.trash = (s.trash || []).filter((e) => e.id !== id);
+      });
+      if (GU.ui) GU.ui.toast('Restored ' + entry.label);
+      return true;
+    },
+    /* Gone for good after 30 days: only then are their files deleted. */
+    purge() {
+      const cutoff = Date.now() - KEEP_DAYS * 864e5;
+      const old = (store.state.trash || []).filter((e) => Date.parse(e.at) < cutoff);
+      if (!old.length) return;
+      store.commit((s) => (s.trash = (s.trash || []).filter((e) => Date.parse(e.at) >= cutoff)));
+      const live = JSON.stringify(store.state);
+      for (const e of old) {
+        const recs = [e.record].concat(Object.values(e.extra || {}).filter(Array.isArray).flat());
+        for (const r of recs) for (const f of (r && r.files) || []) if (!live.includes('"' + f.id + '"')) files.remove(f.id);
+      }
     },
   };
 
@@ -293,6 +346,7 @@
   };
 
   GU.store = store;
+  GU.trash = trash;
   GU.files = files;
   GU.backup = backup;
 })();

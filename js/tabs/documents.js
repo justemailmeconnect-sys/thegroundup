@@ -136,10 +136,9 @@
       values: d,
       onSubmit: (v) => store.upsert('documents', Object.assign({}, d, v)),
       onDelete: () => {
-        store.remove('documents', id);
-        toast('Deleted ' + d.title);
+        store.remove('documents', id, d.title);
       },
-      deleteMessage: 'This deletes the record and its scans from this browser. Keep a backup if you might need them.',
+      deleteMessage: 'This deletes the record and its scans. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
     });
   }
 

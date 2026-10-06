@@ -289,10 +289,9 @@
         save(v, d);
       },
       onDelete: () => {
-        store.remove('debts', id);
-        toast('Debt removed. Your bank transactions are kept.');
+        store.remove('debts', id, d.name);
       },
-      deleteMessage: 'This removes the debt and its notes. Your bank transactions are kept.',
+      deleteMessage: 'This removes the debt and its notes. Your bank transactions are kept. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
     });
   }
 

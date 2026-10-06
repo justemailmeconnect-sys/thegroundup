@@ -84,12 +84,28 @@
     });
   }
 
+  function ago(iso) {
+    const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (mins < 2) return 'just now';
+    if (mins < 60) return mins + ' minutes ago';
+    if (mins < 60 * 24) return plural(Math.round(mins / 60), 'hour') + ' ago';
+    return plural(Math.round(mins / 1440), 'day') + ' ago';
+  }
+  function trashHTML(s) {
+    const list = s.trash || [];
+    return '<section class="panel" id="deleted"><header class="panel__head"><h2>' + icon('trash') + 'Recently deleted</h2><span class="muted">kept for 30 days</span></header>' +
+      (list.length ? '<ul class="rows rows--tight">' + list.slice(0, 50).map((e) => '<li class="row-item"><span class="row-item__text"><b>' + esc(e.label) + '</b><em>' +
+        esc((GU.trash.KIND[e.c] || 'Item') + ' · deleted ' + ago(e.at)) + '</em></span><span class="row-item__act"><button type="button" class="btn btn--sm btn--soft" data-restore="' + esc(e.id) + '">' + icon('repeat') + 'Restore</button></span></li>').join('') + '</ul>'
+        : '<div class="panel__body"><p class="muted">Anything you delete shows up here for 30 days, so you can put it back.</p></div>') + '</section>';
+  }
+
   function render(root) {
     const s = store.state;
     const st = s.settings;
     root.innerHTML = GU.view.head({ eyebrow: 'You', title: 'Settings', text: 'How your assistant works for you.' + (GU.sync.active() ? ' Your data syncs across your devices.' : ' Everything here is saved in this browser only.') }) +
       '<div class="settings">' +
       '<section class="panel" data-sync>' + syncHTML() + '</section>' +
+      trashHTML(s) +
 
       '<section class="panel"><header class="panel__head"><h2>About you</h2></header><form class="panel__body form-grid" data-form="about">' +
       '<div class="field field--half"><label class="field__label" for="set-name">Your first name</label><input id="set-name" name="name" value="' + esc(st.name) + '" placeholder="Used in your greeting"></div>' +
@@ -198,6 +214,8 @@
         return formDialog({ title: 'Rename account', fields: [{ name: 'name', label: 'Account name', required: true }], values: { name: a.name },
           onSubmit: (v) => store.commit((s2) => (s2.accounts.find((x) => x.id === a.id).name = v.name)) });
       }
+      const rs = b('[data-restore]');
+      if (rs) return GU.trash.restore(rs.dataset.restore);
       const ma = b('[data-merge-account]');
       if (ma) return mergeAccount(ma.dataset.mergeAccount);
       const da = b('[data-delete-account]');
@@ -206,10 +224,15 @@
         const n = store.state.transactions.filter((t) => t.account === id).length;
         const ok = await confirmBox({ title: 'Delete this account?', message: n ? 'Its ' + plural(n, 'transaction') + ' will be deleted too. If it’s the same bank account as another one in your list, use Merge into… instead, so nothing is lost or counted twice.' : 'It has no transactions.', confirmLabel: n ? 'Delete it and its transactions' : 'Delete', danger: true });
         if (!ok) return;
-        return store.commit((s2) => {
+        let entry = null;
+        store.commit((s2) => {
+          const acct = s2.accounts.find((x) => x.id === id);
+          const txs = s2.transactions.filter((t) => t.account === id);
           s2.accounts = s2.accounts.filter((x) => x.id !== id);
           s2.transactions = s2.transactions.filter((t) => t.account !== id);
+          entry = GU.trash.put(s2, 'accounts', acct, acct.name + (txs.length ? ' and its ' + plural(txs.length, 'transaction') : ''), { transactions: txs });
         });
+        return GU.trash.offerUndo(entry);
       }
       const dr = b('[data-delete-rule]');
       if (dr) return store.commit((s2) => (s2.rules = s2.rules.filter((r) => r.id !== dr.dataset.deleteRule)));

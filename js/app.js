@@ -165,6 +165,7 @@
 
   /* The first time there's a statement history, find the bills in it. Later imports look for new ones. */
   function firstBillScan() {
+    GU.trash.purge();
     GU.tabs.transactions.autoTidy();
     const s = store.state;
     if (s.meta.billsScanned || s.transactions.filter((t) => !t.demo).length < 30) return;

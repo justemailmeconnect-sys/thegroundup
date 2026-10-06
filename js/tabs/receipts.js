@@ -216,10 +216,9 @@
         save(v, p);
       },
       onDelete: () => {
-        store.remove('paperwork', id);
-        toast('Deleted ' + p.title);
+        store.remove('paperwork', id, p.title);
       },
-      deleteMessage: 'This deletes the record and its attached files from this browser.',
+      deleteMessage: 'This deletes the record and its attached files. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
     });
   }
 

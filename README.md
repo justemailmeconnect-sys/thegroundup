@@ -104,6 +104,8 @@ In the Inbox, your own folder organisation is used: upload a folder such as "My 
 
 ## Your data, sync and backups
 
+- **Undo and Recently deleted:** every delete (a bill, debt, receipt, document, visa application, income, task, transaction, section item, a whole section or a bank account) shows **Undo** straight away and goes to **Settings → Recently deleted**, where it can be restored for 30 days on any of your devices. Attached files are only removed for good once those 30 days are up.
+
 - **On claude.ai** (opened from your artifact link while signed in) everything syncs across your devices: open the same link on your phone, tablet or another computer and it's all there, and changes appear on your other devices within seconds. Records are kept in your own private space in the artifact's database (`data/users/<you>/`), which nobody else can read even if you share the link. Uploaded files are stored as artifact assets and downloaded to a device the first time you open them there. Word, Excel and HEIC photos can't be stored this way, so they stay on the device that added them. Your Anthropic API key is never synced. **Settings → Sync across your devices** shows the status.
 - Each device also keeps a full copy in the browser (`localStorage` for records, IndexedDB for files), so it works offline and catches up when it reconnects. If the same thing is changed on two devices while one is offline, the device that reconnects keeps its version and adds anything new from the other.
 - **Anywhere else** (opened as a file or from your own web host) data stays in that browser only. Use **Settings → Export backup** to move it: the backup is a single JSON file that includes your uploaded files, and **Restore from backup** brings everything back on any device.

@@ -261,12 +261,21 @@
     discard(item.id, true);
   }
 
+  /* keepQuiet: handed on to an importer, so nothing is lost. Otherwise it goes to Recently deleted. */
   function discard(id, keepQuiet) {
     const item = store.state.inbox.find((i) => i.id === id);
     if (!item) return;
-    (item.files || []).forEach((f) => GU.files.remove(f.id));
-    store.commit((s) => (s.inbox = s.inbox.filter((i) => i.id !== id)));
-    if (!keepQuiet) toast('Removed from Inbox');
+    if (keepQuiet) {
+      (item.files || []).forEach((f) => GU.files.remove(f.id));
+      store.commit((s) => (s.inbox = s.inbox.filter((i) => i.id !== id)));
+      return;
+    }
+    let entry = null;
+    store.commit((s) => {
+      s.inbox = s.inbox.filter((i) => i.id !== id);
+      entry = GU.trash.put(s, 'inbox', Object.assign({}, item, { status: 'ready' }), (item.result && item.result.title) || (item.files[0] && item.files[0].name) || 'Inbox item');
+    });
+    GU.trash.offerUndo(entry);
   }
 
   /* Opens the destination's own form, prefilled, so details can be checked before filing. */

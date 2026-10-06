@@ -237,10 +237,9 @@
       values: v,
       onSubmit: (vals) => store.upsert('visas', Object.assign({}, v, vals)),
       onDelete: () => {
-        store.remove('visas', id);
-        toast('Application deleted');
+        store.remove('visas', id, v.visaType);
       },
-      deleteMessage: 'This deletes the application, its checklist, notes and files from this browser.',
+      deleteMessage: 'This deletes the application, its checklist, notes and files. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
     });
   }
 

@@ -386,8 +386,7 @@
       values: Object.assign({}, t, { direction: t.amount > 0 ? 'in' : 'out', amount: Math.abs(t.amount), match: suggestMatch(t.description) }),
       onSubmit: (v) => save(v, t),
       onDelete: () => {
-        const rec = store.remove('transactions', id);
-        toast('Transaction deleted', { action: 'Undo', onAction: () => store.upsert('transactions', rec) });
+        store.remove('transactions', id);
       },
     });
   }

@@ -75,13 +75,16 @@
         if (e.target.closest('[data-rename]')) return rename(sec.id);
         if (e.target.closest('[data-delete-section]')) {
           const n = all.length;
-          const ok = await confirmBox({ title: 'Delete ' + esc(live.name) + '?', message: n ? 'This deletes the section and the ' + n + ' thing' + (n === 1 ? '' : 's') + ' filed in it, including attached files.' : 'The section is empty.', confirmLabel: 'Delete section', danger: true });
+          const ok = await confirmBox({ title: 'Delete ' + esc(live.name) + '?', message: (n ? 'This deletes the section and the ' + n + ' thing' + (n === 1 ? '' : 's') + ' filed in it, including attached files.' : 'The section is empty.') + ' You can undo it, and it stays in Settings → Recently deleted for 30 days.', confirmLabel: 'Delete section', danger: true });
           if (!ok) return;
-          all.forEach((x) => (x.files || []).forEach((f) => GU.files.remove(f.id)));
+          let entry = null;
           store.commit((st) => {
+            const items = st.sectionItems.filter((x) => x.sectionId === sec.id);
             st.sections = st.sections.filter((x) => x.id !== sec.id);
             st.sectionItems = st.sectionItems.filter((x) => x.sectionId !== sec.id);
+            entry = GU.trash.put(st, 'sections', live, live.name + ' section', { sectionItems: items });
           });
+          GU.trash.offerUndo(entry);
           GU.view.go('today');
           return;
         }
@@ -153,8 +156,7 @@
       values: it,
       onSubmit: (v) => store.upsert('sectionItems', Object.assign({}, it, v)),
       onDelete: () => {
-        store.remove('sectionItems', id);
-        toast('Deleted');
+        store.remove('sectionItems', id, it.title);
       },
     });
   }
