@@ -101,6 +101,7 @@
     const remove = () => el.remove();
     if (opts.action) el.querySelector('button').addEventListener('click', () => { remove(); opts.onAction && opts.onAction(); });
     setTimeout(remove, opts.timeout || (opts.action ? 8000 : 3500));
+    return remove;
   }
 
   /* ---------- tooltips: any element with data-tip ---------- */
@@ -441,7 +442,7 @@
       drop.addEventListener('drop', (e) => {
         e.preventDefault();
         drop.classList.remove('is-over');
-        add(Array.from(e.dataTransfer.files || []));
+        filesFromDrop(e.dataTransfer).then(add);
       });
       root.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => {
         const key = b.dataset.remove;
@@ -514,6 +515,83 @@
     show();
   }
 
+  /* ---------- folders ---------- */
+  const JUNK = /(^|\/)(\.[^/]*|thumbs\.db|desktop\.ini|__macosx|icon\r?)(\/|$)/i;
+  /* The file's path inside a dropped or chosen folder, e.g. "Car/MOT 2025.pdf". */
+  function pathOf(f) {
+    return (f && (f._path || f.webkitRelativePath)) || (f && f.name) || '';
+  }
+  function usable(f) {
+    if (JUNK.test(pathOf(f))) return false;
+    if (/^(video|audio)\//.test(f.type || '')) return false;
+    if (/\.(exe|dmg|app|msi|pkg|zip|rar|7z|iso|lnk|tmp|ds_store)$/i.test(f.name)) return false;
+    return f.size > 0;
+  }
+  /* Every file in a drop, including the contents of dropped folders and their subfolders.
+     Call it straight from the drop handler: the browser only lets folders be read during the event. */
+  function filesFromDrop(dt) {
+    const items = Array.from((dt && dt.items) || []);
+    const entries = items.map((i) => (i.kind === 'file' && i.webkitGetAsEntry ? i.webkitGetAsEntry() : null)).filter(Boolean);
+    const plain = Array.from((dt && dt.files) || []);
+    if (!entries.some((e) => e.isDirectory)) return Promise.resolve(plain.filter(usable));
+    const out = [];
+    const readAll = (reader) => new Promise((resolve, reject) => {
+      const all = [];
+      const next = () => reader.readEntries((batch) => {
+        if (!batch.length) return resolve(all);
+        all.push(...batch);
+        next();
+      }, reject);
+      next();
+    });
+    async function walk(entry, path) {
+      if (entry.isFile) {
+        const f = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        try {
+          Object.defineProperty(f, '_path', { value: path + f.name });
+        } catch (e) {
+          /* keep the plain name */
+        }
+        out.push(f);
+      } else if (entry.isDirectory) {
+        for (const child of await readAll(entry.createReader())) await walk(child, path + entry.name + '/');
+      }
+    }
+    return (async () => {
+      for (const e of entries) {
+        try {
+          await walk(e, '');
+        } catch (err) {
+          console.warn('Could not read', e.name, err);
+        }
+      }
+      return out.filter(usable);
+    })();
+  }
+  /* Opens the folder picker. Resolves with every file in the folder and its subfolders. */
+  function pickFolder() {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.webkitdirectory = true;
+      input.setAttribute('webkitdirectory', '');
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      input.addEventListener('change', () => {
+        resolve(Array.from(input.files || []).filter(usable));
+        input.remove();
+      });
+      input.click();
+    });
+  }
+  /* "Car", or "Car and 2 other folders", for messages. */
+  function folderSummary(files) {
+    const tops = Array.from(new Set(files.map((f) => pathOf(f).split('/')).filter((p) => p.length > 1).map((p) => p[0])));
+    if (!tops.length) return '';
+    return '“' + tops[0] + '”' + (tops.length > 1 ? ' and ' + (tops.length - 1) + ' other folder' + (tops.length > 2 ? 's' : '') : '');
+  }
+
   function pickFiles(accept) {
     return new Promise((resolve) => {
       const input = document.createElement('input');
@@ -543,6 +621,6 @@
 
   GU.ui = {
     icon, pill, emptyState, chips, selectOptions, toast, menu, closeMenu,
-    openDialog, confirmBox, formDialog, attachments, hydrate, thumbHTML, viewFiles, pickFiles, download, isImage, ACCEPT,
+    openDialog, confirmBox, formDialog, attachments, hydrate, thumbHTML, viewFiles, pickFiles, pickFolder, filesFromDrop, pathOf, folderSummary, download, isImage, ACCEPT,
   };
 })();

@@ -162,7 +162,7 @@
       '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
       '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button></div>' +
       '</form>' +
-      '<p class="capture__hint">' + icon('clip') + 'Snap or drop anything here: receipts, invoices, letters, warranties. I’ll read it and file it in the right place.</p>' +
+      '<p class="capture__hint">' + icon('clip') + 'Snap or drop anything here, even a whole folder: receipts, invoices, letters, warranties. I’ll read each one and file it in the right place.</p>' +
       timelineHTML(items) +
       '<button type="button" class="btn btn--ghost brief__more" data-horizon>' + (horizon === 14 ? 'Show the next 30 days' : 'Show the next 14 days only') + '</button>' +
       '</div>' +
@@ -244,8 +244,7 @@
       e.preventDefault();
       depth = 0;
       cover.hidden = true;
-      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
-      if (files.length) GU.inbox.add({ files });
+      GU.ui.filesFromDrop(e.dataTransfer).then((files) => files.length && GU.inbox.add({ files }));
     });
   }
 

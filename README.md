@@ -9,7 +9,7 @@ Everything lives in your own browser. There is no server and no account, and not
 | Tab | What it does |
 | --- | --- |
 | **Today** | Your daily briefing: one timeline of everything due (bills, invoices, tasks, visa appointments, document expiries, expected income), plus this month's money, things needing attention and things you're waiting on. Type a note or drop a file straight onto it. |
-| **Inbox** | Throw anything here. The assistant reads each item, files it automatically when it's sure (with undo) and keeps the rest for you to check. |
+| **Inbox** | Throw anything here: files, photos, pasted text or whole folders (subfolders included). The assistant reads each item, files it automatically when it's sure (with undo) and keeps the rest for you to check, with a **File all** button for big batches. Your folder names help: things in a "Car" folder go to a Car section, things in "Work receipts" are tagged Work. |
 | **Bank** | Every transaction across your accounts. Import CSV statements from any UK bank; categories are filled in automatically and learn from your corrections. |
 | **Bills** | Regular payments with next due dates. Direct debits roll on by themselves; bills you pay by hand wait for you to mark them paid. |
 | **In** (Incomings) | Money coming in, by source and month, plus regular income you expect (salary, retainers). |

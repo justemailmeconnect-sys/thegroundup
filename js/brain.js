@@ -231,7 +231,7 @@
     const prompt = instructions(ctx) + '\n\n' +
       'Reply with only a JSON object with exactly these keys: ' + SCHEMA.required.join(', ') + '. Use null for anything unknown.\n\n' +
       'THE ITEM:\n' +
-      (input.files.length ? 'Files: ' + input.files.map((f) => f.name + ' (' + (f.type || 'unknown type') + ')').join(', ') + (images.length ? '. The image' + (images.length > 1 ? 's are' : ' is') + ' attached.' : '') + '\n' : '') +
+      (input.files.length ? 'Files: ' + input.files.map((f, i) => ((input.paths && input.paths[i]) || f.name) + ' (' + (f.type || 'unknown type') + ')').join(', ') + ' (the folder names are how the user organised them, so use them as a hint)' + (images.length ? '. The image' + (images.length > 1 ? 's are' : ' is') + ' attached.' : '') + '\n' : '') +
       (input.note ? 'The user wrote: ' + input.note + '\n' : '') +
       (input.text ? 'Text read from it:\n"""\n' + input.text.slice(0, 12000) + '\n"""\n' : '');
     const opts = { modelTier: 'default' };
@@ -265,7 +265,7 @@
       else if (isPdf(f) && f.size < 20 * 1024 * 1024) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await toBase64(f) } });
     }
     content.push({ type: 'text', text:
-      (input.files.length ? 'Files: ' + input.files.map((f) => f.name).join(', ') + '\n' : '') +
+      (input.files.length ? 'Files: ' + input.files.map((f, i) => (input.paths && input.paths[i]) || f.name).join(', ') + (input.paths && input.paths.some((p) => p.includes('/')) ? ' (folder names show how the user organised them; use them as a hint)' : '') + '\n' : '') +
       (input.note ? 'The user wrote: ' + input.note + '\n' : '') +
       (input.text && !content.length ? 'Text:\n"""\n' + input.text.slice(0, 20000) + '\n"""\n' : '') +
       'Where does this belong? Fill in every field.' });
@@ -362,7 +362,9 @@
 
   async function viaRules(input) {
     const raw = [input.note, input.text].filter(Boolean).join('\n');
-    const names = input.files.map((f) => f.name.replace(/\.[a-z0-9]+$/i, '').replace(/[_\-.]+/g, ' ')).join(' ');
+    const paths = input.paths && input.paths.length ? input.paths : input.files.map((f) => f.name);
+    const names = paths.map((p) => p.replace(/\.[a-z0-9]+$/i, '').replace(/[_\-./]+/g, ' ')).join(' ');
+    const folder = folderOf(paths);
     // "Paid with Visa Debit" is a bank card, not an immigration visa.
     const t = (' ' + raw + ' ' + names + ' ').toLowerCase().replace(/\s+/g, ' ')
       .replace(/\bvisa(?=\s*(debit|credit|card|contactless|electron|\*|ending|x{2,}|\d{4}|payment|purchase))/g, 'card');
@@ -375,7 +377,7 @@
     r.due_date = dueD ? dueD.iso : null;
     r.expiry_date = expD ? expD.iso : null;
     r.amount = findAmount(raw);
-    r.reference = findReference(raw, input.files.map((f) => f.name).join(' '));
+    r.reference = findReference(raw, paths.join(' '));
     r.party = findParty(raw, t);
     r.context = /\b(my business|client|expenses claim|expense claim|for work|work expense|office supplies|freelance|bill to:? .{0,40}(ltd|limited))\b/.test(t) || (store.state.settings.business && t.includes(store.state.settings.business.toLowerCase())) ? 'work' : 'home';
 
@@ -463,11 +465,33 @@
     } else {
       Object.assign(r, { destination: 'unsure', confidence: 0.25, title: input.files[0] ? input.files[0].name : raw.slice(0, 60), summary: 'I’m not sure where this goes. Pick a place for it.' });
     }
+    // Your own folder names are a strong hint: "Car/…" belongs in Car, "Work receipts/…" is for work.
+    if (folder) {
+      if (/\b(work|business|office|company|expenses?|clients?)\b/i.test(paths.join(' '))) r.context = 'work';
+      const sec = (store.state.sections || []).find((x) => x.name.toLowerCase() === folder.toLowerCase());
+      const topic = TOPICS.find((x) => x.name.toLowerCase() === folder.toLowerCase() || x.name.toLowerCase().split(' & ')[0] === folder.toLowerCase());
+      const weak = ['unsure', 'section'].includes(r.destination) || r.confidence < 0.6;
+      if (weak && sec) Object.assign(r, { destination: 'section', section_id: sec.id, new_section_name: null, confidence: 0.85, summary: (r.summary && r.destination !== 'unsure' ? r.summary + ' ' : '') + 'It was in your “' + folder + '” folder, so it goes with ' + sec.name + '.' });
+      else if (weak && (topic || r.destination === 'unsure') && !/receipt|invoice|bill|warrant|guarantee|document|paperwork|statement|bank|visa|immigration|task|to.?do|admin|important|tax|insurance|passport/i.test(folder)) {
+        const name = topic ? topic.name : folder.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+        Object.assign(r, { destination: 'section', section_id: null, new_section_name: name, confidence: topic ? 0.8 : 0.65,
+          title: r.title && r.destination !== 'unsure' ? r.title : (input.files[0] ? input.files[0].name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') : r.title),
+          summary: 'It was in your “' + folder + '” folder, so I’ll keep it in a ' + name + ' section.' });
+      }
+    }
     if (r.destination !== 'task' && /\b(reply|respond|book|renew|send|submit|call us|contact us|attend|bring)\b/.test(t) && (r.due_date || r.expiry_date) && r.destination !== 'invoice_to_pay') {
       r.task_title = 'Follow up: ' + r.title;
       r.task_due = r.due_date || addDays(r.expiry_date, -30);
     }
     return clean(r);
+  }
+
+  /* The most specific folder name that means something ("Car", not "Downloads" or "2024"). */
+  const GENERIC_FOLDER = /^(downloads?|documents?|my documents|desktop|new folder.*|untitled folder.*|scans?|scanned.*|photos?|pictures?|images?|camera roll|camera|dcim|files?|misc|miscellaneous|other|stuff|inbox|uploads?|onedrive|google drive|icloud drive|icloud|dropbox|archive|backups?|old|temp|tmp|done|to sort|sort|\d{1,4}|\d{4}[-_ ]\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*|q[1-4])$/i;
+  function folderOf(paths) {
+    const segs = String((paths || [])[0] || '').split('/').slice(0, -1).map((x) => x.trim()).filter(Boolean);
+    for (let i = segs.length - 1; i >= 0; i--) if (!GENERIC_FOLDER.test(segs[i])) return segs[i];
+    return '';
   }
 
   function matchVisa(t) {
@@ -499,7 +523,8 @@
 
   /* input: {files: File[]|Blob[], note: string} -> result with .via */
   async function analyse(input) {
-    input = { files: input.files || [], note: (input.note || '').trim(), text: '' };
+    const files = input.files || [];
+    input = { files, note: (input.note || '').trim(), text: '', paths: input.paths || files.map((f) => GU.ui.pathOf(f)) };
     const m = await mode();
     // Spreadsheets (bank statements, order lists) are sorted on this device: no need to send them anywhere.
     if (input.files.some((f) => /\.(csv|tsv)$/i.test(f.name) || f.type === 'text/csv')) {
@@ -543,7 +568,7 @@
     const r = result;
     if (r.destination === 'section') {
       const sec = r.section_id && (store.state.sections || []).find((x) => x.id === r.section_id);
-      return sec ? sec.name : (r.new_section_name ? 'New section: ' + r.new_section_name : 'A new section');
+      return sec ? sec.name : (r.new_section_name ? r.new_section_name + ' (new section)' : 'A new section');
     }
     if (r.destination === 'visa') {
       const v = r.visa_id && store.find('visas', r.visa_id);

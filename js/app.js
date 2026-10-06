@@ -42,6 +42,11 @@
           const files = await GU.ui.pickFiles();
           if (files.length) GU.inbox.add({ files });
         } },
+        { icon: 'folder', label: 'A whole folder', hint: 'Every file inside gets sorted', onClick: async () => {
+          const files = await GU.ui.pickFolder();
+          if (files.length) GU.inbox.add({ files });
+          else GU.ui.toast('That folder has no files I can read.');
+        } },
         { icon: 'receipt', label: 'Receipt or invoice', hint: 'Upload a photo or PDF', onClick: () => GU.tabs.receipts.create({ pick: true }) },
         { icon: 'todo', label: 'Task', hint: 'Something to do', onClick: () => GU.tabs.todos.create() },
         { icon: 'bills', label: 'Bill', hint: 'A regular payment', onClick: () => GU.tabs.bills.create() },

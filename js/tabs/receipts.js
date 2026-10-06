@@ -95,7 +95,8 @@
       actions: '<button type="button" class="btn" data-import-orders>' + icon('download') + 'Import Amazon orders</button><button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
     }) +
       '<label class="dropbar" tabindex="0"><input type="file" multiple accept="' + GU.ui.ACCEPT + '" hidden id="rc-file">' + icon('upload', 'drop__icon') +
-      '<span><b>Drop receipts, invoices or warranty cards here</b><small>or tap to take a photo or choose files. Photos and PDFs both work.</small></span></label>' +
+      '<span><b>Drop receipts, invoices or warranty cards here, or a whole folder of them</b><small>or tap to take a photo or choose files. Photos and PDFs both work.</small></span>' +
+      '<button type="button" class="btn btn--sm dropbar__btn" data-rc-folder>' + icon('folder') + 'Choose a folder</button></label>' +
       '<div class="ledger">' +
       '<div><span>Invoices to pay</span><b>' + esc(money(sum(toPay, (p) => p.amount || 0))) + '</b><em>' + esc(plural(toPay.length, 'invoice')) + (toPay.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + toPay.filter((p) => p.dueDate && p.dueDate < t).length + ' overdue' : '') + '</em></div>' +
       '<div><span>Owed to you</span><b>' + esc(money(sum(owed, (p) => p.amount || 0))) + '</b><em>' + esc(plural(owed.length, 'invoice')) + ' sent</em></div>' +
@@ -121,6 +122,12 @@
     }, 150));
     const input = root.querySelector('#rc-file');
     input.addEventListener('change', () => input.files.length && create({ files: Array.from(input.files) }));
+    root.querySelector('[data-rc-folder]').addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const files = await GU.ui.pickFolder();
+      if (files.length) create({ files });
+    });
     const bar = root.querySelector('.dropbar');
     bar.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), input.click()));
     bar.addEventListener('dragover', (e) => (e.preventDefault(), bar.classList.add('is-over')));
@@ -128,8 +135,7 @@
     bar.addEventListener('drop', (e) => {
       e.preventDefault();
       bar.classList.remove('is-over');
-      const files = Array.from(e.dataTransfer.files || []);
-      if (files.length) create({ files });
+      GU.ui.filesFromDrop(e.dataTransfer).then((files) => files.length && create({ files }));
     });
     root.addEventListener('click', (e) => {
       const c = e.target.closest('[data-chip]');
@@ -193,6 +199,11 @@
     if (opts.pick) {
       files = await GU.ui.pickFiles();
       if (!files.length) return;
+    }
+    // Several files are several receipts: let the assistant read and file each one.
+    if (files && files.length > 1 && !opts.values) {
+      GU.inbox.add({ files });
+      return null;
     }
     const defaults = { kind: ui.filter === 'to-pay' ? 'invoice-in' : ui.filter === 'owed' ? 'invoice-out' : ui.filter === 'warranty' ? 'warranty' : 'receipt', context: ui.context === 'work' ? 'work' : 'home', date: today(), status: 'unpaid' };
     const d = formDialog({

@@ -31,17 +31,28 @@
       store.commit((s) => s.inbox.push(item));
       return pump();
     }
-    // Each file is its own item: dropping 200 invoices gives 200 records.
-    if (files.length > 1) toast('Reading ' + plural(files.length, 'file') + '. I’ll tell you when they’re filed.');
+    // Each file is its own item: dropping 200 invoices (or a whole folder) gives 200 records.
+    const from = GU.ui.folderSummary(files);
+    if (files.length > 1 || from) readingToast = toast('Reading ' + plural(files.length, 'file') + (from ? ' from ' + from : '') + '. I’ll tell you when they’re filed.', { timeout: 60000 });
+    let chunk = [];
+    const flush = () => {
+      const items = chunk;
+      chunk = [];
+      if (items.length) store.commit((s) => s.inbox.push(...items));
+      pump();
+    };
     for (const f of files) {
       const meta = await GU.files.add(f);
-      const item = { id: 'in-' + uid(), created: today(), note, files: [meta], status: 'reading' };
-      store.commit((s) => s.inbox.push(item));
-      pump();
+      const path = GU.ui.pathOf(f);
+      if (path !== meta.name) meta.path = path;
+      chunk.push({ id: 'in-' + uid(), created: today(), note, files: [meta], status: 'reading' });
+      if (chunk.length >= 20) flush();
     }
+    flush();
   }
 
   const batch = { filed: 0, waiting: 0, seen: 0 };
+  let readingToast = null;
   async function pump() {
     if (running) return;
     running = true;
@@ -58,7 +69,7 @@
             const rec = await GU.files.get(m.id);
             if (rec && rec.blob) blobs.push(new File([rec.blob], m.name, { type: m.type }));
           }
-          result = await GU.brain.analyse({ files: blobs, note: next.note });
+          result = await GU.brain.analyse({ files: blobs, note: next.note, paths: next.files.map((m) => m.path || m.name) });
         } catch (e) {
           console.warn('[inbox] analyse failed', e);
           error = 'I couldn’t read this one. Pick where it goes.';
@@ -77,6 +88,10 @@
       }
     } finally {
       running = false;
+    }
+    if (readingToast) {
+      readingToast();
+      readingToast = null;
     }
     if (batch.seen > 1) {
       const msg = 'Filed ' + plural(batch.filed, 'item') + (batch.waiting ? '. ' + batch.waiting + ' need' + (batch.waiting === 1 ? 's' : '') + ' a quick check.' : '.');
@@ -124,6 +139,19 @@
       undoers.delete(logId);
     });
     if (!(opts && opts.quiet)) toast('Filed in ' + res.label + ': ' + (result.title || ''), { action: 'Undo', onAction: () => undoers.get(logId) && undoers.get(logId)() });
+  }
+
+  /* Files every item that has a suggestion, in one go. */
+  function fileAll() {
+    const items = store.state.inbox.filter((i) => i.status !== 'reading' && i.result && !['unsure', 'bank_statement', 'order_history'].includes(i.result.destination));
+    let n = 0;
+    for (const it of items) {
+      const live = store.state.inbox.find((x) => x.id === it.id);
+      if (!live) continue;
+      fileItem(live, live.result, { quiet: true });
+      n++;
+    }
+    toast('Filed ' + plural(n, 'item') + '. Each one can be undone from Filed recently.');
   }
 
   async function openOrders(item) {
@@ -264,7 +292,11 @@
 
   function render(root) {
     const s = store.state;
-    const waiting = s.inbox.slice().sort((a, b) => (a.status === 'reading') - (b.status === 'reading'));
+    const reading = s.inbox.filter((i) => i.status === 'reading');
+    const ready = s.inbox.filter((i) => i.status !== 'reading');
+    const fileable = ready.filter((i) => i.result && !['unsure', 'bank_statement', 'order_history'].includes(i.result.destination));
+    const shown = ready.slice(0, 60).concat(reading.slice(0, 6));
+    const waiting = s.inbox;
     const log = s.filedLog.slice(0, 15);
     GU.brain.mode().then((m) => {
       const changed = m !== modeCache;
@@ -282,13 +314,18 @@
       '<form class="thrower" data-throw>' +
       '<label class="visually-hidden" for="inbox-note">Type or paste anything</label>' +
       '<textarea id="inbox-note" name="note" rows="3" placeholder="Type or paste anything: “Dentist on 14 Nov at 3pm”, “Paid £20 to the window cleaner”, an email from your landlord… or paste a screenshot."></textarea>' +
-      '<div class="thrower__drop" tabindex="0" role="button" aria-label="Upload files">' + icon('upload') + '<span><b>Drop photos, PDFs or files here</b><small>or tap to choose them or take a photo</small></span><input type="file" multiple accept="' + GU.ui.ACCEPT + '" hidden id="inbox-file"></div>' +
+      '<div class="thrower__drop" tabindex="0" role="button" aria-label="Upload files">' + icon('upload') + '<span><b>Drop photos, PDFs, files or whole folders here</b><small>or tap to choose files or take a photo. Folders inside folders are included too.</small></span><input type="file" multiple accept="' + GU.ui.ACCEPT + '" hidden id="inbox-file"></div>' +
+      '<div class="thrower__pick"><button type="button" class="btn btn--sm" data-pick-files>' + icon('file') + 'Choose files</button><button type="button" class="btn btn--sm" data-pick-folder>' + icon('folder') + 'Choose a folder</button></div>' +
       '<div class="thrower__foot"><p class="thrower__mode" data-mode>' + modeHTML(modeCache) + '</p>' +
       '<label class="check"><input type="checkbox" id="auto-file"' + (s.settings.autoFile !== false ? ' checked' : '') + '><span>File automatically when I’m sure</span></label>' +
       '<button type="submit" class="btn btn--primary">' + icon('check') + 'Sort it</button></div>' +
       '</form>' +
-      '<section class="panel"><header class="panel__head"><h2>Waiting for you</h2><span class="muted">' + (waiting.length ? plural(waiting.length, 'item') : 'all clear') + '</span></header>' +
-      (waiting.length ? '<ul class="inbox-list">' + waiting.map(cardHTML).join('') + '</ul>'
+      '<section class="panel"><header class="panel__head"><h2>Waiting for you</h2><span class="panel__tools">' +
+      (reading.length ? '<span class="reading"><span class="spinner" aria-hidden="true"></span>Reading ' + reading.length + ' more…</span>' : '') +
+      (fileable.length > 1 ? '<button type="button" class="btn btn--sm btn--primary" data-file-all>' + icon('check') + 'File all ' + fileable.length + '</button>' : '') +
+      (!reading.length && fileable.length <= 1 ? '<span class="muted">' + (waiting.length ? plural(waiting.length, 'item') : 'all clear') + '</span>' : '') + '</span></header>' +
+      (waiting.length ? '<ul class="inbox-list">' + shown.map(cardHTML).join('') + '</ul>' +
+        (ready.length > 60 ? '<p class="panel__foot muted">Showing 60 of ' + ready.length + '. File some to see the rest.</p>' : '')
         : '<div class="panel__body">' + emptyState({ icon: 'check', title: 'Nothing waiting', text: 'Everything you’ve sent me has been filed.' }) + '</div>') + '</section>' +
       (log.length ? '<section class="panel"><header class="panel__head"><h2>Filed recently</h2></header><ul class="rows rows--tight">' + log.map((l) =>
         '<li class="row-item"><span class="row-item__icon">' + icon('check') + '</span><span class="row-item__text"><b>' + esc(l.summary || l.title) + '</b><em>' + esc(fmtDate(l.date, { short: true })) + ' · ' + esc(l.label) + (l.via ? ' · read by ' + esc(GU.brain.modeLabel(l.via).replace(/ \(.*\)/, '')) : '') + '</em></span>' +
@@ -328,6 +365,14 @@
       }
     });
     drop.addEventListener('click', () => input.click());
+    root.querySelector('[data-pick-files]').addEventListener('click', () => input.click());
+    root.querySelector('[data-pick-folder]').addEventListener('click', async () => {
+      const files = await GU.ui.pickFolder();
+      if (!files.length) return toast('That folder has no files I can read.');
+      const note = form.elements.note.value;
+      form.elements.note.value = '';
+      add({ files, note });
+    });
     drop.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), input.click()));
     input.addEventListener('change', () => {
       const note = form.elements.note.value;
@@ -341,7 +386,7 @@
       drop.classList.remove('is-over');
       const note = form.elements.note.value;
       form.elements.note.value = '';
-      add({ files: Array.from(e.dataTransfer.files || []), note });
+      GU.ui.filesFromDrop(e.dataTransfer).then((files) => (files.length ? add({ files, note }) : toast('There were no files I can read in that.')));
     });
     root.querySelector('#auto-file').addEventListener('change', (e) => store.commit((st) => (st.settings.autoFile = e.target.checked)));
 
@@ -351,6 +396,7 @@
         return b ? { b, item: store.state.inbox.find((i) => i.id === b.getAttribute(attr)) } : null;
       };
       let hit;
+      if (e.target.closest('[data-file-all]')) return fileAll();
       if ((hit = find('data-file')) && hit.item) return fileItem(hit.item, hit.item.result);
       if ((hit = find('data-details')) && hit.item) return editAndFile(hit.item);
       if ((hit = find('data-place')) && hit.item) return choosePlace(hit.item, hit.b);
