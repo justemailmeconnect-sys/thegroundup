@@ -31,13 +31,14 @@
     transaction_out: 'Bank transactions',
     transaction_in: 'Bank transactions',
     bank_statement: 'Bank transactions',
+    order_history: 'Receipts & invoices',
     section: 'Your sections',
     unsure: 'Inbox',
   };
   const DEST_LABEL = {
     receipt: 'Receipt', invoice_to_pay: 'Invoice to pay', invoice_owed_to_me: 'Invoice someone owes you', warranty: 'Warranty',
     bill: 'Regular bill', document: 'Important document', visa: 'Visa application', task: 'Task', transaction_out: 'Money out',
-    transaction_in: 'Money in', bank_statement: 'Bank statement', section: 'New or custom section', unsure: 'Not sure yet',
+    transaction_in: 'Money in', bank_statement: 'Bank statement', order_history: 'Online order list', section: 'New or custom section', unsure: 'Not sure yet',
   };
 
   /* ---------- loading helpers ---------- */
@@ -160,7 +161,7 @@
       '',
       'Pick one destination:',
       '- receipt: proof of something already bought or paid for (till receipt, card slip, order confirmation, e-receipt).',
-      '- invoice_to_pay: an invoice or one-off bill the user has to pay. If it shows it has already been paid, still use this and set paid to true.',
+      '- invoice_to_pay: an invoice or one-off bill the user has to pay. If it shows it has already been paid, still use this and set paid to true. Invoices for online orders (Amazon, eBay and similar) are already paid: set paid to true and put the order number in reference.',
       '- invoice_owed_to_me: an invoice the user or their business sent to someone else, so someone owes the user money.',
       '- warranty: a warranty, guarantee or protection plan. Put the cover end date in expiry_date (work it out from the purchase date and length if needed).',
       '- bill: a regular payment being set up or changed (direct debit notice, subscription, contract with a monthly cost). Set frequency and put the next payment date in due_date.',
@@ -339,7 +340,11 @@
     const all = (raw.match(/(?:£|gbp\s?)\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+\.\d{2}/gi) || []).map((x) => Math.abs(parseAmount(x))).filter((x) => !isNaN(x) && x < 1e7);
     return all.length ? Math.max(...all) : null;
   }
-  function findReference(raw) {
+  /* Amazon order numbers look like 203-1234567-1234567 (or D01-… for digital orders). */
+  const ORDER_ID = /\b(?:\d{3}|D\d{2})-\d{7}-\d{7}\b/;
+  function findReference(raw, names) {
+    const order = String(raw || '').match(ORDER_ID) || String(names || '').match(ORDER_ID);
+    if (order) return order[0];
     const re = /\b(?:invoice|order|receipt|policy|reference|ref|account|booking|application|confirmation|passport|licence|license|certificate|membership|customer|claim|case|transaction)\b[^\n\d]{0,20}?([A-Z0-9][A-Z0-9\-/]*\d[A-Z0-9\-/]*)/gi;
     let m;
     while ((m = re.exec(raw))) if (m[1].length >= 4 && !/^\d{1,2}[/-]\d{1,2}/.test(m[1])) return m[1];
@@ -370,11 +375,17 @@
     r.due_date = dueD ? dueD.iso : null;
     r.expiry_date = expD ? expD.iso : null;
     r.amount = findAmount(raw);
-    r.reference = findReference(raw);
+    r.reference = findReference(raw, input.files.map((f) => f.name).join(' '));
     r.party = findParty(raw, t);
     r.context = /\b(my business|client|expenses claim|expense claim|for work|work expense|office supplies|freelance|bill to:? .{0,40}(ltd|limited))\b/.test(t) || (store.state.settings.business && t.includes(store.state.settings.business.toLowerCase())) ? 'work' : 'home';
 
-    // A CSV is almost always a bank statement.
+    // A spreadsheet is either a list of online orders or a bank statement.
+    const sheetLike = !input.files.length || input.files.every((f) => /\.(csv|tsv|txt)$/i.test(f.name) || /^text\//.test(f.type));
+    const headerLine = (raw.split(/\n/).find((l) => l.trim()) || '').toLowerCase();
+    const looksLikeOrders = sheetLike && headerLine.split(/,|\t/).length >= 3 && /order\s*(id|number|no|#)/.test(headerLine) && /date/.test(headerLine);
+    if (looksLikeOrders && raw.split(/\n/).filter((l) => l.trim()).length > 1) {
+      return Object.assign(r, { destination: 'order_history', confidence: 0.95, title: 'Order list', summary: 'A list of online orders. I’ll open the importer so every order becomes a paid invoice.' });
+    }
     if (input.files.some((f) => /\.csv$/i.test(f.name) || f.type === 'text/csv')) {
       return Object.assign(r, { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check the columns.' });
     }
@@ -410,7 +421,8 @@
       break;
     }
     const topic = TOPICS.map((x) => ({ x, n: has(t, x.words) })).sort((a, b) => b.n - a.n)[0];
-    const paidWords = has(t, ['paid in full', 'payment received', 'thank you for your payment', 'amount paid', 'balance: 0.00', 'balance due: 0.00', 'balance due £0.00', 'paid on']);
+    const onlineOrder = /\bamazon\b|\bebay\b|sold by|order (?:number|no\.?|#|id)|order date/.test(t) && !/amount due|balance due|please pay|payment due|pay by/.test(t);
+    const paidWords = has(t, ['paid in full', 'payment received', 'thank you for your payment', 'amount paid', 'balance: 0.00', 'balance due: 0.00', 'balance due £0.00', 'paid on']) + (onlineOrder ? 1 : 0);
     const biz = (store.state.settings.business || '').toLowerCase().trim();
     const fromMe = biz && t.includes(biz) && !new RegExp('bill(?:ed)? to:?\\s*' + biz.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(t);
     const warrantyYears = t.match(/(\d+)[\s-]*year (?:manufacturer'?s? )?(?:warranty|guarantee)/);
@@ -423,7 +435,7 @@
       const until = r.expiry_date || (warrantyYears && (r.date || today()) ? addMonths(r.date || today(), 12 * +warrantyYears[1]) : null);
       Object.assign(r, { destination: 'warranty', confidence: 0.78, expiry_date: until, title: r.party ? r.party + ' warranty' : 'Warranty',
         summary: 'A warranty' + (r.party ? ' from ' + r.party : '') + (until ? ', covered until ' + fmtDate(until) : '') + '.' });
-    } else if (sc.invoice >= 4 || (sc.invoice >= 2 && sc.invoice > sc.receipt)) {
+    } else if (sc.invoice >= 4 || (sc.invoice >= 2 && (sc.invoice > sc.receipt || onlineOrder))) {
       const dest = fromMe ? 'invoice_owed_to_me' : 'invoice_to_pay';
       Object.assign(r, { destination: dest, confidence: 0.72 + Math.min(0.15, sc.invoice / 40), paid: !fromMe && paidWords > 0, title: r.party ? 'Invoice from ' + r.party : 'Invoice',
         category: F.categorise(r.party + ' ' + t, -1, store.state.rules) || null,
@@ -489,6 +501,11 @@
   async function analyse(input) {
     input = { files: input.files || [], note: (input.note || '').trim(), text: '' };
     const m = await mode();
+    // Spreadsheets (bank statements, order lists) are sorted on this device: no need to send them anywhere.
+    if (input.files.some((f) => /\.(csv|tsv)$/i.test(f.name) || f.type === 'text/csv')) {
+      input.text = (await readFileText(input.files[0], false)).slice(0, 4000);
+      return Object.assign(await viaRules(input), { via: 'offline' });
+    }
     const textNeeded = input.files.some((f) => isText(f) || isPdf(f));
     const ocr = m === 'offline' && store.state.settings.ocr !== false;
     if (textNeeded || ocr) {
@@ -547,6 +564,8 @@
     let tab = null;
     let ref = null;
     let visaUndo = null;
+    let attachUndo = null;
+    let sameTitle = '';
     store.commit((st) => {
       const add = (c, rec) => {
         st[c].push(rec);
@@ -560,6 +579,18 @@
         case 'warranty': {
           const kind = { receipt: 'receipt', invoice_to_pay: 'invoice-in', invoice_owed_to_me: 'invoice-out', warranty: 'warranty' }[r.destination];
           const inv = kind === 'invoice-in' || kind === 'invoice-out';
+          const refKey = String(r.reference || '').trim().toLowerCase();
+          const same = refKey.length >= 4 && st.paperwork.find((p) => String(p.reference || '').trim().toLowerCase() === refKey);
+          if (same) {
+            // Same order or invoice number: add the file to the record you already have.
+            same.files = (same.files || []).concat(metas);
+            if (same.amount == null && r.amount != null) same.amount = r.amount;
+            attachUndo = { id: same.id, fileIds: metas.map((m) => m.id) };
+            sameTitle = same.title;
+            tab = 'receipts';
+            ref = { c: 'paperwork', id: same.id };
+            break;
+          }
           const rec = add('paperwork', { id: 'p-' + uid(), created: t, kind, context: r.context, title: r.title, party: r.party || '', amount: r.amount, date: r.date || t,
             dueDate: inv ? r.due_date || '' : '', status: inv ? (r.paid ? 'paid' : 'unpaid') : '', paidDate: inv && r.paid ? r.date || t : '',
             warrantyUntil: r.destination === 'warranty' || r.expiry_date ? r.expiry_date || '' : '', reference: r.reference || '', category: r.category || '', notes, files: metas, via: r.via });
@@ -639,7 +670,7 @@
       }
     });
     if (!ref) return null;
-    const label = where(r);
+    const label = sameTitle ? 'Receipts & invoices › ' + sameTitle + ' (added to it)' : where(r);
     return {
       tab,
       ref,
@@ -647,6 +678,10 @@
       undo() {
         store.commit((st) => {
           for (const c of created) st[c.c] = st[c.c].filter((x) => x.id !== c.id);
+          if (attachUndo) {
+            const p = st.paperwork.find((x) => x.id === attachUndo.id);
+            if (p) p.files = (p.files || []).filter((f) => !attachUndo.fileIds.includes(f.id));
+          }
           if (visaUndo) {
             const v = st.visas.find((x) => x.id === visaUndo.id);
             if (v) {

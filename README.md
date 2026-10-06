@@ -39,6 +39,14 @@ It picks the best reader available:
 
 It files an item automatically when it's confident and shows an Undo button; anything it's unsure about waits in the Inbox with buttons to file it, choose somewhere else or check the details first. If a letter asks you to do something by a date, it also adds a follow-up task.
 
+## Amazon and other online orders
+
+Online order invoices are filed as **paid invoices**, never as bills to pay, and are matched up by order number so nothing is filed twice.
+
+- **Every order at once:** on Amazon go to *Your Account → Request your data*, choose *Your Orders*, and when the email arrives open the zip and drop the `Retail.OrderHistory` CSV into the Inbox (or use **Receipts → Import Amazon orders**). Each order from the last 3 years (you can change the date) becomes a paid invoice with its items, total and order number. Cancelled orders are skipped.
+- **The invoice PDFs:** Amazon has no "download all" for personal accounts. Claude in Chrome can work through your orders while you're signed in and download each invoice. Drop all the PDFs into the Inbox in one go: each becomes its own record, or is attached to its order if you've already imported it.
+- **A pasted list:** paste a table that starts with `Order Date,Order ID,Items,Total` into the Inbox and it imports the same way.
+
 ## Importing bank statements
 
 Download a statement from your online banking as a **CSV** file and either drop it in the Inbox or use **Bank → Import statement**. The importer guesses the date, description and amount columns (including banks with separate "paid in" and "paid out" columns, and files with no header row), shows a preview, and skips anything you've already imported. Transfers between your own accounts are left out of your in/out totals.

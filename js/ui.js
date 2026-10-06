@@ -213,6 +213,9 @@
     } catch (e) {
       dlg.setAttribute('open', '');
     }
+    const heading = dlg.querySelector('.dlg__head h2');
+    heading.tabIndex = -1;
+    heading.focus();
     return { el: dlg, form: dlg.querySelector('form'), body: dlg.querySelector('.dlg__body'), close };
   }
 

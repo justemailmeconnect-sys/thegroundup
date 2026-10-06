@@ -92,7 +92,7 @@
       eyebrow: 'Paperwork',
       title: 'Receipts & invoices',
       text: 'Snap or upload every receipt, invoice and warranty the moment you get it. Your assistant reads it and fills in the details.',
-      actions: '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
+      actions: '<button type="button" class="btn" data-import-orders>' + icon('download') + 'Import Amazon orders</button><button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
     }) +
       '<label class="dropbar" tabindex="0"><input type="file" multiple accept="' + GU.ui.ACCEPT + '" hidden id="rc-file">' + icon('upload', 'drop__icon') +
       '<span><b>Drop receipts, invoices or warranty cards here</b><small>or tap to take a photo or choose files. Photos and PDFs both work.</small></span></label>' +
@@ -138,6 +138,7 @@
         return GU.render();
       }
       if (e.target.closest('[data-upload]')) return create({ pick: true });
+      if (e.target.closest('[data-import-orders]')) return importOrders();
       const pay = e.target.closest('[data-pay]');
       if (pay) return markPaid(pay.dataset.pay);
       const v = e.target.closest('[data-view]');
@@ -260,5 +261,127 @@
     });
   }
 
-  GU.tabs.receipts = { label: 'Receipts & invoices', short: 'Receipts', icon: 'receipt', render, create, edit, markPaid, KINDS };
+  /* ---------- online order lists (Amazon "Request your data", or a list made by Claude in Chrome) ---------- */
+  function readOrders(text) {
+    const rows = GU.util.parseCSV(text);
+    const hi = rows.findIndex((r) => r.some((c) => /order\s*(id|number|no|#)/i.test(c)));
+    if (hi < 0) return null;
+    const header = rows[hi].map((h) => h.toLowerCase().trim());
+    const pick = (words) => {
+      for (const w of words) {
+        const i = header.findIndex((h) => h.includes(w));
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
+    const c = {
+      id: pick(['order id', 'order number', 'order no', 'order #']),
+      date: pick(['order date', 'date']),
+      total: pick(['total owed', 'order total', 'grand total', 'total', 'amount', 'price']),
+      items: pick(['product name', 'items', 'item', 'product', 'description', 'title']),
+      status: pick(['order status', 'status']),
+      site: pick(['website', 'site', 'store']),
+    };
+    if (c.id < 0 || c.date < 0) return null;
+    const order = GU.util.guessDateOrder(rows.slice(hi + 1, hi + 60).map((r) => r[c.date]));
+    const map = new Map();
+    let sites = '';
+    for (const r of rows.slice(hi + 1)) {
+      const id = (r[c.id] || '').trim();
+      if (!id || (c.status >= 0 && /cancel/i.test(r[c.status] || ''))) continue;
+      const date = GU.util.parseLooseDate(r[c.date], order);
+      if (!date) continue;
+      const amt = c.total >= 0 ? GU.util.parseAmount(r[c.total]) : NaN;
+      const item = c.items >= 0 ? (r[c.items] || '').replace(/\s+/g, ' ').trim() : '';
+      const o = map.get(id) || { id, date, total: 0, items: [] };
+      if (!isNaN(amt)) o.total = GU.util.round2(o.total + Math.abs(amt));
+      for (const part of item.split(/\s*;\s*/)) if (part && !o.items.includes(part)) o.items.push(part);
+      if (date < o.date) o.date = date;
+      map.set(id, o);
+      if (c.site >= 0 && sites.length < 200) sites += ' ' + (r[c.site] || '');
+    }
+    const orders = Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+    const amazon = /amazon/i.test(sites) || orders.some((o) => /^(\d{3}|D\d{2})-\d{7}-\d{7}$/.test(o.id));
+    const domain = (sites.match(/amazon\.[a-z.]+/i) || ['amazon.co.uk'])[0].toLowerCase();
+    return { orders, amazon, domain };
+  }
+
+  async function importOrders(source) {
+    if (!source) {
+      const picked = await GU.ui.pickFiles('.csv,text/csv,.txt,.zip');
+      if (!picked.length) return;
+      source = picked[0];
+    }
+    if (source && typeof source !== 'string' && /\.zip$/i.test(source.name)) {
+      return toast('Open the zip file first, then choose the file inside it called Retail.OrderHistory (it ends in .csv).');
+    }
+    const text = typeof source === 'string' ? source : await source.text();
+    const parsed = readOrders(text);
+    if (!parsed || !parsed.orders.length) return toast('I couldn’t find any orders in that file. It needs columns for the order number and order date.');
+    const s = store.state;
+    const t = today();
+    const ui2 = { from: GU.util.addMonths(t, -36), context: 'home' };
+    const known = new Set(s.paperwork.map((p) => String(p.reference || '').toLowerCase()).filter(Boolean));
+    const party = parsed.amazon ? 'Amazon' : 'Online shop';
+    const d = GU.ui.openDialog({
+      title: parsed.amazon ? 'Import your Amazon orders' : 'Import your orders',
+      wide: true,
+      body: '<div data-orders></div>',
+      footer: '<span class="spacer"></span><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn--primary" data-go>Import</button>',
+    });
+    const box = d.body.querySelector('[data-orders]');
+    const go = d.el.querySelector('[data-go]');
+    let chosen = [];
+    function draw() {
+      const inRange = parsed.orders.filter((o) => o.date >= ui2.from);
+      chosen = inRange.filter((o) => !known.has(o.id.toLowerCase()));
+      const dupes = inRange.length - chosen.length;
+      const first = parsed.orders[parsed.orders.length - 1].date;
+      box.innerHTML =
+        '<p class="dlg__intro">I found <b>' + esc(plural(parsed.orders.length, 'order')) + '</b> from ' + esc(fmtDate(first)) + ' to ' + esc(fmtDate(parsed.orders[0].date)) +
+        '. Each one becomes a paid invoice in Receipts &amp; invoices, with its items and order number. Invoice PDFs you drop in the Inbox later are matched to their order automatically.</p>' +
+        '<div class="form-grid">' +
+        '<div class="field field--half"><label class="field__label" for="ord-from">Import orders from</label><input type="date" id="ord-from" value="' + esc(ui2.from) + '"></div>' +
+        '<div class="field field--half"><span class="field__label">These were for</span><div class="seg">' +
+        ['home', 'work'].map((v) => '<label><input type="radio" name="ord-ctx" value="' + v + '"' + (ui2.context === v ? ' checked' : '') + '><span>' + icon(v === 'home' ? 'home' : 'briefcase') + (v === 'home' ? 'Home' : 'Work') + '</span></label>').join('') + '</div></div></div>' +
+        '<h3 class="subhead">Preview</h3>' +
+        (chosen.length ? '<div class="table-wrap"><table class="tbl tbl--compact"><thead><tr><th>Date</th><th>Items</th><th>Order</th><th class="num">Total</th></tr></thead><tbody>' +
+          chosen.slice(0, 8).map((o) => '<tr><td class="nowrap">' + esc(fmtDate(o.date, { short: true })) + '</td><td class="wrap">' + esc(o.items.join('; ') || '—') + '</td><td class="nowrap muted">' + esc(o.id) + '</td><td class="num">' + (o.total ? esc(money(o.total)) : '—') + '</td></tr>').join('') +
+          '</tbody></table></div>' : '<p class="muted">No new orders in this date range.</p>') +
+        '<p class="field__help">' + esc(plural(chosen.length, 'new order')) + (chosen.length ? ', ' + esc(money(sum(chosen, (o) => o.total))) + ' in total' : '') + (dupes ? '. ' + plural(dupes, 'order') + ' already filed will be skipped' : '') + '.</p>';
+      go.disabled = !chosen.length;
+      go.textContent = chosen.length ? 'Import ' + plural(chosen.length, 'order') : 'Import';
+      box.querySelector('#ord-from').addEventListener('change', (e) => {
+        if (e.target.value) ui2.from = e.target.value;
+        draw();
+      });
+      box.querySelectorAll('input[name="ord-ctx"]').forEach((el) => el.addEventListener('change', () => (ui2.context = el.value)));
+    }
+    draw();
+    d.form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!chosen.length) return;
+      const batch = 'ord-' + uid();
+      store.commit((st) => {
+        for (const o of chosen) {
+          const items = o.items.join('; ');
+          st.paperwork.push({
+            id: 'p-' + uid(), created: t, kind: 'invoice-in', status: 'paid', paidDate: o.date, context: ui2.context,
+            title: items ? (items.length > 90 ? items.slice(0, 88) + '…' : items) : party + ' order',
+            party, amount: o.total || null, date: o.date, dueDate: '', warrantyUntil: '', reference: o.id,
+            category: F.categorise(items, -1, st.rules) || 'Shopping',
+            notes: (items ? 'Items: ' + items : '') + (parsed.amazon ? '\nOrder details: https://www.' + parsed.domain + '/gp/your-account/order-details?orderID=' + o.id : ''),
+            files: [], source: 'order-import', importBatch: batch,
+          });
+        }
+      });
+      const n = chosen.length;
+      d.close();
+      toast('Imported ' + plural(n, 'order'), { action: 'Undo', onAction: () => store.commit((st) => (st.paperwork = st.paperwork.filter((p) => p.importBatch !== batch))) });
+      ui.filter = 'paid';
+      GU.view.go('receipts');
+    });
+  }
+
+  GU.tabs.receipts = { label: 'Receipts & invoices', short: 'Receipts', icon: 'receipt', render, create, edit, markPaid, importOrders, KINDS };
 })();

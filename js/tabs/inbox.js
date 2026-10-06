@@ -22,22 +22,30 @@
     // Quick notes ("call the dentist tomorrow") are filed instantly without waiting for Claude.
     if (!files.length) {
       const quick = await GU.brain.quick(note).catch(() => null);
+      if (quick && quick.destination === 'order_history') return GU.tabs.receipts.importOrders(note);
       if (quick && quick.confidence >= 0.8 && ['task', 'transaction_out', 'transaction_in'].includes(quick.destination)) {
         fileItem({ id: 'in-' + uid(), created: today(), note, files: [] }, quick);
         return;
       }
+      const item = { id: 'in-' + uid(), created: today(), note, files: [], status: 'reading' };
+      store.commit((s) => s.inbox.push(item));
+      return pump();
     }
-    const metas = [];
-    for (const f of files) metas.push(await GU.files.add(f));
-    const item = { id: 'in-' + uid(), created: today(), note, files: metas, status: 'reading' };
-    store.commit((s) => s.inbox.push(item));
-    if (files.length) toast('Reading ' + plural(files.length, 'file') + '…');
-    pump();
+    // Each file is its own item: dropping 200 invoices gives 200 records.
+    if (files.length > 1) toast('Reading ' + plural(files.length, 'file') + '. I’ll tell you when they’re filed.');
+    for (const f of files) {
+      const meta = await GU.files.add(f);
+      const item = { id: 'in-' + uid(), created: today(), note, files: [meta], status: 'reading' };
+      store.commit((s) => s.inbox.push(item));
+      pump();
+    }
   }
 
+  const batch = { filed: 0, waiting: 0, seen: 0 };
   async function pump() {
     if (running) return;
     running = true;
+    Object.assign(batch, { filed: 0, waiting: 0, seen: 0 });
     try {
       let next;
       while ((next = store.state.inbox.find((i) => i.status === 'reading'))) {
@@ -62,24 +70,42 @@
           item.result = result || null;
           item.error = error;
         });
-        settle(item);
+        batch.seen++;
+        const quiet = batch.seen > 1 || store.state.inbox.some((i) => i.status === 'reading');
+        if (settle(item, quiet)) batch.filed++;
+        else batch.waiting++;
       }
     } finally {
       running = false;
     }
+    if (batch.seen > 1) {
+      const msg = 'Filed ' + plural(batch.filed, 'item') + (batch.waiting ? '. ' + batch.waiting + ' need' + (batch.waiting === 1 ? 's' : '') + ' a quick check.' : '.');
+      toast(msg, batch.waiting && location.hash !== '#inbox' ? { action: 'Review', onAction: () => GU.view.go('inbox') } : {});
+    }
   }
 
-  function settle(item) {
+  /* Returns true when the item was filed automatically. */
+  function settle(item, quiet) {
     const r = item.result;
-    if (!r) return;
+    if (!r) return false;
     const auto = store.state.settings.autoFile !== false;
-    if (auto && r.confidence >= AUTO_FILE_AT && !['unsure', 'bank_statement'].includes(r.destination)) fileItem(item, r);
-    else if (location.hash !== '#inbox') toast('Something needs a quick check in your Inbox', { action: 'Review', onAction: () => GU.view.go('inbox') });
+    if (auto && r.confidence >= AUTO_FILE_AT && !['unsure', 'bank_statement', 'order_history'].includes(r.destination)) {
+      fileItem(item, r, { quiet });
+      return true;
+    }
+    // A single spreadsheet opens its importer straight away (you still confirm there).
+    if (!quiet && ['bank_statement', 'order_history'].includes(r.destination)) {
+      fileItem(item, r);
+      return true;
+    }
+    if (!quiet && location.hash !== '#inbox') toast('Something needs a quick check in your Inbox', { action: 'Review', onAction: () => GU.view.go('inbox') });
+    return false;
   }
 
   /* Files an inbox item using a (possibly edited) result. */
-  function fileItem(item, result) {
+  function fileItem(item, result, opts) {
     if (result.destination === 'bank_statement') return openImporter(item);
+    if (result.destination === 'order_history') return openOrders(item);
     const res = GU.brain.file(result, item.files || [], item.note);
     if (!res) return;
     const logId = 'log-' + uid();
@@ -97,7 +123,15 @@
       });
       undoers.delete(logId);
     });
-    toast('Filed in ' + res.label + ': ' + (result.title || ''), { action: 'Undo', onAction: () => undoers.get(logId) && undoers.get(logId)() });
+    if (!(opts && opts.quiet)) toast('Filed in ' + res.label + ': ' + (result.title || ''), { action: 'Undo', onAction: () => undoers.get(logId) && undoers.get(logId)() });
+  }
+
+  async function openOrders(item) {
+    const m = (item.files || [])[0];
+    const rec = m && (await GU.files.get(m.id));
+    if (!rec) return toast('The order list is missing. Try uploading it again.');
+    GU.tabs.receipts.importOrders(new File([rec.blob], m.name, { type: m.type || 'text/csv' }));
+    discard(item.id, true);
   }
 
   async function openImporter(item) {
@@ -147,6 +181,8 @@
         return GU.sections.createItem(r.section_id || { name: r.new_section_name || 'New section' }, { title: r.title, party: r.party, amount: r.amount, date: r.date, dueDate: r.due_date || r.expiry_date, reference: r.reference, notes: [r.summary, r.notes].filter(Boolean).join('\n'), files }, { onSaved: done, byAssistant: true });
       case 'bank_statement':
         return openImporter(item);
+      case 'order_history':
+        return openOrders(item);
       default:
         return choosePlace(item, null);
     }
@@ -219,9 +255,9 @@
       (r ? '<p class="inbox-card__dest">' + icon('chevron') + '<b>' + esc(dest) + '</b>' + confidenceLabel(r.confidence) + '</p><p class="details">' + detailChips(r) + '</p>' : '') +
       (r && r.warning ? '<p class="field__help">' + esc(r.warning) + '</p>' : '') +
       '<div class="inbox-card__actions">' +
-      (r && r.destination !== 'unsure' ? '<button type="button" class="btn btn--sm btn--primary" data-file="' + esc(item.id) + '">' + icon('check') + (r.destination === 'bank_statement' ? 'Open importer' : 'File it') + '</button>' : '') +
+      (r && r.destination !== 'unsure' ? '<button type="button" class="btn btn--sm btn--primary" data-file="' + esc(item.id) + '">' + icon('check') + (['bank_statement', 'order_history'].includes(r.destination) ? 'Open importer' : 'File it') + '</button>' : '') +
       '<button type="button" class="btn btn--sm" data-place="' + esc(item.id) + '">' + icon('folder') + (r && r.destination !== 'unsure' ? 'Somewhere else' : 'Choose where') + '</button>' +
-      (r && r.destination !== 'unsure' && r.destination !== 'bank_statement' ? '<button type="button" class="btn btn--sm" data-details="' + esc(item.id) + '">' + icon('edit') + 'Check details</button>' : '') +
+      (r && !['unsure', 'bank_statement', 'order_history'].includes(r.destination) ? '<button type="button" class="btn btn--sm" data-details="' + esc(item.id) + '">' + icon('edit') + 'Check details</button>' : '') +
       '<button type="button" class="btn btn--sm btn--ghost" data-discard="' + esc(item.id) + '">' + icon('trash') + 'Remove</button>' +
       '</div></div></li>';
   }
