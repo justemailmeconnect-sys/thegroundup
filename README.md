@@ -11,7 +11,7 @@ Everything lives in your own browser. There is no server and no account, and not
 | **Today** | Your daily briefing: one timeline of everything due (bills, invoices, tasks, visa appointments, document expiries, expected income), plus this month's money, things needing attention and things you're waiting on. Type a note or drop a file straight onto it. |
 | **Inbox** | Throw anything here: files, photos, pasted text or whole folders (subfolders included). The assistant reads each item, files it automatically when it's sure (with undo) and keeps the rest for you to check, with a **File all** button for big batches. Your folder names help: things in a "Car" folder go to a Car section, things in "Work receipts" are tagged Work. |
 | **Bank** | Every transaction across your accounts, with each account's current balance and a balance-over-time chart. Import statements from any UK bank; categories are filled in automatically and learn from your corrections. |
-| **Bills** | Regular payments with next due dates. Direct debits roll on by themselves; bills you pay by hand wait for you to mark them paid. |
+| **Bills** | Regular payments with next due dates. Direct debits roll on by themselves; bills you pay by hand wait for you to mark them paid. Bills are also found in your bank statements for you (see below). |
 | **In** (Incomings) | Money coming in, by source and month, plus regular income you expect (salary, retainers). |
 | **Out** (Outgoings) | Spending by category, monthly budgets with warnings, and your biggest payments. |
 | **Debts** | Credit cards, loans, car finance, Klarna, PayPal Pay in 3, Monzo Flex, overdrafts and money owed to people. Your bank statements show what you're paying each one, so the balance left, monthly cost and debt-free date keep themselves up to date. |
@@ -76,6 +76,16 @@ Live bank connections (Open Banking) need a small server and an account with a p
 - **Left to pay** is the balance you gave me, less what you've paid since, plus interest if you gave me the rate, worked out only over days your statements cover. For a fixed-term loan or car finance with no current balance, it's the payments still to make.
 - Regular payments to lenders you haven't added show up as **Payments that look like debts**, ready to track in one tap. Plans with no payments for two months are flagged as probably paid off.
 
+## Bills found in your statements
+
+After you import statements (and the first time there's a history to look at), I look for bills in it and add them to the Bills tab under **Found in your bank statements**:
+
+- **Monthly:** a payment to the same company in 3 months in a row on the same day of the month, give or take 3 days for weekends and bank holidays. A month with no statement imported for that account doesn't count as a missed payment.
+- **Weekly, fortnightly, every 4 weeks, quarterly or yearly:** payments at that steady spacing.
+- **Left out:** anything that has stopped, everyday spending (groceries, eating out, travel, shopping), savings, transfers between your accounts, and debt payments, which live on the Debts tab. The same payment imported twice (two overlapping statements, or the same account under two names) only counts once.
+
+Each one has **Keep**, **Not a bill** (removed and never suggested again), and under **⋯**, **It was a one-off**, **I've cancelled it** or **Change the details**. **Find bills in my statements** looks again at any time.
+
 ## Uploading folders
 
 Every tab that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts & invoices, Important documents, Bills, Bank, each visa application and each of your own sections. Files uploaded there stay in that tab; the assistant only reads them to fill in the details. Subfolders are kept as groups.
@@ -105,6 +115,7 @@ js/brain.js           reading and filing: Claude, API key and offline readers
 js/statements.js      bank statements: PDF, CSV, Excel, Santander .txt, QIF and OFX
 js/folders.js         using your own folder names to decide where files go
 js/debts.js           account balances, lenders, matching debt payments, payoff maths
+js/recurring.js       finding regular bills in your bank statements
 js/sample.js          example data
 js/app.js             the icon rail, routing and redraws
 js/tabs/*.js          one file per tab

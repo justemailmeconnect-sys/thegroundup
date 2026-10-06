@@ -610,6 +610,7 @@
         }),
       });
       if (location.hash !== '#transactions') GU.view.go('transactions');
+      setTimeout(() => GU.recurring.scan({ quiet: true }), 1500);
     }
 
     async function load(f) {
@@ -800,6 +801,7 @@
         }),
       });
       if (location.hash !== '#transactions') GU.view.go('transactions');
+      setTimeout(() => GU.recurring.scan({ quiet: true }), 1500);
     }
 
     d.form.addEventListener('submit', (e) => {

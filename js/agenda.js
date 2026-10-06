@@ -134,6 +134,8 @@
       }
       for (const x of GU.debts.spotted(state).slice(0, 2)) out.push({ level: 'info', tab: 'debts', title: plural(x.count, 'payment') + ' to ' + x.lender + ' look like a debt', detail: 'Track it to see what’s left to pay' });
     }
+    const toCheck = state.bills.filter((b) => b.review && b.active !== false).length;
+    if (toCheck) out.push({ level: 'info', tab: 'bills', title: plural(toCheck, 'bill') + ' I found in your statements', detail: 'Check they’re right: keep them, or tell me which aren’t regular bills' });
     const uncategorised = state.transactions.filter((x) => !x.category).length;
     if (uncategorised) out.push({ level: 'info', tab: 'transactions', title: plural(uncategorised, 'transaction') + ' need a category', detail: 'Sorting them keeps your spending totals right', go: 'uncategorised' });
     const month = t.slice(0, 7);

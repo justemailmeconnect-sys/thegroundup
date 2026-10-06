@@ -595,6 +595,10 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .spot__text { display: grid; min-width: 0; }
 .spot__text b { font-weight: 600; font-size: 14.5px; }
 .spot__text em { font-style: normal; font-size: 12.5px; color: var(--ink-3); }
+.spot__btn { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.spot__btn:hover b { color: var(--accent); }
+.spot__amt { font: 500 13.5px/1 var(--font-mono); color: var(--ink-2); margin-left: 4px; white-space: nowrap; }
+.panel__intro { padding: 12px 18px 4px; font-size: 13.5px; color: var(--ink-2); }
 .spot__act { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .panel--spotted { border-color: color-mix(in srgb, var(--info) 30%, var(--line)); }
 .od-meter { width: 110px; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }

@@ -27,7 +27,7 @@
     [['boots', 'superdrug', 'pharmacy', 'dentist', 'optician', 'specsavers', 'puregym', 'gym', 'nuffield', 'bupa'], 'Health & fitness'],
     [['odeon', 'vue ', 'cineworld', 'ticketmaster', 'steam', 'cinema', 'theatre'], 'Entertainment'],
     [['ryanair', 'easyjet', 'british airways', 'jet2', 'wizz', 'booking.com', 'airbnb', 'expedia', 'hotel', 'premier inn'], 'Travel'],
-    [['klarna', 'clearpay', 'payin3', 'pay in 3', 'zilch', 'laybuy', 'barclaycard', 'capital one', 'vanquis', 'mbna', 'american express', 'amex', 'paypal credit', 'zopa', 'lendable', 'moneybarn', 'student loan', 'tymit', 'aqua card', 'newday'], 'Debt repayments'],
+    [['klarna', 'clearpay', 'payin3', 'pay in 3', 'zilch', 'laybuy', 'barclaycard', 'capital one', 'vanquis', 'mbna', 'american express', 'amex', 'paypal credit', 'zopa', 'lendable', 'moneybarn', 'student loan', 'tymit', 'aqua card', 'newday', 'lowell portfolio', 'cabot financial', 'intrum', 'pra group', 'asset link capital', 'allied international', 'moorcroft', 'link financial', 'capquest', 'robinson way', 'wescot', 'bw legal'], 'Debt repayments'],
     [['amazon', 'amzn', 'argos', 'ebay', 'asos', 'john lewis', 'ikea', 'primark', 'currys', 'b&q', 'wickes', 'tk maxx', 'zara', 'h&m', 'uniqlo', 'etsy', 'tiktok', 'temu', 'shein', 'jd sports', 'sports direct', 'sportsdirect', 'footlocker', 'foot locker', 'menswear', 'fashion', 'clothing', 'shoes', 'next retail', 'matalan', 'b&m', 'home bargains', 'poundland', 'the range', 'wilko', 'boohoo', 'very.co.uk'], 'Shopping'],
     [['moneybox', 'vanguard', 'trading 212', 'freetrade', 'hargreaves', 'premium bonds', 'ns&i'], 'Savings & investments'],
     [['atm', 'cash withdrawal', 'cashpoint'], 'Cash'],

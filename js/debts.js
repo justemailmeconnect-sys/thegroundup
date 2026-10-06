@@ -82,7 +82,7 @@
   }
 
   /* ---------- debts ---------- */
-  const TYPES = ['Credit card', 'Loan', 'Buy now pay later', 'Car finance', 'Store or catalogue card', 'Overdraft', 'Mortgage', 'Student loan', 'Owed to a person', 'Other'];
+  const TYPES = ['Credit card', 'Loan', 'Buy now pay later', 'Car finance', 'Store or catalogue card', 'Overdraft', 'Mortgage', 'Student loan', 'Debt collection agency', 'Owed to a person', 'Other'];
   /* Lenders and how they appear on bank statements. */
   const LENDERS = [
     { name: 'Klarna', type: 'Buy now pay later', keys: ['klarna'] },
@@ -110,6 +110,23 @@
     { name: 'Littlewoods', type: 'Store or catalogue card', keys: ['littlewoods'] },
     { name: 'JD Williams', type: 'Store or catalogue card', keys: ['jd williams'] },
     { name: 'Student Loans Company', type: 'Student loan', keys: ['student loan', 'slc '] },
+    // Companies that buy or collect old debts.
+    { name: 'Lowell', type: 'Debt collection agency', keys: ['lowell portfolio', 'lowell financial', 'lowell solicitors', 'lowell group'] },
+    { name: 'Cabot Financial', type: 'Debt collection agency', keys: ['cabot financial', 'cabot credit'] },
+    { name: 'Intrum', type: 'Debt collection agency', keys: ['intrum'] },
+    { name: 'PRA Group', type: 'Debt collection agency', keys: ['pra group'] },
+    { name: 'Asset Link Capital', type: 'Debt collection agency', keys: ['asset link capital', 'assetlink'] },
+    { name: 'Allied International Credit', type: 'Debt collection agency', keys: ['allied international', 'aic uk'] },
+    { name: 'Moorcroft', type: 'Debt collection agency', keys: ['moorcroft'] },
+    { name: 'Link Financial', type: 'Debt collection agency', keys: ['link financial'] },
+    { name: 'Hoist Finance', type: 'Debt collection agency', keys: ['hoist finance', 'hoist portfolio'] },
+    { name: 'Capquest', type: 'Debt collection agency', keys: ['capquest'] },
+    { name: 'Robinson Way', type: 'Debt collection agency', keys: ['robinson way'] },
+    { name: 'Advantis', type: 'Debt collection agency', keys: ['advantis credit'] },
+    { name: 'BW Legal', type: 'Debt collection agency', keys: ['bw legal'] },
+    { name: 'Wescot', type: 'Debt collection agency', keys: ['wescot'] },
+    { name: 'Arrow Global', type: 'Debt collection agency', keys: ['arrow global'] },
+    { name: 'Overdales', type: 'Debt collection agency', keys: ['overdales'] },
   ];
   function lenderFor(name) {
     const n = String(name || '').toLowerCase();

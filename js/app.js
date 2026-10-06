@@ -161,6 +161,13 @@
   }
   GU.render = render;
 
+  /* The first time there's a statement history, find the bills in it. Later imports look for new ones. */
+  function firstBillScan() {
+    const s = store.state;
+    if (s.meta.billsScanned || s.transactions.filter((t) => !t.demo).length < 30) return;
+    GU.recurring.scan({ quiet: true });
+  }
+
   async function start() {
     store.init();
     await GU.files.open();
@@ -178,8 +185,9 @@
         const empty = !['transactions', 'bills', 'paperwork', 'documents', 'visas', 'tasks', 'debts'].some((k) => (store.state[k] || []).length);
         if (fresh && !r.remote && empty) await GU.sample.load();
         store.commit((s) => GU.finance.rollForward(s));
+        firstBillScan();
       });
-    }
+    } else firstBillScan();
     GU.inbox.resume();
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);

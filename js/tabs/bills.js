@@ -4,7 +4,7 @@
   'use strict';
   const GU = window.GU;
   const { esc, uid, today, money, fmtDate, relDays, daysUntil, plural, sum } = GU.util;
-  const { icon, pill, emptyState, formDialog, toast } = GU.ui;
+  const { icon, pill, emptyState, formDialog, toast, menu } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
 
@@ -13,7 +13,7 @@
   let showStopped = false;
 
   function status(b) {
-    if (b.active === false) return pill('Stopped', 'muted');
+    if (b.active === false) return pill(b.endedAs === 'once' ? 'One-off' : 'Stopped', 'muted');
     const n = daysUntil(b.nextDue);
     if (!b.autopay && n < 0) return pill('Overdue', 'crit', 'alert');
     if (n === 0) return pill(b.autopay ? 'Leaves today' : 'Due today', b.autopay ? 'info' : 'warn', 'clock');
@@ -33,9 +33,29 @@
       '<span class="row-item__act">' + (canPay ? '<button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(b.id) + '">' + icon('check') + 'Paid</button>' : '') + '</span></li>';
   }
 
+  /* Bills found in your statements, waiting for you to say whether they're right. */
+  function reviewHTML(list) {
+    if (!list.length) return '';
+    return '<section class="panel panel--spotted"><header class="panel__head"><h2>' + icon('search') + 'Found in your bank statements</h2>' +
+      '<button type="button" class="btn btn--sm btn--primary" data-keep-all>' + icon('check') + 'Keep all ' + list.length + '</button></header>' +
+      '<p class="panel__intro">I added these because you pay them regularly. Keep the ones that are right, and tell me about any that aren’t a regular bill, were a one-off or you’ve cancelled.</p>' +
+      '<ul class="rows">' + list.map((b) => {
+        const h = b.history || [];
+        const lo = Math.min(...h.map((x) => x.amount));
+        const hi = Math.max(...h.map((x) => x.amount));
+        const meta = [F.freqLabel(b.frequency), h.length ? plural(h.length, 'payment') + ' since ' + fmtDate(h[0].date, { short: true }) : '', hi - lo > 0.5 ? 'varies ' + money(lo) + ' to ' + money(hi) : '', 'next ' + fmtDate(b.nextDue, { short: true })].filter(Boolean).join(' · ');
+        return '<li class="spot"><span class="row-item__icon">' + icon(b.autopay ? 'repeat' : 'bills') + '</span>' +
+          '<button type="button" class="spot__text spot__btn" data-edit="' + esc(b.id) + '"><b>' + esc(b.name) + ' <span class="spot__amt">' + esc(money(b.amount)) + '</span></b><em>' + esc(meta) + '</em></button>' +
+          '<span class="spot__act"><button type="button" class="btn btn--sm btn--soft" data-keep="' + esc(b.id) + '">' + icon('check') + 'Keep</button>' +
+          '<button type="button" class="btn btn--sm btn--ghost" data-notbill="' + esc(b.id) + '">Not a bill</button>' +
+          '<button type="button" class="btn btn--sm btn--ghost" data-more="' + esc(b.id) + '" aria-label="More for ' + esc(b.name) + '">' + icon('more') + '</button></span></li>';
+      }).join('') + '</ul></section>';
+  }
+
   function render(root) {
     const s = store.state;
     const t = today();
+    const review = s.bills.filter((b) => b.review && b.active !== false);
     const active = s.bills.filter((b) => b.active !== false).sort((a, b) => (a.nextDue < b.nextDue ? -1 : 1));
     const stopped = s.bills.filter((b) => b.active === false);
     const monthly = sum(active, (b) => F.monthlyEquivalent(b.amount, b.frequency));
@@ -58,9 +78,11 @@
       eyebrow: 'Money',
       title: 'Bills',
       text: 'Your regular payments. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on your Today list until you mark them paid.',
-      actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
+      actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +
+        '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +
       GU.ui.dropbar('Drop bills and contracts here, or a whole folder', 'Each new company becomes a bill. Letters from a company you already have are added to its bill, not duplicated.') +
+      reviewHTML(review) +
       '<div class="ledger">' +
       '<div><span>Bills per month</span><b>' + esc(money(monthly)) + '</b><em>on average</em></div>' +
       '<div><span>Bills per year</span><b>' + esc(money(monthly * 12, { whole: true })) + '</b><em>' + esc(plural(active.length, 'active bill')) + '</em></div>' +
@@ -83,11 +105,57 @@
     if (det) det.addEventListener('toggle', () => (showStopped = det.open));
     root.addEventListener('click', (e) => {
       if (e.target.closest('[data-add]')) return create();
+      if (e.target.closest('[data-scan]')) return GU.recurring.scan();
+      if (e.target.closest('[data-keep-all]')) {
+        const ids = review.map((b) => b.id);
+        store.commit((st) => st.bills.forEach((b) => ids.includes(b.id) && (b.review = false)));
+        toast('Kept ' + plural(ids.length, 'bill'), { action: 'Undo', onAction: () => store.commit((st) => st.bills.forEach((b) => ids.includes(b.id) && (b.review = true))) });
+        return;
+      }
+      const keep = e.target.closest('[data-keep]');
+      if (keep) return store.commit((st) => (st.bills.find((b) => b.id === keep.dataset.keep).review = false));
+      const nb = e.target.closest('[data-notbill]');
+      if (nb) return notABill(nb.dataset.notbill);
+      const more = e.target.closest('[data-more]');
+      if (more) {
+        const id = more.dataset.more;
+        return menu(more, [
+          { icon: 'check', label: 'It was a one-off', hint: 'Keep it as a past payment, not a regular bill', onClick: () => endBill(id, 'once') },
+          { icon: 'x', label: 'I’ve cancelled it', hint: 'Move it to stopped bills', onClick: () => endBill(id, 'cancelled') },
+          { icon: 'edit', label: 'Change the details', hint: 'Name, amount, date or how often', onClick: () => edit(id) },
+        ]);
+      }
       const pay = e.target.closest('[data-pay]');
       if (pay) return markPaid(pay.dataset.pay);
       const ed = e.target.closest('[data-edit]');
       if (ed) edit(ed.dataset.edit);
     });
+  }
+
+  /* Not a regular bill: remove it and don't suggest it again. */
+  function notABill(id) {
+    const b = store.find('bills', id);
+    if (!b) return;
+    store.commit((st) => {
+      st.bills = st.bills.filter((x) => x.id !== id);
+      if (b.foundKey) st.settings.ignoredBills = (st.settings.ignoredBills || []).concat([b.foundKey]);
+    });
+    toast('Removed ' + b.name + '. I won’t suggest it again.', { action: 'Undo', onAction: () => store.commit((st) => {
+      st.bills.push(b);
+      st.settings.ignoredBills = (st.settings.ignoredBills || []).filter((k) => k !== b.foundKey);
+    }) });
+  }
+  /* A one-off or a cancelled bill: kept under stopped bills so it isn't suggested again. */
+  function endBill(id, why) {
+    const before = JSON.parse(JSON.stringify(store.find('bills', id)));
+    store.commit((st) => {
+      const b = st.bills.find((x) => x.id === id);
+      Object.assign(b, { active: false, review: false, endedAs: why });
+      if (why === 'once') b.frequency = 'once';
+    });
+    toast(before.name + (why === 'once' ? ' marked as a one-off' : ' moved to stopped bills'), { action: 'Undo', onAction: () => store.commit((st) => {
+      st.bills = st.bills.map((x) => (x.id === id ? before : x));
+    }) });
   }
 
   function fields() {
@@ -107,7 +175,7 @@
   }
 
   function save(v, existing) {
-    const rec = Object.assign(existing ? Object.assign({}, existing) : { id: 'b-' + uid(), history: [], created: today() }, v, {
+    const rec = Object.assign(existing ? Object.assign({}, existing) : { id: 'b-' + uid(), history: [], created: today() }, v, { review: false }, {
       autopay: isAuto(v.method),
       anchorDay: +String(v.nextDue).slice(8, 10),
       active: existing ? v.active : true,
