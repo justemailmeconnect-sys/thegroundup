@@ -923,5 +923,83 @@
     return Object.assign(await viaRules({ files: [], note: note || '', text: '' }), { via: 'offline' });
   }
 
-  GU.brain = { readStatement, quick, analyse, file, where, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS };
+  /* ---------- payment schedules from Klarna, PayPal and similar ---------- */
+  const SCHEDULE_SCHEMA = {
+    type: 'object', additionalProperties: false, required: ['lender', 'payments'],
+    properties: {
+      lender: NULLABLE('string'),
+      payments: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'amount', 'merchant', 'paid'],
+        properties: { date: { type: 'string' }, amount: { type: 'number' }, merchant: NULLABLE('string'), paid: { type: 'boolean' } } } },
+    },
+  };
+  function schedulePrompt(text) {
+    return 'These are the user\'s payments from a buy now pay later or credit account (Klarna, PayPal Pay in 3, Clearpay, Monzo Flex or similar), as a screenshot or copied text. Today is ' + today() + '. ' +
+      'List every payment in it. date: YYYY-MM-DD (UK dates, so 03/04 is 3 April; "Tomorrow" is the day after today; a date with no year is the next one from today). amount: the payment in pounds as a plain number. ' +
+      'merchant: the shop or plan it is for, or null. paid: true if it has already been paid, false if it is still to pay. lender: the company, for example "Klarna" or "PayPal Pay in 3".' +
+      (text ? '\n\nTHE TEXT:\n<<<\n' + text.slice(0, 12000) + '\n>>>' : '');
+  }
+  function cleanSchedule(data) {
+    const list = ((data && data.payments) || []).filter((p) => p && !p.paid && GU.util.isISO(p.date) && Number(p.amount) > 0)
+      .map((p) => ({ date: p.date, amount: round2(Math.abs(Number(p.amount))), merchant: (p.merchant || '').trim(), n: null, of: null }));
+    return { lender: (data && data.lender) || null, payments: list.sort((a, b) => a.date.localeCompare(b.date)) };
+  }
+  /* input: {text, files}. Pasted text is read on this device; screenshots go to Claude when it's connected,
+     otherwise their text is read here (photo text recognition) and parsed the same way. */
+  async function readSchedule(input) {
+    const text = String(input.text || '').trim();
+    const files = input.files || [];
+    if (text && !files.length) {
+      const offline = GU.debts.parseSchedule(text);
+      if (offline.length) return { lender: null, payments: offline, via: 'offline' };
+    }
+    const sample = await getSample();
+    if (sample) {
+      let images = [];
+      try {
+        const lim = await sample.limits();
+        if (lim && lim.images) images = files.filter((f) => lim.images.mediaTypes.includes(f.type)).slice(0, lim.images.maxCount || 1);
+      } catch (e) {
+        images = [];
+      }
+      const docs = [];
+      for (const f of files) if (isPdf(f)) docs.push(await readFileText(f, false));
+      const all = [text].concat(docs).filter(Boolean).join('\n\n');
+      if (images.length || all) {
+        try {
+          const opts = { modelTier: 'default' };
+          if (images.length) opts.images = images;
+          const data = await sample.json(schedulePrompt(all) + '\n\nReply with only a JSON object: {"lender": string or null, "payments": [{"date", "amount", "merchant", "paid"}]}', opts);
+          return Object.assign(cleanSchedule(data), { via: 'claude-app' });
+        } catch (e) {
+          console.warn('[brain] schedule via Claude failed', e);
+        }
+      }
+    }
+    const key = (store.state.settings.apiKey || '').trim();
+    if (key && files.length) {
+      try {
+        const Anthropic = await getSDK();
+        const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+        const content = [];
+        for (const f of files) {
+          if (/^image\/(png|jpeg|gif|webp)$/.test(f.type)) content.push({ type: 'image', source: { type: 'base64', media_type: f.type, data: await toBase64(f) } });
+          else if (isPdf(f)) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await toBase64(f) } });
+        }
+        content.push({ type: 'text', text: schedulePrompt(text) });
+        const res = await client.beta.messages.create({
+          model: store.state.settings.model || MODEL, max_tokens: 8000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+          output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEDULE_SCHEMA } }, messages: [{ role: 'user', content }],
+        });
+        const block = res.content.find((x) => x.type === 'text');
+        if (block) return Object.assign(cleanSchedule(JSON.parse(block.text)), { via: 'claude-api' });
+      } catch (e) {
+        console.warn('[brain] schedule via API failed', e);
+      }
+    }
+    let all = text;
+    for (const f of files) all += '\n' + (await readFileText(f, store.state.settings.ocr !== false));
+    return { lender: null, payments: GU.debts.parseSchedule(all), via: 'offline' };
+  }
+
+  GU.brain = { readSchedule, readStatement, quick, analyse, file, where, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS };
 })();

@@ -75,7 +75,7 @@
     const catItems = Array.from(byCat, ([label, value]) => ({ label, value: Math.round(value * 100) / 100 })).sort((a, b) => b.value - a.value);
 
     root.innerHTML = GU.view.head({
-      eyebrow: 'Money',
+      eyebrow: 'Money ahead',
       title: 'Bills',
       text: 'Your regular payments. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on your Today list until you mark them paid.',
       actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +

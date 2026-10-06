@@ -1,9 +1,9 @@
-/* The Ground Up: Today. The daily briefing: one timeline of everything due, a quick capture bar,
-   and a side column with this month's money, things needing attention and things you're waiting on. */
+/* The Ground Up: Home. Where you stand and where you're heading: your balances now, the money coming in
+   and going out from today with the lowest point and the month-end figure, then the other things coming up. */
 (function () {
   'use strict';
   const GU = window.GU;
-  const { esc, today, addDays, daysUntil, fmtDate, fmtLongDate, greeting, money, plural, monthKey, monthLabel, weekday } = GU.util;
+  const { esc, today, addDays, daysUntil, fmtDate, fmtLongDate, greeting, money, plural, monthLabel, weekday, sum } = GU.util;
   const { icon, emptyState } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
@@ -91,33 +91,102 @@
         : '<p class="tl-day__clear">' + icon('check') + 'Nothing else due today</p>') + '</li>').join('') + '</ol>';
   }
 
-  function footText(s, inn, out) {
-    if (!inn) {
-      const next = s.incomeSources.filter((x) => x.nextDate).sort((a, b) => a.nextDate.localeCompare(b.nextDate))[0];
-      return 'Nothing has come in yet this month' + (next ? '; ' + esc(next.name.toLowerCase()) + ' is expected <b>' + esc(fmtDate(next.nextDate, { short: true })) + '</b>.' : '.');
+  /* ---------- money ahead ---------- */
+  let range = 'month';
+  const shortMonth = (iso) => monthLabel(iso.slice(0, 7), true).split(' ')[0];
+  function windowFor(t) {
+    const end = GU.forecast.monthEnd(t);
+    if (range === '30') return { from: t, to: addDays(t, 30), label: 'Next 30 days', endLabel: 'By ' + fmtDate(addDays(t, 30), { short: true }) };
+    if (range === 'next') {
+      const s = addDays(end, 1);
+      return { from: s, to: GU.forecast.monthEnd(s), label: monthLabel(s.slice(0, 7), true), endLabel: 'By ' + fmtDate(GU.forecast.monthEnd(s), { short: true }) };
     }
-    return (inn >= out ? 'Left over so far: ' : 'Spent more than came in by ') + '<b>' + esc(money(Math.abs(inn - out))) + '</b>.';
+    return { from: t, to: end, label: 'Rest of ' + shortMonth(t), endLabel: 'By ' + fmtDate(end, { short: true }) };
+  }
+  const KIND_LABEL = { income: 'In', bill: 'Bill', debt: 'Debt', invoice: 'Invoice' };
+
+  function nowHTML(s) {
+    const list = GU.money.accounts(s).filter((x) => x.info || x.count);
+    if (!list.length) {
+      return '<section class="now"><header class="sec-head"><h2>Right now</h2></header><div class="now-empty">' + icon('bank') +
+        '<p>Tell me what’s in your accounts and I’ll plan the rest of the month from there.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
+    }
+    const known = list.filter((x) => x.info);
+    const total = sum(known, (x) => x.info.balance);
+    const spare = sum(known, (x) => x.info.overdraftLimit || 0);
+    const asOf = known.reduce((m, x) => (!m || x.info.asOf < m ? x.info.asOf : m), '');
+    const stale = asOf && daysUntil(asOf) < -2;
+    return '<section class="now"><header class="sec-head"><h2>Right now</h2><span class="muted">' + (asOf ? 'balances as of ' + esc(fmtDate(asOf, { weekday: true })) : '') + '</span>' +
+      '<button type="button" class="btn btn--sm' + (stale ? ' btn--primary' : '') + '" data-balances>' + icon('edit') + 'Update balances</button></header>' +
+      (stale ? '<p class="note-line">' + icon('clock') + '<span>These balances are ' + Math.abs(daysUntil(asOf)) + ' days old. Put in what your banking apps show now so the plan below stays right.</span></p>' : '') +
+      '<div class="now-cards">' + list.map((x) => {
+        const b = x.info;
+        const neg = b && b.balance < 0;
+        const od = b && b.overdraftLimit ? (neg ? money(b.overdraftLimit + b.balance, { whole: false }) + ' of ' + money(b.overdraftLimit, { whole: true }) + ' overdraft left' : money(b.overdraftLimit, { whole: true }) + ' overdraft available') : neg ? 'Overdrawn' : '';
+        return '<button type="button" class="now-card' + (neg ? ' is-neg' : '') + '" data-account="' + esc(x.account.id) + '"><span>' + esc(x.account.name) + '</span><b>' + (b ? esc(money(b.balance)) : '–') + '</b><em>' + esc(od || (b ? 'in credit' : 'no balance yet')) + '</em></button>';
+      }).join('') +
+      (known.length > 1 ? '<div class="now-card now-card--total' + (total < 0 ? ' is-neg' : '') + '"><span>Together</span><b>' + esc(money(total)) + '</b><em>' + esc(spare ? money(total + spare) + ' available with overdrafts' : 'across your accounts') + '</em></div>' : '') +
+      '</div></section>';
   }
 
-  function monthCard(s) {
-    const key = monthKey(today());
-    const rows = F.inMonth(s.transactions, key);
-    const inn = F.moneyIn(rows);
-    const out = F.moneyOut(rows);
-    const max = Math.max(inn, out, 1);
-    const end = addDays(GU.util.addMonths(key + '-01', 1), -1);
-    let billsLeft = 0;
-    for (const b of s.bills) {
-      if (b.active === false || !b.nextDue) continue;
-      billsLeft += F.occurrences(b.nextDue < today() ? today() : b.nextDue, b.frequency, b.anchorDay, today(), end).length * b.amount;
+  function aheadHTML(s, t) {
+    const win = windowFor(t);
+    const plan = GU.forecast.plan(s, { to: win.to });
+    const ev = plan.events.filter((e) => e.date >= win.from);
+    const before = plan.events.filter((e) => e.date < win.from);
+    const startShown = before.length ? before[before.length - 1].after : plan.start;
+    const days = plan.days.filter((d) => d.date >= win.from);
+    const low = days.reduce((m, d) => (d.value < m.value ? d : m), { date: win.from, value: startShown });
+    const endShown = ev.length ? ev[ev.length - 1].after : startShown;
+    const inn = sum(ev.filter((e) => e.amount > 0), (e) => e.amount);
+    const out = sum(ev.filter((e) => e.amount < 0), (e) => -e.amount);
+    const warns = plan.accounts.filter((a) => a.low < 0).map((a) => {
+      const past = a.low < -a.limit;
+      return '<li class="' + (past ? 'is-crit' : 'is-warn') + '">' + icon('alert') + '<span>' + esc(past
+        ? a.name + ' would go ' + money(-a.low - a.limit) + ' past its ' + money(a.limit, { whole: true }) + ' overdraft limit by ' + fmtDate(a.lowDate, { weekday: true }) + '. Move money across before then.'
+        : a.name + ' stays overdrawn, lowest ' + money(a.low) + ' on ' + fmtDate(a.lowDate, { short: true }) + (a.limit ? ' (' + money(a.limit + a.low) + ' of overdraft left)' : '') + '.') + '</span></li>';
+    });
+    const step = Math.max(1, Math.round(days.length / 4));
+    const labels = [];
+    for (let i = 0; i < days.length; i += step) labels.push({ i, text: fmtDate(days[i].date, { short: true }) });
+    const groups = new Map();
+    for (const e of ev) {
+      if (!groups.has(e.date)) groups.set(e.date, []);
+      groups.get(e.date).push(e);
     }
-    return '<section class="side-card"><h2>' + esc(monthLabel(key, true).split(' ')[0]) + ' so far</h2>' +
-      '<div class="mini-bars">' +
-      '<div><span>Money in</span><i style="width:' + (inn / max) * 100 + '%;background:var(--series-in)' + (inn ? '' : ';min-width:0') + '"></i><b>' + esc(money(inn, { whole: true })) + '</b></div>' +
-      '<div><span>Money out</span><i style="width:' + (out / max) * 100 + '%;background:var(--series-out)"></i><b>' + esc(money(out, { whole: true })) + '</b></div>' +
-      '</div><p class="side-card__foot">' + footText(s, inn, out) +
-      (billsLeft ? ' ' + esc(money(billsLeft, { whole: true })) + ' of bills still to go out this month.' : '') + '</p>' +
-      '<a class="link" href="#outgoings">See spending ' + icon('chevron') + '</a></section>';
+    const seg = [['month', 'Rest of ' + shortMonth(t)], ['30', 'Next 30 days'], ['next', shortMonth(addDays(GU.forecast.monthEnd(t), 1))]];
+    return '<section class="panel ahead"><header class="panel__head"><h2>' + icon('trend') + 'Money ahead</h2>' +
+      '<div class="seg seg--sm" role="radiogroup" aria-label="Period">' + seg.map(([v, l]) => '<label><input type="radio" name="ahead-range" value="' + v + '"' + (range === v ? ' checked' : '') + '><span>' + esc(l) + '</span></label>').join('') + '</div></header>' +
+      '<div class="ahead__sum">' +
+      '<div><span>Coming in</span><b class="is-in">' + esc(money(inn, { sign: true })) + '</b><em>' + esc(plural(ev.filter((e) => e.amount > 0).length, 'payment')) + '</em></div>' +
+      '<div><span>Going out</span><b>' + esc(money(-out)) + '</b><em>' + esc(plural(ev.filter((e) => e.amount < 0).length, 'payment')) + '</em></div>' +
+      '<div><span>' + esc(win.endLabel) + '</span><b class="' + (endShown < 0 ? 'is-crit' : '') + '">' + esc(money(endShown)) + '</b><em>across your accounts</em></div>' +
+      '<div><span>Lowest point</span><b class="' + (low.value < 0 ? 'is-crit' : '') + '">' + esc(money(low.value)) + '</b><em>' + esc(fmtDate(low.date, { weekday: true })) + '</em></div>' +
+      '</div>' +
+      (warns.length ? '<ul class="ahead__warn">' + warns.join('') + '</ul>' : '') +
+      (days.length > 2 && ev.length ? '<div class="panel__body ahead__chart">' + GU.charts.line(days.map((d) => ({ value: d.value, tip: fmtDate(d.date, { weekday: true }) + ': ' + money(d.value) })), { height: 150, labels, color: '--series-in' }) + '</div>' : '') +
+      (ev.length ? '<ol class="flow">' + Array.from(groups).map(([d, items]) => '<li class="flow-day' + (d === t ? ' is-today' : '') + '"><h3>' + esc(d === t ? 'Today' : fmtDate(d, { weekday: true })) + '</h3><ul>' +
+        items.map((e) => '<li class="flow-row' + (e.amount > 0 ? ' is-in' : '') + (e.review || e.rough ? ' is-soft' : '') + '"><span class="kind kind--' + (e.kind === 'income' ? 'income' : e.kind === 'debt' ? 'debt' : 'bill') + '">' + esc(KIND_LABEL[e.kind] || '') + '</span>' +
+          '<button type="button" class="flow-row__main" data-open="' + esc(e.ref.c + ':' + e.ref.id) + '"><b>' + esc(e.label) + '</b><em>' + esc((e.overdue ? 'Overdue · ' : '') + (e.sub || '')) + '</em></button>' +
+          '<span class="flow-row__amt">' + esc(money(e.amount, { sign: true })) + '</span><span class="flow-row__after' + (e.after < 0 ? ' is-neg' : '') + '">' + esc(money(e.after)) + '</span></li>').join('') + '</ul></li>').join('') + '</ol>'
+        : '<div class="panel__body"><p class="muted">Nothing expected in this period yet. Add your income, bills and payment schedules and I’ll plan around them.</p></div>') +
+      '<footer class="panel__foot ahead__add"><button type="button" class="btn btn--sm btn--ghost" data-add-income>' + icon('in') + 'Expected income</button>' +
+      '<button type="button" class="btn btn--sm btn--ghost" data-add-bill>' + icon('bills') + 'A bill</button>' +
+      '<button type="button" class="btn btn--sm btn--ghost" data-add-schedule>' + icon('card') + 'Klarna or PayPal schedule</button></footer>' +
+      '</section>';
+  }
+
+  function summaryLine(s, t) {
+    const plan = GU.forecast.plan(s, { to: GU.forecast.monthEnd(t) });
+    if (!plan.known) return 'Add your balances, income and bills and I’ll show you where you’re heading.';
+    const incomes = plan.events.filter((e) => e.amount > 0).map((e) => e.label);
+    const names = Array.from(new Set(incomes));
+    const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+    const lowAcct = plan.accounts.filter((a) => a.low < -a.limit)[0];
+    return (plan.start < 0 ? 'You’re ' + money(-plan.start) + ' overdrawn across your accounts' : 'You have ' + money(plan.start) + ' across your accounts') +
+      (list ? ', with ' + list + ' still to come this month' : '') + '. ' +
+      'By ' + fmtDate(plan.to, { short: true }) + ' you should have about ' + money(plan.end) + '.' +
+      (lowAcct ? ' Watch ' + lowAcct.name + ': it would go past its overdraft on ' + fmtDate(lowAcct.lowDate, { short: true }) + '.' : '');
   }
 
   function listCard(title, items, emptyText) {
@@ -128,53 +197,51 @@
       '<span><b>' + esc(a.title) + '</b><em>' + esc(a.detail || '') + '</em></span></button></li>').join('') + '</ul></section>';
   }
 
-  function recentUploads(s) {
-    const withFiles = s.paperwork.filter((p) => p.files && p.files.length).sort((a, b) => (b.created || b.date || '').localeCompare(a.created || a.date || '')).slice(0, 6);
-    if (!withFiles.length) return '';
-    return '<section class="side-card"><h2>Recent uploads</h2><div class="thumb-row">' + withFiles.map((p) =>
-      '<button type="button" class="thumb-btn" data-view="' + esc(p.id) + '" data-tip="' + esc(p.title + (p.amount ? ' · ' + money(p.amount) : '')) + '" aria-label="View ' + esc(p.title) + '">' + GU.ui.thumbHTML(p.files) + '</button>').join('') +
-      '</div><a class="link" href="#receipts">All receipts and invoices ' + icon('chevron') + '</a></section>';
+  /* Klarna, PayPal and the like without a payment schedule yet. */
+  function scheduleCard(s) {
+    const missing = (s.debts || []).filter((d) => !d.closed && d.type === 'Buy now pay later' && !GU.debts.summary(s, d).scheduled);
+    const spotted = GU.debts.spotted(s).filter((x) => x.type === 'Buy now pay later' && daysUntil(x.last) > -45);
+    const names = Array.from(new Set(missing.map((d) => d.lender || d.name).concat(spotted.map((x) => x.lender)))).filter((n) => n !== 'Monzo Flex' || missing.some((d) => (d.lender || d.name) === n));
+    if (!names.length) return '';
+    return '<section class="side-card side-card--ask"><h2>Add your payment schedules</h2><p class="side-card__foot">So the plan includes every instalment on the right day. Paste the list or add a screenshot from the app.</p>' +
+      '<div class="side-card__btns">' + names.slice(0, 3).map((n) => '<button type="button" class="btn btn--sm" data-schedule-for="' + esc(n) + '">' + icon('card') + esc(n) + '</button>').join('') + '</div></section>';
   }
 
   function render(root) {
     const s = store.state;
     const t = today();
-    const items = GU.agenda.timeline(s, horizon);
-    const overdue = items.filter((i) => i.overdue && i.kind !== 'income').length;
-    const dueToday = items.filter((i) => i.date === t && i.kind !== 'income').length;
-    const week = items.filter((i) => !i.overdue && i.date > t && i.date <= addDays(t, 7)).length;
-    const parts = [];
-    if (overdue) parts.push(plural(overdue, 'thing') + (overdue === 1 ? ' is' : ' are') + ' overdue');
-    if (dueToday) parts.push(dueToday + ' due today');
-    if (week) parts.push(week + ' more this week');
-    const summary = parts.length ? parts.join(', ').replace(/, ([^,]*)$/, ' and $1') + '.' : 'Nothing is overdue. Nice work.';
-    const attention = GU.agenda.attention(s);
+    const items = GU.agenda.timeline(s, horizon).filter((i) => !['bill', 'income', 'invoice', 'owed', 'debt'].includes(i.kind));
+    const attention = GU.agenda.attention(s).filter((a) => !/need a category/.test(a.title));
     const waiting = GU.agenda.waiting(s);
 
     root.innerHTML =
       '<div class="brief">' +
       '<div class="brief__feed">' +
       '<p class="eyebrow">' + esc(fmtLongDate(t)) + '</p>' +
-      '<h1 class="brief__title">' + esc(greeting() + (s.settings.name ? ', ' + s.settings.name : '')) + '. Here’s what’s coming up.</h1>' +
-      '<p class="brief__summary">' + esc(summary) + '</p>' +
+      '<h1 class="brief__title">' + esc(greeting() + (s.settings.name ? ', ' + s.settings.name : '')) + '. Here’s where you stand.</h1>' +
+      '<p class="brief__summary">' + esc(summaryLine(s, t)) + '</p>' +
       '<form class="capture" data-capture>' +
       '<label class="capture__field">' + icon('plus') + '<input type="text" name="task" id="quick-task" autocomplete="off" placeholder="Tell me anything, e.g. Renew car tax on Friday" aria-label="Tell your assistant anything"></label>' +
       '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
       '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button></div>' +
       '</form>' +
-      '<p class="capture__hint">' + icon('clip') + 'Snap or drop anything here, even a whole folder: receipts, invoices, letters, warranties. I’ll read each one and file it in the right place.</p>' +
+      nowHTML(s) +
+      aheadHTML(s, t) +
+      '<section class="later"><header class="sec-head"><h2>Also coming up</h2><span class="muted">tasks, documents and deadlines</span></header>' +
       timelineHTML(items) +
-      '<button type="button" class="btn btn--ghost brief__more" data-horizon>' + (horizon === 14 ? 'Show the next 30 days' : 'Show the next 14 days only') + '</button>' +
+      '<button type="button" class="btn btn--ghost brief__more" data-horizon>' + (horizon === 14 ? 'Show the next 30 days' : 'Show the next 14 days only') + '</button></section>' +
       '</div>' +
       '<aside class="brief__aside">' +
-      GU.tabs.debts.accountsCard(s) +
-      monthCard(s) +
       listCard('Needs attention', attention, 'Nothing needs your attention right now.') +
+      scheduleCard(s) +
       listCard('Waiting on', waiting) +
-      recentUploads(s) +
       '</aside></div>' +
       '<div class="dropcover" hidden><div>' + icon('upload') + '<b>Drop to let me sort it</b></div></div>';
 
+    root.querySelectorAll('input[name="ahead-range"]').forEach((el) => el.addEventListener('change', () => {
+      range = el.value;
+      GU.render();
+    }));
     const form = root.querySelector('[data-capture]');
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -224,6 +291,11 @@
         return;
       }
       if (e.target.closest('[data-balances]')) return GU.tabs.transactions.updateBalances();
+      if (e.target.closest('[data-add-income]')) return GU.tabs.incomings.createSource();
+      if (e.target.closest('[data-add-bill]')) return GU.tabs.bills.create();
+      if (e.target.closest('[data-add-schedule]')) return GU.tabs.debts.scheduleDialog('');
+      const sf = e.target.closest('[data-schedule-for]');
+      if (sf) return GU.tabs.debts.scheduleDialog(sf.dataset.scheduleFor);
       const acct = e.target.closest('[data-account]');
       if (acct) {
         e.preventDefault();
@@ -257,5 +329,5 @@
     });
   }
 
-  GU.tabs.today = { label: 'Today', short: 'Today', icon: 'today', render, parseQuickTask };
+  GU.tabs.today = { label: 'Home', short: 'Home', icon: 'today', render, parseQuickTask };
 })();

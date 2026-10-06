@@ -240,5 +240,16 @@
     return ids;
   }
 
-  GU.recurring = { find, scan, addAsBills, keyOf, accountEnds };
+  /* After transactions move between accounts, each found bill follows the account it's actually paid from. */
+  function reassignBills(st) {
+    const latest = {};
+    for (const t of st.transactions) {
+      if (t.amount >= 0) continue;
+      const k = keyOf(t.description);
+      if (!latest[k] || t.date > latest[k].date) latest[k] = t;
+    }
+    for (const b of st.bills || []) if (b.foundKey && latest[b.foundKey]) b.account = latest[b.foundKey].account;
+  }
+
+  GU.recurring = { find, scan, addAsBills, keyOf, accountEnds, reassignBills };
 })();

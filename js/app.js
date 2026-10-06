@@ -6,7 +6,9 @@
   const { icon } = GU.ui;
   const store = GU.store;
 
-  const ORDER = ['today', 'inbox', 'transactions', 'bills', 'incomings', 'outgoings', 'debts', 'receipts', 'documents', 'visas', 'todos'];
+  /* The menu, in groups: home and inbox; money ahead; paperwork; history. */
+  const GROUPS = [['today', 'inbox'], ['bills', 'debts', 'incomings', 'todos'], ['receipts', 'documents', 'visas'], ['transactions', 'outgoings']];
+  const ORDER = GROUPS.flat();
   GU.tabs = GU.tabs || {};
   const intents = {};
   let current = null;
@@ -92,7 +94,7 @@
     };
     document.querySelector('.rail__items').innerHTML =
       '<button type="button" class="rail__item rail__add" data-quick-add aria-label="Add something"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">Add</span></button>' +
-      ORDER.map(item).join('') +
+      GROUPS.map((g) => g.map(item).join('')).join('<span class="rail__sep" aria-hidden="true"></span>') +
       (custom.length ? '<span class="rail__sep" aria-hidden="true"></span>' + custom.map(item).join('') : '') +
       '<a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>';
   }
@@ -163,6 +165,7 @@
 
   /* The first time there's a statement history, find the bills in it. Later imports look for new ones. */
   function firstBillScan() {
+    GU.tabs.transactions.autoTidy();
     const s = store.state;
     if (s.meta.billsScanned || s.transactions.filter((t) => !t.demo).length < 30) return;
     GU.recurring.scan({ quiet: true });

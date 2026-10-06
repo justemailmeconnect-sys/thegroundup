@@ -92,6 +92,54 @@
       }) + '</div></section>';
   }
 
+  /* Suggested fixes for accounts that got mixed up on import. */
+  function fixesHTML(s) {
+    const fixes = GU.money.accountFixes(s);
+    if (!fixes.length) return '';
+    return '<section class="panel panel--spotted acct-fixes"><header class="panel__head"><h2>' + icon('alert') + 'Tidy up your accounts</h2></header><ul class="rows">' +
+      fixes.map((f, i) => '<li class="spot"><span class="row-item__icon">' + icon(f.kind === 'merge' ? 'repeat' : 'bank') + '</span><span class="spot__text"><b>' + esc(f.title) + '</b><em>' + esc(f.text) + '</em></span>' +
+        '<span class="spot__act"><button type="button" class="btn btn--sm btn--primary" data-fix="' + i + '">' + esc(f.action) + '</button><button type="button" class="btn btn--sm btn--ghost" data-fix-ignore="' + i + '">Leave it</button></span></li>').join('') +
+      '</ul></section>';
+  }
+  function runFix(i) {
+    const f = GU.money.accountFixes(store.state)[+i];
+    if (!f) return;
+    const before = { transactions: store.state.transactions, accounts: store.state.accounts, bills: store.state.bills };
+    let r;
+    store.commit((st) => {
+      st.transactions = st.transactions.map((t) => Object.assign({}, t));
+      st.accounts = st.accounts.map((a) => Object.assign({}, a));
+      r = GU.money.applyFix(st, f);
+      st.bills = st.bills.map((b) => Object.assign({}, b));
+      GU.recurring.reassignBills(st);
+    });
+    toast((f.kind === 'merge' ? 'Merged. ' + plural(r.moved, 'transaction') + ' moved and ' + plural(r.duplicates, 'copy', 'copies') + ' removed.' : 'Moved ' + plural(r.moved, 'transaction') + '.'), {
+      timeout: 12000, action: 'Undo', onAction: () => store.commit((st) => Object.assign(st, before)),
+    });
+  }
+
+  /* Once: put right statements that were imported into the wrong account (you can undo it, and the Bank tab
+     offers any later fixes one at a time instead). */
+  function autoTidy() {
+    const s = store.state;
+    if (s.meta.accountsTidied || !GU.money.accountFixes(s).length) return;
+    const before = { transactions: s.transactions, accounts: s.accounts, bills: s.bills };
+    const done = [];
+    store.commit((st) => {
+      st.transactions = st.transactions.map((t) => Object.assign({}, t));
+      st.accounts = st.accounts.map((a) => Object.assign({}, a));
+      st.bills = st.bills.map((b) => Object.assign({}, b));
+      for (const x of GU.money.tidyAll(st)) done.push({ f: x.fix, r: x.result });
+      GU.recurring.reassignBills(st);
+      st.meta.accountsTidied = today();
+    });
+    const moved = sum(done, (x) => x.r.moved);
+    const copies = sum(done, (x) => x.r.duplicates);
+    toast('I tidied up your accounts: ' + plural(moved, 'transaction') + ' moved to the right account and ' + plural(copies, 'copy', 'copies') + ' removed, so nothing is counted twice.', {
+      timeout: 20000, action: 'Undo', onAction: () => store.commit((st) => Object.assign(st, before)),
+    });
+  }
+
   function editAccount(id) {
     const a = store.state.accounts.find((x) => x.id === id);
     if (!a) return;
@@ -118,12 +166,20 @@
         store.commit((st) => {
           const x = st.accounts.find((y) => y.id === id);
           Object.assign(x, { name: v.name, bank: v.bank, type: v.type, overdraftLimit: v.overdraftLimit || 0 });
-          if (amt != null) x.balanceAnchor = { date: v.anchorDate || today(), amount: amt };
+          if (amt != null) x.balanceAnchor = { date: anchorDate(st, id, v.anchorDate), amount: amt };
         });
       },
       onDelete: n || store.state.accounts.length < 2 ? null : () => store.commit((st) => (st.accounts = st.accounts.filter((x) => x.id !== id))),
       deleteMessage: 'This account has no transactions, so nothing else is removed.',
     });
+  }
+
+  /* A balance typed in for today already includes every payment imported for that account,
+     even ones the bank dated a day ahead. */
+  function anchorDate(st, id, date) {
+    const d = date || today();
+    if (d < today()) return d;
+    return st.transactions.reduce((m, t) => (t.account === id && t.date > m ? t.date : m), d);
   }
 
   /* Tell me what every account holds right now, in one go. Blank boxes are left as they are. */
@@ -155,7 +211,7 @@
         }
         if (!set.length) return;
         store.commit((st) => {
-          for (const [id, amt] of set) st.accounts.find((a) => a.id === id).balanceAnchor = { date: v.date || today(), amount: amt };
+          for (const [id, amt] of set) st.accounts.find((a) => a.id === id).balanceAnchor = { date: anchorDate(st, id, v.date), amount: amt };
         });
         const total = sum(GU.money.accounts(store.state).filter((x) => x.info), (x) => x.info.balance);
         toast('Balances updated. Together you have ' + money(total));
@@ -180,7 +236,7 @@
     const cats = Array.from(new Set(s.transactions.map((t) => t.category).filter(Boolean))).sort();
 
     root.innerHTML = GU.view.head({
-      eyebrow: 'Money',
+      eyebrow: 'History',
       title: 'Bank transactions',
       text: 'Every payment in and out of your accounts, with each account’s balance worked out from your statements. Import statements from your bank and I’ll sort each line into a category.',
       actions: (s.transactions.length || s.accounts.length > 1 ? '<button type="button" class="btn" data-balances>' + icon('coin') + 'Update balances</button>' : '') +
@@ -188,7 +244,7 @@
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add transaction</button>',
     }) +
       GU.ui.dropbar('Drop bank statements here, or a whole folder of them', 'PDF statements from Monzo, Santander, HSBC and most banks, or CSV, Excel, .txt, Quicken and Money files.') +
-      accountsStrip(s) + balanceChart(s) +
+      fixesHTML(s) + accountsStrip(s) + balanceChart(s) +
       '<div class="toolbar">' +
       '<label class="search">' + icon('search') + '<input type="search" id="tx-search" placeholder="Search descriptions" value="' + esc(ui.q) + '" aria-label="Search transactions"></label>' +
       '<select id="tx-month" aria-label="Month">' + selectOptions(months.map((m) => ({ value: m, label: monthLabel(m, true) })), ui.month, 'All months') + '</select>' +
@@ -231,6 +287,14 @@
       if (e.target.closest('[data-add]')) return create();
       if (e.target.closest('[data-import]')) return importCSV();
       if (e.target.closest('[data-balances]')) return updateBalances();
+      const fx = e.target.closest('[data-fix]');
+      if (fx) return runFix(fx.dataset.fix);
+      const fi = e.target.closest('[data-fix-ignore]');
+      if (fi) {
+        const f = GU.money.accountFixes(store.state)[+fi.dataset.fixIgnore];
+        if (f) store.commit((st) => (st.settings.ignoredAccountFixes = (st.settings.ignoredAccountFixes || []).concat([f.key])));
+        return;
+      }
       const ae = e.target.closest('[data-acct-edit]');
       if (ae) return editAccount(ae.dataset.acctEdit);
       const ac = e.target.closest('[data-acct]');
@@ -517,7 +581,8 @@
           '<div class="table-wrap"><table class="tbl tbl--compact"><thead><tr><th>Statement</th><th>Dates</th><th class="num">Lines</th><th class="num">New</th><th>Account</th></tr></thead><tbody>' +
           entries.map((e, i) => {
             const dates = e.list.map((t) => t.date).sort();
-            const what = e.status === 'reading' ? '<span class="muted">Reading…</span>' : e.status === 'ok' ? esc([e.res.bank, e.res.format].filter(Boolean).join(' ')) +
+            const warn = e.status === 'ok' && !String(e.account).startsWith('__new') ? GU.money.importWarning(store.state, e.list, e.account, e.res.bank) : '';
+            const what = e.status === 'reading' ? '<span class="muted">Reading…</span>' : e.status === 'ok' ? (warn ? pill(warn, 'crit', 'alert') + ' ' : '') + esc([e.res.bank, e.res.format].filter(Boolean).join(' ')) +
               (e.res.check && e.res.check.ok && !e.res.check.bad ? ' ' + pill('Balances add up', 'good', 'check') : e.res.check && e.res.check.bad ? ' ' + pill(e.res.check.bad + ' to check', 'warn') : '') : pill('Couldn’t read', 'crit', 'alert');
             return '<tr><td class="wrap"><b class="cell-title">' + esc(GU.ui.pathOf(e.file)) + '</b><small class="cell-sub">' + what + '</small></td>' +
               '<td class="nowrap">' + (dates.length ? esc(fmtDate(dates[0], { short: true }) + ' to ' + fmtDate(dates[dates.length - 1], { short: true })) : '—') + '</td>' +
@@ -667,7 +732,8 @@
           (res.check && res.check.ok && !res.check.bad ? '<p class="check-ok">' + icon('check') + 'Every line adds up against the statement’s running balance.</p>' : '') +
           (res.check && res.check.bad ? '<p class="banner banner--warn">' + icon('alert') + '<span>' + esc(plural(res.check.bad, 'line')) + ' didn’t add up against the running balance. They’ll still be imported; check any that look wrong.</span></p>' : '') +
           '<div class="form-grid">' +
-          '<div class="field field--half"><label class="field__label" for="st-account">Which account is this?</label><select id="st-account">' + selectOptions(accountOptions(), ui2.account) + '</select></div>' +
+          '<div class="field field--half"><label class="field__label" for="st-account">Which account is this?</label><select id="st-account">' + selectOptions(accountOptions(), ui2.account) + '</select>' +
+          (ui2.account !== '__new' && GU.money.importWarning(store.state, list, ui2.account, res.bank) ? '<p class="field__help is-crit">' + esc(GU.money.importWarning(store.state, list, ui2.account, res.bank)) + '</p>' : '') + '</div>' +
           (ui2.account === '__new' ? '<div class="field field--half"><label class="field__label" for="st-new">New account name</label><input id="st-new" type="text" value="' + esc(ui2.newAccount) + '" placeholder="e.g. Monzo"></div>' : '<div class="field field--half"></div>') +
           (potLines ? '<div class="field"><label class="check"><input type="checkbox" id="st-pots"' + (ui2.pots ? ' checked' : '') + '><span>Also import my Pots (' + esc(plural(potLines, 'line')) + ' across ' + esc(plural(res.pots.length, 'Pot')) + ')</span></label><p class="field__help">Usually best left off: money moving into and out of Pots already shows in your main account as “Transfer to Pot”.</p></div>' : '') +
           (res.isPdf ? '<div class="field"><label class="check"><input type="checkbox" id="st-keep"' + (ui2.keepPdf ? ' checked' : '') + '><span>Keep a copy of this statement in Important documents</span></label></div>' : '') +
@@ -817,5 +883,5 @@
   }
   const importCSV = importStatement;
 
-  GU.tabs.transactions = { label: 'Bank transactions', short: 'Bank', icon: 'bank', render, create, edit, importCSV, importStatement, editAccount, showAccount, updateBalances };
+  GU.tabs.transactions = { label: 'Bank transactions', short: 'Bank', icon: 'bank', render, create, edit, importCSV, importStatement, editAccount, showAccount, updateBalances, autoTidy };
 })();

@@ -8,12 +8,12 @@ Everything lives in your own browser. There is no server and no account, and not
 
 | Tab | What it does |
 | --- | --- |
-| **Today** | Your daily briefing: one timeline of everything due (bills, invoices, tasks, visa appointments, document expiries, expected income), plus this month's money, things needing attention and things you're waiting on. Type a note or drop a file straight onto it. |
+| **Home** | Where you stand and where you're heading: what's in each account now, then every payment coming in and going out (income, bills, debt payments, Klarna and PayPal instalments, invoices) day by day with the balance after each, the lowest point, the month-end figure and a warning before any account goes past its overdraft. Switch between the rest of this month, the next 30 days and next month. Tasks and deadlines follow, and you can type a note or drop a file straight onto it. |
 | **Inbox** | Throw anything here: files, photos, pasted text or whole folders (subfolders included). The assistant reads each item, files it automatically when it's sure (with undo) and keeps the rest for you to check, with a **File all** button for big batches. Your folder names help: things in a "Car" folder go to a Car section, things in "Work receipts" are tagged Work. |
 | **Bank** | Every transaction across your accounts, with each account's current balance and a balance-over-time chart. Import statements from any UK bank; categories are filled in automatically and learn from your corrections. |
 | **Bills** | Regular payments with next due dates. Direct debits roll on by themselves; bills you pay by hand wait for you to mark them paid. Bills are also found in your bank statements for you (see below). |
-| **In** (Incomings) | Money coming in, by source and month, plus regular income you expect (salary, retainers). |
-| **Out** (Outgoings) | Spending by category, monthly budgets with warnings, and your biggest payments. |
+| **Income** | The money you expect (salary, benefits, anything regular) with its next dates; past income is folded away underneath. |
+| **Spending** | History: spending by category, monthly budgets with warnings, and your biggest payments. |
 | **Debts** | Credit cards, loans, car finance, Klarna, PayPal Pay in 3, Monzo Flex, overdrafts and money owed to people. Your bank statements show what you're paying each one, so the balance left, monthly cost and debt-free date keep themselves up to date. |
 | **Receipts** | Receipts, invoices you need to pay, invoices someone owes you, paid invoices and warranties, for home and for work, each with its photo or PDF. |
 | **Documents** | Passports, licences, certificates, contracts and policies, with scans, where the original is kept, and reminders before anything expires. Reference numbers stay hidden until you tap Show. |
@@ -64,6 +64,16 @@ PDF statements are read on your device: the transaction table is found by its co
 Anything you've already imported is skipped, money moved between your own accounts (for example Santander to Monzo) is marked as a transfer rather than spending, and a copy of each PDF can be kept in Important documents.
 
 Live bank connections (Open Banking) need a small server and an account with a provider such as GoCardless Bank Account Data or TrueLayer, so they're not built in yet.
+
+## Planning ahead
+
+The menu is grouped by what you need: **Home** and **Inbox**; money ahead (**Bills**, **Debts**, **Income**, **To-do**); paperwork (**Receipts**, **Documents**, **Visas**); and history (**Bank**, **Spending**).
+
+Home starts from your balances (from your statements, or what you put in with **Update balances**) and adds everything expected from today: income on its next dates, bills, debt payments, every instalment of a payment schedule and unpaid invoices. Each account is followed separately, so if your income lands in one account and your bills leave another you'll see which one runs short and when.
+
+**Payment schedules:** on the Debts tab, **Add a payment schedule** reads the list of upcoming payments from Klarna, PayPal Pay in 3, Clearpay and others, pasted as text or from screenshots (Claude reads screenshots when it's connected), and you tick the ones to keep. A section named after the lender (for example *Klarna*) with its payments listed under **Coming up** is used as the schedule directly, so it stays in step when that section is updated. Notes that name the paying bank put each instalment against that account.
+
+**Keeping accounts right:** when you import statements, I warn you if a statement looks like it belongs to another bank or repeats what's already in another account. If statements did end up in the wrong account (or one account was imported twice under two names), the Bank tab offers to put it right in one tap, moving them across without counting anything twice. Deleting an account now deletes its transactions instead of quietly moving them, and **Settings → Bank accounts → Merge into…** joins two accounts that are really one.
 
 ## Balances and debts
 
@@ -116,6 +126,7 @@ js/statements.js      bank statements: PDF, CSV, Excel, Santander .txt, QIF and 
 js/folders.js         using your own folder names to decide where files go
 js/debts.js           account balances, lenders, matching debt payments, payoff maths
 js/recurring.js       finding regular bills in your bank statements
+js/forecast.js        money ahead: income, bills, debts and instalments from today, per account
 js/sample.js          example data
 js/app.js             the icon rail, routing and redraws
 js/tabs/*.js          one file per tab

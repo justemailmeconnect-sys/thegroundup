@@ -57,28 +57,37 @@
     const filt = list.filter(F.periodFilter(period.in));
     const sources = s.incomeSources.slice().sort((a, b) => (a.nextDate || '9').localeCompare(b.nextDate || '9'));
     const next30 = sum(sources, (x) => (x.nextDate ? F.occurrences(x.nextDate, x.frequency, x.anchorDay, today(), GU.util.addDays(today(), 30)).length * x.amount : 0));
-    const cats = F.byCategory(filt, 'in').map((c) => ({ label: c.category, value: c.total }));
 
+    const upcoming = [];
+    for (const x of sources) {
+      if (!x.nextDate) continue;
+      for (const d of F.occurrences(x.nextDate, x.frequency, x.anchorDay, today(), GU.util.addDays(today(), 62))) upcoming.push({ d, x });
+    }
+    upcoming.sort((a, b) => a.d.localeCompare(b.d));
     root.innerHTML = GU.view.head({
-      eyebrow: 'Money',
-      title: 'Incomings',
-      text: 'Money coming in: salary, side work, refunds, benefits. Worked out from your bank transactions, plus the regular income you expect.',
-      actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button><button type="button" class="btn" data-add-source>' + icon('repeat') + 'Add regular income</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add money in</button>',
+      eyebrow: 'Money ahead',
+      title: 'Income',
+      text: 'The money you expect: benefits, salary and anything else that comes in on a schedule. It’s all in the plan on your Home page.',
+      actions: '<button type="button" class="btn btn--primary" data-add-source>' + icon('plus') + 'Add expected income</button>',
     }) +
-      ledger(list, 'in', '<div><span>Expected in the next 30 days</span><b>' + esc(money(next30)) + '</b><em>from ' + esc(plural(sources.length, 'regular source')) + '</em></div>') +
       '<div class="cols cols--main-side">' +
       '<div class="stack">' +
-      '<section class="panel"><header class="panel__head"><h2>Money in, last 12 months</h2></header><div class="panel__body">' + (chartHTML(list, 'in') || '<p class="muted">Nothing to chart yet.</p>') + '</div></section>' +
-      '<section class="panel"><header class="panel__head"><h2>Payments received</h2>' + chips('period', F.PERIODS, period.in) + '</header>' + txList(filt, 'in', 40) + '</section>' +
+      '<section class="panel"><header class="panel__head"><h2>Coming in</h2><span class="muted">next 2 months</span></header>' +
+      (upcoming.length ? '<ul class="rows rows--tight">' + upcoming.map(({ d, x }) =>
+        '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__icon">' + icon('in') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' + esc([x.from, F.freqLabel(x.frequency)].filter(Boolean).join(' · ')) + '</em></span></button>' +
+        '<span class="row-item__date"><b>' + esc(fmtDate(d, { weekday: true })) + '</b><em>' + esc(relDays(d)) + '</em></span><span></span><span class="row-item__amt is-in">' + esc(money(x.amount, { sign: true })) + '</span><span></span></li>').join('') + '</ul>'
+        : '<div class="panel__body"><p class="muted">Add your salary, benefits or any income you get on a schedule and I’ll plan around it.</p></div>') + '</section>' +
+      '<details class="panel panel--details"><summary class="panel__head"><h2>Past income</h2><span class="muted">from your statements</span></summary>' +
+      '<div class="panel__body">' + (chartHTML(list, 'in') || '<p class="muted">Nothing to chart yet.</p>') + '</div>' +
+      '<header class="panel__head"><h3>Payments received</h3>' + chips('period', F.PERIODS, period.in) + '</header>' + txList(filt, 'in', 40) + '</details>' +
       '</div><aside class="stack">' +
       '<section class="panel"><header class="panel__head"><h2>Regular income</h2><button type="button" class="btn btn--sm btn--ghost" data-add-source>' + icon('plus') + 'Add</button></header>' +
       (sources.length ? '<ul class="rows rows--tight">' + sources.map((x) =>
         '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' +
-        esc([F.freqLabel(x.frequency), x.nextDate ? 'next ' + fmtDate(x.nextDate, { short: true }) + ' (' + relDays(x.nextDate) + ')' : ''].filter(Boolean).join(' · ')) + '</em></span></button>' +
+        esc([F.freqLabel(x.frequency), x.nextDate ? 'next ' + fmtDate(x.nextDate, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></span></button>' +
         '<span class="row-item__amt is-in">' + esc(money(x.amount)) + '</span></li>').join('') + '</ul>'
-        : '<div class="panel__body"><p class="muted">Add your salary or any income you get on a schedule, and I’ll show when it’s due on your Today page.</p></div>') + '</section>' +
-      '<section class="panel"><header class="panel__head"><h2>Where it comes from</h2><span class="muted">' + esc(F.PERIODS.find((p) => p.value === period.in).label.toLowerCase()) + '</span></header><div class="panel__body">' +
-      (cats.length ? GU.charts.barList(cats, { color: '--series-in' }) : '<p class="muted">No money in for this period.</p>') + '</div></section>' +
+        : '<div class="panel__body"><p class="muted">Nothing yet.</p></div>') + '</section>' +
+      '<section class="panel"><div class="panel__body"><p><b>' + esc(money(next30)) + '</b> <span class="muted">expected in the next 30 days</span></p></div></section>' +
       '</aside></div>';
 
     root.addEventListener('click', (e) => {
@@ -155,8 +164,8 @@
     const billsMonthly = sum(s.bills.filter((b) => b.active !== false), (b) => F.monthlyEquivalent(b.amount, b.frequency));
 
     root.innerHTML = GU.view.head({
-      eyebrow: 'Money',
-      title: 'Outgoings',
+      eyebrow: 'History',
+      title: 'Spending',
       text: 'Where your money goes, by category. Set a monthly budget for any category and I’ll warn you when you go over.',
       actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button><button type="button" class="btn" data-budgets>' + icon('flag') + 'Set budgets</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add spending</button>',
     }) +
@@ -209,6 +218,6 @@
     });
   }
 
-  GU.tabs.incomings = { label: 'Incomings', short: 'In', icon: 'in', render: renderIn, edit: editSource, createSource };
-  GU.tabs.outgoings = { label: 'Outgoings', short: 'Out', icon: 'out', render: renderOut, editBudgets };
+  GU.tabs.incomings = { label: 'Income', short: 'Income', icon: 'in', render: renderIn, edit: editSource, createSource };
+  GU.tabs.outgoings = { label: 'Spending', short: 'Spending', icon: 'out', render: renderOut, editBudgets };
 })();

@@ -86,6 +86,11 @@
           '</tbody></table></div>' + (rows.length > 60 ? '<p class="muted small">Showing the latest 60.</p>' : '') + '</details>'
         : '<p class="debt__none">' + icon('search') + '<span>No payments to ' + esc(lender ? lender.name : d.lender || d.name) + ' in your bank statements yet. ' +
           (store.state.transactions.length ? 'If they show up under another name, add it under “How it shows on your statement”.' : 'Import a statement from the Bank tab and I’ll find them.') + '</span></p>') +
+      (s.scheduled ? '<div class="debt__plan"><h3>Still to pay <span class="muted">' + esc(plural(s.plan.length, 'payment') + (s.scheduleFrom ? ', from your ' + s.scheduleFrom + ' section' : ', updated ' + fmtDate(d.scheduleUpdated || today(), { short: true }))) + '</span></h3><ul>' +
+        s.plan.slice(0, 8).map((i) => '<li><span>' + esc(fmtDate(i.date, { weekday: true })) + '</span><span class="muted">' + esc([i.merchant, i.of ? i.n + ' of ' + i.of : ''].filter(Boolean).join(' · ')) + '</span><b>' + esc(money(i.amount)) + '</b></li>').join('') +
+        (s.plan.length > 8 ? '<li class="muted">and ' + (s.plan.length - 8) + ' more</li>' : '') + '</ul>' +
+        '<button type="button" class="btn btn--sm btn--ghost" data-schedule="' + esc(d.id) + '">' + icon('upload') + 'Update the schedule</button></div>'
+        : d.type === 'Buy now pay later' ? '<p class="debt__none">' + icon('clock') + '<span>Add the payment schedule from the ' + esc(d.lender || d.name) + ' app so I know exactly what’s due and when. <button type="button" class="link-btn" data-schedule="' + esc(d.id) + '">Add the schedule</button></span></p>' : '') +
       (d.notes ? '<p class="debt__notes">' + esc(d.notes) + '</p>' : '') +
       '</article>';
   }
@@ -101,10 +106,10 @@
     const owedItems = active.map((d) => ({ label: d.name, value: D.summary(s, d).estBalance || 0 })).concat(ods.map((o) => ({ label: o.account.name + ' overdraft', value: o.used }))).filter((x) => x.value > 0).sort((a, b) => b.value - a.value);
 
     root.innerHTML = GU.view.head({
-      eyebrow: 'Money',
+      eyebrow: 'Money ahead',
       title: 'Debts',
       text: 'Everything you owe in one place. Add a debt, or drop in a statement, agreement or screenshot, and I’ll find your payments to it in your bank statements and work out what’s left and when you’ll be clear.',
-      actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>',
+      actions: '<button type="button" class="btn" data-schedule>' + icon('list') + 'Add a payment schedule</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>',
     }) +
       GU.ui.dropbar('Drop credit card statements, loan agreements or Klarna screenshots here', 'I’ll read the balance, monthly payment and interest rate, and add it to the right debt.') +
       '<div class="ledger">' +
@@ -151,6 +156,10 @@
         store.commit((st) => (st.settings.ignoredLenders = (st.settings.ignoredLenders || []).concat([x.lender])));
         toast('I won’t suggest ' + x.lender + ' again', { action: 'Undo', onAction: () => store.commit((st) => (st.settings.ignoredLenders = (st.settings.ignoredLenders || []).filter((n) => n !== x.lender))) });
         return;
+      }
+      if ((el = b('[data-schedule]'))) {
+        const d = el.dataset.schedule && store.find('debts', el.dataset.schedule);
+        return scheduleDialog(d ? d.lender || d.name : '');
       }
       if ((el = b('[data-balance]'))) return updateBalance(el.dataset.balance);
       if ((el = b('[data-close]'))) {
@@ -307,6 +316,86 @@
     });
   }
 
+  /* ---------- payment schedules ---------- */
+  const SCHEDULE_FROM = ['Klarna', 'PayPal Pay in 3', 'PayPal Credit', 'Clearpay', 'Zilch', 'Laybuy', 'Monzo Flex'];
+  const HOW = {
+    Klarna: 'In the Klarna app, tap Payments to see everything that’s upcoming. Select the list and copy it, or take screenshots of it.',
+    'PayPal Pay in 3': 'In the PayPal app, go to Pay Later, open each plan and copy or screenshot its payment schedule.',
+    'PayPal Credit': 'In the PayPal app, open PayPal Credit and screenshot your statement balance, minimum payment and due date.',
+    'Monzo Flex': 'In the Monzo app, open Flex and screenshot your upcoming payments.',
+  };
+  function scheduleDialog(lender) {
+    const known = (store.state.debts || []).filter((d) => !d.closed).map((d) => d.lender || d.name);
+    const options = Array.from(new Set(SCHEDULE_FROM.concat(known)));
+    formDialog({
+      title: 'Add a payment schedule',
+      intro: 'Paste the list of upcoming payments, or add screenshots of it. I’ll read each payment’s date and amount and put them in your plan.',
+      fields: [
+        { name: 'lender', label: 'From', type: 'select', options, default: lender && options.includes(lender) ? lender : 'Klarna' },
+        { name: 'how', type: 'html', html: '<p class="field__help" data-how></p>' },
+        { name: 'text', label: 'Paste the upcoming payments', type: 'textarea', rows: 7, optional: true, placeholder: 'For example:\nASOS  £33.33  Due 15 Oct\nJD Sports  £86.67  Due 25 Oct' },
+        { name: 'files', label: 'Or add screenshots', type: 'files', dropLabel: 'Add screenshots from the app' },
+      ],
+      values: { lender: lender && options.includes(lender) ? lender : 'Klarna' },
+      submitLabel: 'Read it',
+      onChange: (v, form) => {
+        const el = form.querySelector('[data-how]');
+        if (el) el.textContent = HOW[v.lender] || 'Copy the list of upcoming payments from the app or website, or take screenshots of it.';
+      },
+      onSubmit: async (v) => {
+        const metas = v.files || [];
+        if (!v.text && !metas.length) {
+          toast('Paste the payments or add a screenshot first.');
+          return false;
+        }
+        const files = [];
+        for (const m of metas) {
+          const r = await GU.files.get(m.id);
+          if (r && r.blob) files.push(new File([r.blob], m.name, { type: m.type }));
+        }
+        const done = toast('Reading your ' + v.lender + ' payments…', { timeout: 90000 });
+        let res;
+        try {
+          res = await GU.brain.readSchedule({ text: v.text, files });
+        } finally {
+          if (typeof done === 'function') done();
+        }
+        if (!res.payments.length) {
+          toast('I couldn’t find any payments still to pay in that. Try copying the list again, or a clearer screenshot.');
+          return false;
+        }
+        setTimeout(() => checkSchedule(v.lender, res.payments, metas), 50);
+      },
+    });
+  }
+  function checkSchedule(lender, list, metas) {
+    const total = sum(list, (p) => p.amount);
+    formDialog({
+      title: 'Check your ' + lender + ' payments',
+      intro: 'I found ' + esc(plural(list.length, 'payment')) + ' still to pay, ' + esc(money(total)) + ' in all. Untick anything that isn’t right. Saving replaces the upcoming payments I had for ' + esc(lender) + '.',
+      fields: [{ name: 'list', type: 'html', html: '<ul class="sched-pick">' + list.map((p, i) => '<li><label class="check"><input type="checkbox" data-pick="' + i + '" checked><span><b>' + esc(fmtDate(p.date, { weekday: true })) + '</b> ' +
+        esc([p.merchant, p.of ? p.n + ' of ' + p.of : ''].filter(Boolean).join(' · ')) + '</span></label><span class="sched-pick__amt">' + esc(money(p.amount)) + '</span></li>').join('') + '</ul>' }],
+      submitLabel: 'Save schedule',
+      noAutofocus: true,
+      onSubmit: () => {
+        const picked = list.filter((p, i) => {
+          const el = document.querySelector('[data-pick="' + i + '"]');
+          return !el || el.checked;
+        });
+        let id = null;
+        store.commit((st) => {
+          const d = GU.debts.setSchedule(st, lender, picked);
+          if (metas.length) d.files = (d.files || []).concat(metas);
+          GU.debts.claim(st, d);
+          id = d.id;
+        });
+        const d = store.find('debts', id);
+        const s = GU.debts.summary(store.state, d);
+        toast('Saved ' + plural(picked.length, 'payment') + ' for ' + lender + (s.clearBy ? '. The last one is on ' + fmtDate(s.clearBy) : '') + '.');
+      },
+    });
+  }
+
   /* From the inbox: a statement or agreement for a debt, read by the assistant. Adds to the debt you already have from that lender. */
   function fromInbox(r, metas) {
     const s = store.state;
@@ -347,5 +436,5 @@
     }) };
   }
 
-  GU.tabs.debts = { label: 'Debts', short: 'Debts', icon: 'card', render, create, edit, updateBalance, fromInbox, accountsCard, balanceLine, staleNote };
+  GU.tabs.debts = { label: 'Debts', short: 'Debts', icon: 'card', render, create, edit, updateBalance, fromInbox, accountsCard, balanceLine, staleNote, scheduleDialog };
 })();

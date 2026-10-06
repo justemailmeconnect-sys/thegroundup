@@ -121,7 +121,7 @@
         const when = b.staleDays > 3 ? ' on ' + fmtDate(b.asOf, { short: true }) : '';
         const go = { account: x.account.id };
         if (b.balance < 0 && b.overdraftLimit && -b.balance >= b.overdraftLimit * 0.9) out.push(Object.assign({ level: 'crit', tab: 'transactions', title: name + (b.staleDays > 3 ? ' was ' : ' is ') + 'near its overdraft limit', detail: money(-b.balance) + ' of ' + money(b.overdraftLimit, { whole: true }) + ' used' + when }, go));
-        else if (b.balance < 0) out.push(Object.assign({ level: 'warn', tab: 'transactions', title: name + (b.staleDays > 3 ? ' was' : ' is') + ' overdrawn by ' + money(-b.balance), detail: (b.overdraftLimit ? money(b.available, { whole: true }) + ' of overdraft left' : 'Overdraft fees may apply') + when }, go));
+        else if (b.balance < 0) out.push(Object.assign({ level: 'warn', tab: 'transactions', title: name + (b.staleDays > 3 ? ' was' : ' is') + ' overdrawn by ' + money(-b.balance), detail: (b.overdraftLimit ? money(b.available) + ' of overdraft left' : 'Overdraft fees may apply') + when }, go));
         if (b.staleDays >= 14 && x.count) out.push(Object.assign({ level: 'info', tab: 'transactions', title: 'Import your latest ' + (x.account.bank || name) + ' statement', detail: 'I only know your balance up to ' + fmtDate(b.asOf, { short: true }) }, go));
       }
     }
@@ -134,6 +134,7 @@
       }
       for (const x of GU.debts.spotted(state).slice(0, 2)) out.push({ level: 'info', tab: 'debts', title: plural(x.count, 'payment') + ' to ' + x.lender + ' look like a debt', detail: 'Track it to see what’s left to pay' });
     }
+    if (GU.money) for (const f of GU.money.accountFixes(state)) out.push({ level: 'warn', tab: 'transactions', title: f.title, detail: f.kind === 'merge' ? 'Some payments are counted twice. Fix it on the Bank tab.' : 'Fix it in one tap on the Bank tab.' });
     const toCheck = state.bills.filter((b) => b.review && b.active !== false).length;
     if (toCheck) out.push({ level: 'info', tab: 'bills', title: plural(toCheck, 'bill') + ' I found in your statements', detail: 'Check they’re right: keep them, or tell me which aren’t regular bills' });
     const uncategorised = state.transactions.filter((x) => !x.category).length;

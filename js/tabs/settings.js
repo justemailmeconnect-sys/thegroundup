@@ -47,6 +47,43 @@
     if (el) el.innerHTML = syncHTML();
   });
 
+  /* The same account imported twice under two names: fold one into the other. */
+  function mergeAccount(fromId) {
+    const s = store.state;
+    const from = s.accounts.find((a) => a.id === fromId);
+    const others = s.accounts.filter((a) => a.id !== fromId);
+    const preview = (intoId) => {
+      const copy = { transactions: s.transactions.map((t) => Object.assign({}, t)), accounts: s.accounts.map((a) => Object.assign({}, a)) };
+      return GU.money.mergeAccounts(copy, fromId, intoId);
+    };
+    formDialog({
+      title: 'Merge ' + from.name + ' into another account',
+      intro: 'Use this when the same bank account was imported under two names. Its transactions move across, any that are already there (the same amount within 2 days) are dropped so nothing is counted twice, and “' + esc(from.name) + '” is removed.',
+      fields: [
+        { name: 'into', label: 'Merge into', type: 'select', options: others.map((a) => ({ value: a.id, label: a.name })) },
+        { name: 'preview', type: 'html', html: '<p class="field__help" data-preview></p>' },
+      ],
+      values: { into: (others.find((a) => a.bank && from.bank && a.bank === from.bank) || others[0]).id },
+      submitLabel: 'Merge',
+      onChange: (v, form) => {
+        const r = preview(v.into);
+        form.querySelector('[data-preview]').textContent = plural(r.moved, 'transaction') + ' will move across and ' + plural(r.duplicates, 'duplicate') + ' will be dropped.';
+      },
+      onSubmit: (v) => {
+        const before = { transactions: store.state.transactions, accounts: store.state.accounts, bills: store.state.bills };
+        let r;
+        store.commit((st) => {
+          st.transactions = st.transactions.map((t) => Object.assign({}, t));
+          st.accounts = st.accounts.map((a) => Object.assign({}, a));
+          st.bills = st.bills.map((b) => Object.assign({}, b));
+          r = GU.money.mergeAccounts(st, fromId, v.into);
+          GU.recurring.reassignBills(st);
+        });
+        toast('Merged. ' + plural(r.moved, 'transaction') + ' moved and ' + plural(r.duplicates, 'duplicate') + ' removed.', { timeout: 12000, action: 'Undo', onAction: () => store.commit((st) => Object.assign(st, before)) });
+      },
+    });
+  }
+
   function render(root) {
     const s = store.state;
     const st = s.settings;
@@ -79,6 +116,7 @@
         const n = s.transactions.filter((t) => t.account === a.id).length;
         return '<li class="row-item"><span class="row-item__icon">' + icon('bank') + '</span><span class="row-item__text"><b>' + esc(a.name) + '</b><em>' + esc(plural(n, 'transaction')) + '</em></span><span class="row-item__act">' +
           '<button type="button" class="btn btn--sm btn--ghost" data-rename-account="' + esc(a.id) + '">Rename</button>' +
+          (s.accounts.length > 1 && n ? '<button type="button" class="btn btn--sm btn--ghost" data-merge-account="' + esc(a.id) + '">Merge into…</button>' : '') +
           (s.accounts.length > 1 ? '<button type="button" class="btn btn--sm btn--ghost" data-delete-account="' + esc(a.id) + '">Delete</button>' : '') + '</span></li>';
       }).join('') + '</ul></section>' +
 
@@ -160,15 +198,17 @@
         return formDialog({ title: 'Rename account', fields: [{ name: 'name', label: 'Account name', required: true }], values: { name: a.name },
           onSubmit: (v) => store.commit((s2) => (s2.accounts.find((x) => x.id === a.id).name = v.name)) });
       }
+      const ma = b('[data-merge-account]');
+      if (ma) return mergeAccount(ma.dataset.mergeAccount);
       const da = b('[data-delete-account]');
       if (da) {
         const id = da.dataset.deleteAccount;
         const n = store.state.transactions.filter((t) => t.account === id).length;
-        const ok = await confirmBox({ title: 'Delete this account?', message: n ? 'Its ' + plural(n, 'transaction') + ' will move to your first account.' : 'It has no transactions.', confirmLabel: 'Delete', danger: true });
+        const ok = await confirmBox({ title: 'Delete this account?', message: n ? 'Its ' + plural(n, 'transaction') + ' will be deleted too. If it’s the same bank account as another one in your list, use Merge into… instead, so nothing is lost or counted twice.' : 'It has no transactions.', confirmLabel: n ? 'Delete it and its transactions' : 'Delete', danger: true });
         if (!ok) return;
         return store.commit((s2) => {
           s2.accounts = s2.accounts.filter((x) => x.id !== id);
-          s2.transactions.forEach((t) => t.account === id && (t.account = s2.accounts[0].id));
+          s2.transactions = s2.transactions.filter((t) => t.account !== id);
         });
       }
       const dr = b('[data-delete-rule]');
