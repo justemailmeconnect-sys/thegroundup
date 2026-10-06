@@ -49,9 +49,26 @@ Online order invoices are filed as **paid invoices**, never as bills to pay, and
 
 ## Importing bank statements
 
-Download a statement from your online banking as a **CSV** file and either drop it in the Inbox or use **Bank → Import statement**. The importer guesses the date, description and amount columns (including banks with separate "paid in" and "paid out" columns, and files with no header row), shows a preview, and skips anything you've already imported. Transfers between your own accounts are left out of your in/out totals.
+Use **Bank → Import statements**, drop statements on the Bank tab, or drop them in the Inbox. You can import one file, several, or a whole folder at once; each statement is matched to an account by its bank.
+
+| Bank | What works |
+| --- | --- |
+| **Monzo** | PDF statements (Pots are read separately and left out by default, since they mirror "Transfer to Pot" lines) and the CSV export from the app, including Monzo's own categories. |
+| **Santander** | PDF statements, and the online banking download as .txt, Excel or Quicken. |
+| **HSBC** | PDF statements, and the CSV download in both its current (Date, Type, Description, Amount, Balance, no header) and older layouts, or Excel. |
+| Most others | PDF statements with a Date / Description / Money in / Money out / Balance table, CSV, Excel (.xls, .xlsx), Quicken (.qif) and Money (.ofx, .qfx). |
+
+PDF statements are read on your device: the transaction table is found by its column headings, wrapped descriptions are joined back together, years are worked out from the statement period, and every line is checked against the statement's running balance (the import screen tells you if anything doesn't add up). If a PDF can't be read that way and Claude is connected, Claude can read it instead.
+
+Anything you've already imported is skipped, money moved between your own accounts (for example Santander to Monzo) is marked as a transfer rather than spending, and a copy of each PDF can be kept in Important documents.
 
 Live bank connections (Open Banking) need a small server and an account with a provider such as GoCardless Bank Account Data or TrueLayer, so they're not built in yet.
+
+## Uploading folders
+
+Every tab that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts & invoices, Important documents, Bills, Bank, each visa application and each of your own sections. Files uploaded there stay in that tab; the assistant only reads them to fill in the details. Subfolders are kept as groups.
+
+In the Inbox, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, that visa application). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
 
 ## Your data and backups
 
@@ -71,6 +88,8 @@ js/ui.js              icons, dialogs, forms, attachments, toasts, menus
 js/charts.js          monthly column chart and category bars
 js/agenda.js          the Today timeline, attention list and tab badges
 js/brain.js           reading and filing: Claude, API key and offline readers
+js/statements.js      bank statements: PDF, CSV, Excel, Santander .txt, QIF and OFX
+js/folders.js         using your own folder names to decide where files go
 js/sample.js          example data
 js/app.js             the icon rail, routing and redraws
 js/tabs/*.js          one file per tab

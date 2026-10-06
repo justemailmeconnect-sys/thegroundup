@@ -28,6 +28,17 @@
       '<span class="doc-row__end">' + (it.amount != null ? '<b>' + esc(money(it.amount)) + '</b>' : '') + '</span></li>';
   }
 
+  /* Items grouped by the subfolder they came from (ungrouped first). */
+  function groupsOf(list) {
+    const map = new Map();
+    for (const it of list) {
+      const g = it.group || '';
+      if (!map.has(g)) map.set(g, []);
+      map.get(g).push(it);
+    }
+    return Array.from(map, ([name, items]) => ({ name, items })).sort((a, b) => (a.name === '' ? -1 : b.name === '' ? 1 : a.name.localeCompare(b.name)));
+  }
+
   function makeTab(sec) {
     const tabId = 's-' + sec.id;
     function render(root) {
@@ -42,9 +53,13 @@
         text: live.byAssistant ? 'I started this section on ' + esc(fmtDate(live.created)) + ' because some things you sent me belong together. Rename it or add to it any time.' : 'Your own filing drawer. Drop anything related in here.',
         actions: '<button type="button" class="btn" data-rename>' + icon('edit') + 'Rename</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add</button>',
       }) +
+        GU.ui.dropbar('Drop anything for ' + live.name + ' here, or a whole folder', 'It all stays in ' + live.name + '. Subfolders become groups, so your own organisation is kept.') +
         '<div class="toolbar"><label class="search">' + icon('search') + '<input type="search" id="sec-search" placeholder="Search ' + esc(live.name) + '" value="' + esc(queries[sec.id] || '') + '" aria-label="Search"></label>' +
         '<span class="toolbar__gap"></span><button type="button" class="btn btn--sm btn--ghost" data-delete-section>' + icon('trash') + 'Delete section</button></div>' +
-        '<section class="panel"><ul class="doc-rows">' + (list.length ? list.map(itemRow).join('') : '<li>' + emptyState({ icon: live.icon || 'star', title: all.length ? 'Nothing matches' : 'Nothing here yet', text: 'Add something, or drop it in the Inbox and I’ll put it here.' }) + '</li>') + '</ul></section>';
+        (list.length ? groupsOf(list).map((g) => '<section class="panel">' + (g.name ? '<header class="panel__head"><h2>' + icon('folder') + esc(g.name) + '</h2><span class="muted">' + g.items.length + '</span></header>' : '') +
+          '<ul class="doc-rows">' + g.items.map(itemRow).join('') + '</ul></section>').join('')
+          : '<section class="panel"><ul class="doc-rows"><li>' + emptyState({ icon: live.icon || 'star', title: all.length ? 'Nothing matches' : 'Nothing here yet', text: 'Drop files or a folder above, or send things to the Inbox and I’ll put them here.' }) + '</li></ul></section>');
+      GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'section', sectionId: sec.id, name: live.name } }));
 
       root.querySelector('#sec-search').addEventListener('input', debounce((e) => {
         queries[sec.id] = e.target.value;
@@ -91,7 +106,8 @@
       { name: 'date', label: 'Date', type: 'date', half: true, optional: true },
       { name: 'amount', label: 'Amount', type: 'money', half: true, optional: true },
       { name: 'dueDate', label: 'Remind me on', type: 'date', half: true, optional: true, help: 'Shows on your Today page.' },
-      { name: 'reference', label: 'Reference number', optional: true },
+      { name: 'reference', label: 'Reference number', optional: true, half: true },
+      { name: 'group', label: 'Group', optional: true, half: true, placeholder: 'e.g. MOT, Insurance' },
       { name: 'files', label: 'Files', type: 'files' },
       { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, optional: true },
     ];

@@ -61,14 +61,14 @@
   }
 
   /* ---------- reading text out of files ---------- */
-  async function pdfText(file) {
+  async function pdfText(file, maxPages) {
     await withTimeout(loadScript(PDFJS), 20000, 'PDF reader did not load');
     const lib = window.pdfjsLib;
     lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
     const data = new Uint8Array(await file.arrayBuffer());
     const doc = await lib.getDocument({ data }).promise;
     let out = '';
-    for (let i = 1; i <= Math.min(doc.numPages, 6); i++) {
+    for (let i = 1; i <= Math.min(doc.numPages, maxPages || 6); i++) {
       const page = await doc.getPage(i);
       const tc = await page.getTextContent();
       let line = '';
@@ -284,6 +284,69 @@
     return clean(JSON.parse(block.text));
   }
 
+  function looksLikeStatement(text) {
+    const t = String(text || '').toLowerCase();
+    if (/^\s*from:\s*\d{2}\/\d{2}\/\d{4}/m.test(t) && /^\s*description:/m.test(t) && /^\s*amount:/m.test(t)) return true; // Santander .txt
+    return /statement/.test(t) && /(sort code|account number|iban)/.test(t) && /balance/.test(t) && /(money in|money out|paid in|paid out|amount)/.test(t) && (t.match(/\d{1,2}[\/ ](?:\d{1,2}|[a-z]{3})/g) || []).length > 6;
+  }
+
+  /* ---------- Claude reads a statement PDF the offline reader couldn't ---------- */
+  const STATEMENT_SCHEMA = {
+    type: 'object', additionalProperties: false, required: ['bank', 'transactions'],
+    properties: {
+      bank: { type: 'string' },
+      transactions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'description', 'amount'],
+        properties: { date: { type: 'string' }, description: { type: 'string' }, amount: { type: 'number' } } } },
+    },
+  };
+  async function askJSON(prompt) {
+    const sample = await getSample();
+    if (sample) return sample.json(prompt + '\n\nReply with only the JSON object.', { modelTier: 'default' });
+    const key = (store.state.settings.apiKey || '').trim();
+    if (!key) return null;
+    const Anthropic = await getSDK();
+    const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+    const res = await client.beta.messages.create({
+      model: store.state.settings.model || MODEL, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: STATEMENT_SCHEMA } },
+      messages: [{ role: 'user', content: prompt }],
+    });
+    if (res.stop_reason === 'refusal') throw new Error('Claude declined to read this statement.');
+    const block = res.content.find((x) => x.type === 'text');
+    return block ? JSON.parse(block.text) : null;
+  }
+  async function readStatement(file) {
+    const text = await pdfText(file, 200);
+    const chunks = [];
+    let cur = '';
+    for (const l of text.split('\n')) {
+      if (cur.length + l.length > 14000) {
+        chunks.push(cur);
+        cur = '';
+      }
+      cur += l + '\n';
+    }
+    if (cur.trim()) chunks.push(cur);
+    let bank = '';
+    const out = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const data = await askJSON('Here is part ' + (i + 1) + ' of ' + chunks.length + ' of the text of a UK bank statement. List every transaction in this part as JSON: ' +
+        '{"bank": "bank name", "transactions": [{"date": "YYYY-MM-DD", "description": "payee or description", "amount": -12.34}]}. ' +
+        'Money out is negative and money in is positive. Use the statement period to work out the year when a date has none. ' +
+        'Skip balance brought forward and carried forward lines, totals and anything that is not a transaction. ' +
+        'If the statement has separate sections for savings pots, leave those out.\n\nSTATEMENT TEXT:\n' + chunks[i]);
+      if (!data) return null;
+      bank = bank || data.bank || '';
+      for (const t of data.transactions || []) {
+        const date = GU.util.isISO(t.date) ? t.date : parseLooseDate(t.date, 'dmy');
+        const amount = typeof t.amount === 'number' ? t.amount : parseAmount(t.amount);
+        if (date && !isNaN(amount) && t.description) out.push({ date, raw: t.description, description: GU.statements.cleanDescription(t.description), amount: round2(amount) });
+      }
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date));
+    return { kind: 'transactions', bank: bank || GU.statements.detectBank(text, file.name), format: 'PDF statement (read by Claude)', transactions: out, isPdf: true };
+  }
+
   /* ---------- reader 3: offline rules ---------- */
   const TOPICS = [
     { name: 'Car', icon: 'car', words: ['mot test', 'mot certificate', 'v5c', 'dvla', 'car tax', 'vehicle tax', 'tyres', 'tyre ', 'garage', 'car service', 'parking fine', 'penalty charge', 'pcn ', 'breakdown cover', 'registration mark', 'mileage', 'vehicle'] },
@@ -304,7 +367,7 @@
     [['hmrc', 'self assessment', 'tax return', 'tax code', 'unique taxpayer', 'utr'], 'Tax'],
     [['policy schedule', 'certificate of insurance', 'insurance policy', 'policy number', 'policy document'], 'Insurance policy'],
     [['tenancy agreement', 'lease agreement', 'mortgage offer', 'completion statement', 'deed', 'council tax'], 'Home and tenancy'],
-    [['v5c', 'mot certificate', 'logbook', 'vehicle registration'], 'Vehicle'],
+    [['v5c', 'mot certificate', 'mot test', 'logbook', 'vehicle registration'], 'Vehicle'],
     [['nhs number', 'medical record', 'vaccination record', 'discharge summary'], 'Medical and health'],
     [['pension', 'isa ', 'annual statement', 'savings account'], 'Bank, savings and pension'],
     [['last will', 'power of attorney', 'testament'], 'Legal (will, power of attorney)'],
@@ -391,8 +454,9 @@
     if (input.files.some((f) => /\.csv$/i.test(f.name) || f.type === 'text/csv')) {
       return Object.assign(r, { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check the columns.' });
     }
-    // Typed notes with no files: tasks or quick money notes.
-    if (!input.files.length && raw.length < 240) {
+    // Typed notes (or a short note saved as a .txt file): tasks or quick money notes.
+    const noteLike = !input.files.length || (input.files.every((f) => /\.txt$/i.test(f.name)) && raw.length < 240 && !/receipt|invoice|statement|total|policy|certificate|booking/i.test(raw));
+    if (noteLike && raw.length < 240) {
       const amt = raw.match(/(?:£|\$|€)\s?(\d+(?:\.\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s?(?:quid|pounds|gbp)/i);
       if (amt && /\b(paid|spent|bought|gave|cost)\b/i.test(raw)) {
         const who = raw.match(/\b(?:to|at|on|for)\s+(?:the\s+)?([a-z][\w' &-]{2,40})/i);
@@ -447,7 +511,9 @@
         title: r.party || 'New bill', due_date: r.due_date || r.date, category: F.categorise(r.party + ' ' + t, -1, store.state.rules) || 'Bills & utilities',
         summary: 'A regular payment' + (r.party ? ' to ' + r.party : '') + (r.amount ? ' of ' + money(r.amount) : '') + '.' });
     } else if (docType) {
-      Object.assign(r, { destination: 'document', confidence: 0.75, document_type: docType, title: docType === 'Other' ? (r.party || 'Document') : docType.split(/[,(]/)[0].replace(/ or .*/, '').trim(),
+      const firstLine = raw.split('\n').map((x) => x.trim()).find((l) => /[a-z]{3}/i.test(l) && l.length <= 60);
+      const tidy = (l) => (l === l.toUpperCase() ? l.split(' ').map((w) => (w.length <= 3 ? w : w[0] + w.slice(1).toLowerCase())).join(' ') : l);
+      Object.assign(r, { destination: 'document', confidence: 0.75, document_type: docType, title: firstLine ? tidy(firstLine) : docType === 'Other' ? (r.party || 'Document') : docType.split(/[,(]/)[0].replace(/ or .*/, '').trim(),
         summary: 'An important document (' + docType.toLowerCase() + ')' + (r.expiry_date ? ', expires ' + fmtDate(r.expiry_date) : '') + '.' });
     } else if (sc.receipt >= 1.3) {
       Object.assign(r, { destination: 'receipt', confidence: 0.6 + Math.min(0.3, sc.receipt / 12), title: r.party ? r.party + ' receipt' : 'Receipt',
@@ -472,7 +538,7 @@
       const topic = TOPICS.find((x) => x.name.toLowerCase() === folder.toLowerCase() || x.name.toLowerCase().split(' & ')[0] === folder.toLowerCase());
       const weak = ['unsure', 'section'].includes(r.destination) || r.confidence < 0.6;
       if (weak && sec) Object.assign(r, { destination: 'section', section_id: sec.id, new_section_name: null, confidence: 0.85, summary: (r.summary && r.destination !== 'unsure' ? r.summary + ' ' : '') + 'It was in your “' + folder + '” folder, so it goes with ' + sec.name + '.' });
-      else if (weak && (topic || r.destination === 'unsure') && !/receipt|invoice|bill|warrant|guarantee|document|paperwork|statement|bank|visa|immigration|task|to.?do|admin|important|tax|insurance|passport/i.test(folder)) {
+      else if (weak && topic && !/receipt|invoice|bill|warrant|guarantee|document|paperwork|statement|bank|visa|immigration|task|to.?do|admin|important|tax|insurance|passport/i.test(folder)) {
         const name = topic ? topic.name : folder.replace(/\b[a-z]/g, (c) => c.toUpperCase());
         Object.assign(r, { destination: 'section', section_id: null, new_section_name: name, confidence: topic ? 0.8 : 0.65,
           title: r.title && r.destination !== 'unsure' ? r.title : (input.files[0] ? input.files[0].name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') : r.title),
@@ -531,6 +597,9 @@
       input.text = (await readFileText(input.files[0], false)).slice(0, 4000);
       return Object.assign(await viaRules(input), { via: 'offline' });
     }
+    if (input.files.some((f) => /\.(qif|ofx|qfx|xls|xlsx)$/i.test(f.name))) {
+      return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check it.', via: 'offline' });
+    }
     const textNeeded = input.files.some((f) => isText(f) || isPdf(f));
     const ocr = m === 'offline' && store.state.settings.ocr !== false;
     if (textNeeded || ocr) {
@@ -540,6 +609,11 @@
         if (t) parts.push(t);
       }
       input.text = parts.join('\n\n');
+    }
+    // Bank statements are spotted on this device and read by the statement importer.
+    if (looksLikeStatement(input.text)) {
+      return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', via: 'offline',
+        summary: 'A ' + ((GU.statements && GU.statements.detectBank(input.text, input.files[0] && input.files[0].name)) || 'bank') + ' statement. I’ll open the importer so you can check it.' });
     }
     if (m === 'claude-app') {
       try {
@@ -618,12 +692,22 @@
           }
           const rec = add('paperwork', { id: 'p-' + uid(), created: t, kind, context: r.context, title: r.title, party: r.party || '', amount: r.amount, date: r.date || t,
             dueDate: inv ? r.due_date || '' : '', status: inv ? (r.paid ? 'paid' : 'unpaid') : '', paidDate: inv && r.paid ? r.date || t : '',
-            warrantyUntil: r.destination === 'warranty' || r.expiry_date ? r.expiry_date || '' : '', reference: r.reference || '', category: r.category || '', notes, files: metas, via: r.via });
+            warrantyUntil: r.destination === 'warranty' || r.expiry_date ? r.expiry_date || '' : '', reference: r.reference || '', category: r.category || '', notes, files: metas, via: r.via, folder: r.folder || '' });
           tab = 'receipts';
           ref = { c: 'paperwork', id: rec.id };
           break;
         }
         case 'bill': {
+          const who = String(r.party || r.title || '').trim().toLowerCase();
+          const existingBill = who && st.bills.find((x) => [x.payee, x.name].filter(Boolean).some((n) => n.toLowerCase() === who || (who.length > 3 && n.toLowerCase().includes(who))));
+          if (existingBill) {
+            existingBill.files = (existingBill.files || []).concat(metas);
+            attachUndo = { id: existingBill.id, fileIds: metas.map((m) => m.id), c: 'bills' };
+            sameTitle = existingBill.name;
+            tab = 'bills';
+            ref = { c: 'bills', id: existingBill.id };
+            break;
+          }
           const due = r.due_date || r.date || t;
           const rec = add('bills', { id: 'b-' + uid(), created: t, name: r.title, payee: r.party || '', amount: r.amount || 0, frequency: r.frequency || 'monthly', nextDue: due < t ? F.nextDate(due, r.frequency || 'monthly', +due.slice(8)) || t : due,
             anchorDay: +due.slice(8), method: 'Direct debit', autopay: true, category: r.category || 'Bills & utilities', account: (st.accounts[0] || {}).id, notes, files: metas, history: [], active: true });
@@ -633,7 +717,7 @@
         }
         case 'document': {
           const rec = add('documents', { id: 'd-' + uid(), created: t, title: r.title, type: r.document_type || 'Other', holder: '', reference: r.reference || '', location: '',
-            issueDate: r.date || '', expiryDate: r.expiry_date || '', notes: [r.summary, notes].filter(Boolean).join('\n'), files: metas });
+            issueDate: r.date || '', expiryDate: r.expiry_date || '', notes: [r.summary, notes].filter(Boolean).join('\n'), files: metas, folder: r.folder || '' });
           tab = 'documents';
           ref = { c: 'documents', id: rec.id };
           break;
@@ -682,7 +766,7 @@
             }
           }
           const rec = add('sectionItems', { id: 'si-' + uid(), created: t, sectionId: sec.id, title: r.title, party: r.party || '', amount: r.amount, date: r.date || '', dueDate: r.due_date || r.expiry_date || '',
-            reference: r.reference || '', notes: [r.summary, notes].filter(Boolean).join('\n'), files: metas });
+            reference: r.reference || '', notes: [r.summary, notes].filter(Boolean).join('\n'), files: metas, group: r.group || '' });
           tab = 's-' + sec.id;
           ref = { c: 'sectionItems', id: rec.id };
           break;
@@ -695,7 +779,7 @@
       }
     });
     if (!ref) return null;
-    const label = sameTitle ? 'Receipts & invoices › ' + sameTitle + ' (added to it)' : where(r);
+    const label = sameTitle ? (tab === 'bills' ? 'Bills › ' : 'Receipts & invoices › ') + sameTitle + ' (added to it)' : where(r);
     return {
       tab,
       ref,
@@ -704,7 +788,7 @@
         store.commit((st) => {
           for (const c of created) st[c.c] = st[c.c].filter((x) => x.id !== c.id);
           if (attachUndo) {
-            const p = st.paperwork.find((x) => x.id === attachUndo.id);
+            const p = st[attachUndo.c || 'paperwork'].find((x) => x.id === attachUndo.id);
             if (p) p.files = (p.files || []).filter((f) => !attachUndo.fileIds.includes(f.id));
           }
           if (visaUndo) {
@@ -780,5 +864,5 @@
     return Object.assign(await viaRules({ files: [], note: note || '', text: '' }), { via: 'offline' });
   }
 
-  GU.brain = { quick, analyse, file, where, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS };
+  GU.brain = { readStatement, quick, analyse, file, where, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS };
 })();

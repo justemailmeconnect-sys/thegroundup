@@ -30,7 +30,7 @@
     return '<li class="doc-row">' +
       '<button type="button" class="doc-row__thumb" data-view="' + esc(d.id) + '" aria-label="' + (d.files && d.files.length ? 'View scans of ' : 'Add a scan to ') + esc(d.title) + '">' + thumbHTML(d.files) + '</button>' +
       '<div class="doc-row__main"><button type="button" class="doc-row__title" data-edit="' + esc(d.id) + '"><b>' + esc(d.title) + '</b></button>' +
-      '<em>' + esc([d.holder, d.location ? 'Kept: ' + d.location : ''].filter(Boolean).join(' · ')) + (ref ? (d.holder || d.location ? ' · ' : '') + ref : '') + '</em>' +
+      '<em>' + esc([d.holder, d.location ? 'Kept: ' + d.location : '', d.folder ? 'Folder: ' + d.folder : ''].filter(Boolean).join(' · ')) + (ref ? (d.holder || d.location || d.folder ? ' · ' : '') + ref : '') + '</em>' +
       '<span class="doc-row__chips">' + pill(d.type || 'Other', 'muted') + expiryPill(d) + '</span></div>' +
       '<span class="doc-row__end"><button type="button" class="icon-btn" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.title) + '">' + icon('edit') + '</button></span></li>';
   }
@@ -51,6 +51,7 @@
       text: 'Passports, licences, certificates, contracts and policies. Keep a scan of each, note where the original is, and I’ll warn you ' + warn + ' days before anything expires.',
       actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add document</button>',
     }) +
+      GU.ui.dropbar('Drop documents here, or a whole folder of them', 'Scans, photos and PDFs. I’ll read each one for its type, number and expiry date. Subfolders like Passports or Insurance set the type.') +
       (soon.length ? '<section class="panel panel--alert"><header class="panel__head"><h2>' + icon('alert') + 'Renew soon</h2></header><ul class="doc-rows">' + soon.map(rowHTML).join('') + '</ul></section>' : '') +
       '<div class="toolbar">' + chips('type', [{ value: 'all', label: 'All', count: docs.length }].concat(present.map((t) => ({ value: t, label: t, count: docs.filter((d) => d.type === t).length }))), ui.type) +
       '<label class="search">' + icon('search') + '<input type="search" id="doc-search" placeholder="Search documents" value="' + esc(ui.q) + '" aria-label="Search documents"></label></div>' +
@@ -58,6 +59,7 @@
         : '<section class="panel">' + emptyState({ icon: 'folder', title: docs.length ? 'Nothing matches' : 'No documents yet', text: docs.length ? 'Try another search.' : 'Start with your passport, driving licence and tenancy or mortgage papers.', action: docs.length ? '' : '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a document</button>' }) + '</section>') +
       '<p class="privacy-note">' + icon('lock') + 'Documents and scans are stored only in this browser. Reference numbers are hidden until you tap Show.</p>';
 
+    GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'documents', name: 'Important documents' } }));
     const search = root.querySelector('#doc-search');
     search.addEventListener('input', debounce(() => {
       ui.q = search.value;

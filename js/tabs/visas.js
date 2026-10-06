@@ -68,7 +68,8 @@
         (log.length > 4 ? '<button type="button" class="link link--btn" data-more-log="' + esc(v.id) + '">' + (showAll ? 'Show fewer' : 'Show all ' + log.length) + '</button>' : '') : '<p class="muted">No notes yet.</p>') +
       '</section></div>' +
       '<footer class="visa__foot"><div class="thumb-row">' + (v.files || []).map((f, i) => '<button type="button" class="thumb-btn" data-vfile="' + esc(v.id) + ':' + i + '" data-tip="' + esc(f.name) + '" aria-label="View ' + esc(f.name) + '">' + thumbHTML([f]) + '</button>').join('') +
-      '<button type="button" class="btn btn--sm" data-vupload="' + esc(v.id) + '">' + icon('clip') + 'Add files</button></div>' +
+      '<button type="button" class="btn btn--sm" data-vupload="' + esc(v.id) + '">' + icon('clip') + 'Add files</button>' +
+      '<button type="button" class="btn btn--sm" data-vfolder="' + esc(v.id) + '">' + icon('folder') + 'Add a folder</button><span class="muted visa__drop-hint">or drop files on this card</span></div>' +
       (v.portalUrl ? '<a class="link" href="' + esc(/^https?:\/\//.test(v.portalUrl) ? v.portalUrl : 'https://' + v.portalUrl) + '" target="_blank" rel="noopener">Open application website ' + icon('chevron') + '</a>' : '') + '</footer>' +
       '</article>';
   }
@@ -86,6 +87,16 @@
       (visas.length ? '<div class="stack">' + visas.map(cardHTML).join('') + '</div>'
         : '<section class="panel">' + emptyState({ icon: 'globe', title: 'No visa applications yet', text: 'Add one to get a ready-made document checklist and reminders for every key date.', action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Start an application</button>' }) + '</section>');
 
+    root.querySelectorAll('[data-visa]').forEach((card) => {
+      card.addEventListener('dragover', (e) => (e.preventDefault(), card.classList.add('is-over')));
+      card.addEventListener('dragleave', (e) => !card.contains(e.relatedTarget) && card.classList.remove('is-over'));
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        card.classList.remove('is-over');
+        const id = card.dataset.visa;
+        GU.ui.filesFromDrop(e.dataTransfer).then((files) => files.length && GU.inbox.add({ files, scope: { kind: 'visa', visaId: id, name: (store.find('visas', id) || {}).visaType } }));
+      });
+    });
     root.addEventListener('change', (e) => {
       const st = e.target.closest('[data-status]');
       if (st) {
@@ -150,6 +161,12 @@
         const [vid, i] = vf.dataset.vfile.split(':');
         const v = store.find('visas', vid);
         return viewFiles(v.files, +i, v.visaType);
+      }
+      const vf2 = e.target.closest('[data-vfolder]');
+      if (vf2) {
+        const files = await GU.ui.pickFolder();
+        if (files.length) GU.inbox.add({ files, scope: { kind: 'visa', visaId: vf2.dataset.vfolder, name: (store.find('visas', vf2.dataset.vfolder) || {}).visaType } });
+        return;
       }
       const up = e.target.closest('[data-vupload]');
       if (up) {

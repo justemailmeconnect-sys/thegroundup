@@ -16,9 +16,9 @@
   /* Keyword rules for common UK merchants. User rules always win over these. Order matters. */
   const DEFAULT_RULES = [
     [['uber eats', 'deliveroo', 'just eat', 'justeat'], 'Eating out'],
-    [['amazon prime', 'prime video', 'netflix', 'spotify', 'disney', 'apple.com/bill', 'icloud', 'google storage', 'youtube premium', 'now tv', 'audible', 'playstation', 'xbox', 'adobe', 'microsoft 365', 'patreon'], 'Subscriptions'],
+    [['amazon prime', 'prime video', 'netflix', 'spotify', 'disney', 'apple.com/bill', 'icloud', 'google storage', 'google one', 'youtube premium', 'now tv', 'audible', 'playstation', 'xbox', 'adobe', 'microsoft 365', 'patreon', 'canva', 'chatgpt', 'openai', 'uber *one', 'uber one', 'dropbox', 'apple developer', 'google play', 'paramount+', 'crunchyroll'], 'Subscriptions'],
     [['tesco', 'sainsbury', 'asda', 'morrisons', 'aldi', 'lidl', 'waitrose', 'co-op', 'coop food', 'iceland', 'ocado', 'm&s food', 'spar '], 'Groceries'],
-    [['pret', 'costa', 'starbucks', 'greggs', 'mcdonald', 'kfc', 'nando', 'domino', 'pizza', 'wagamama', 'burger king', 'subway', 'leon ', 'itsu', 'wasabi', 'restaurant', 'cafe', 'coffee'], 'Eating out'],
+    [['pret', 'costa', 'starbucks', 'greggs', 'mcdonald', 'kfc', 'nando', 'domino', 'pizza', 'wagamama', 'burger king', 'subway', 'leon ', 'itsu', 'wasabi', 'restaurant', 'cafe', 'coffee', 'grill', 'kebab', 'chicken', 'takeaway', 'soul food', 'tim hortons', 'five guys', 'taco', 'sushi', 'bakery'], 'Eating out'],
     [['tfl', 'trainline', 'national rail', 'uber', 'bolt', 'shell', 'esso', 'texaco', 'parking', 'avanti', 'gwr', 'lner', 'stagecoach', 'dvla', 'citymapper', 'zipcar'], 'Transport'],
     [['british gas', 'octopus energy', 'edf', 'e.on', 'eon next', 'ovo', 'scottish power', 'thames water', 'severn trent', 'anglian water', 'united utilities', 'council tax', 'tv licen', 'bt group', 'virgin media', 'vodafone', 'giffgaff', 'plusnet', 'talktalk', 'hyperoptic', 'sky digital', 'o2 ', ' ee '], 'Bills & utilities'],
     [['rent', 'mortgage', 'letting', 'estate agent', 'openrent'], 'Housing'],
@@ -27,9 +27,11 @@
     [['boots', 'superdrug', 'pharmacy', 'dentist', 'optician', 'specsavers', 'puregym', 'gym', 'nuffield', 'bupa'], 'Health & fitness'],
     [['odeon', 'vue ', 'cineworld', 'ticketmaster', 'steam', 'cinema', 'theatre'], 'Entertainment'],
     [['ryanair', 'easyjet', 'british airways', 'jet2', 'wizz', 'booking.com', 'airbnb', 'expedia', 'hotel', 'premier inn'], 'Travel'],
-    [['amazon', 'amzn', 'argos', 'ebay', 'asos', 'john lewis', 'ikea', 'primark', 'currys', 'b&q', 'wickes', 'tk maxx', 'zara', 'h&m', 'uniqlo', 'etsy'], 'Shopping'],
+    [['amazon', 'amzn', 'argos', 'ebay', 'asos', 'john lewis', 'ikea', 'primark', 'currys', 'b&q', 'wickes', 'tk maxx', 'zara', 'h&m', 'uniqlo', 'etsy', 'tiktok', 'temu', 'shein', 'klarna', 'clearpay', 'payin3', 'pay in 3', 'jd sports', 'sports direct', 'sportsdirect', 'footlocker', 'foot locker', 'menswear', 'fashion', 'clothing', 'shoes', 'next retail', 'matalan', 'b&m', 'home bargains', 'poundland', 'the range', 'wilko', 'boohoo', 'very.co.uk'], 'Shopping'],
+    [['moneybox', 'vanguard', 'trading 212', 'freetrade', 'hargreaves', 'premium bonds', 'ns&i'], 'Savings & investments'],
     [['atm', 'cash withdrawal', 'cashpoint'], 'Cash'],
-    [['overdraft', 'interest charge', 'late fee', 'non-sterling', 'transaction fee'], 'Fees & charges'],
+    [['overdraft', 'interest charge', 'late fee', 'non-sterling', 'transaction fee', 'overdraft fees', 'arranged overdraft'], 'Fees & charges'],
+    [['council', 'dvla', 'gov.uk', 'hmrc'], 'Bills & utilities'],
   ];
   const DEFAULT_INCOME_RULES = [
     [['refund', 'reversal'], 'Refunds'],

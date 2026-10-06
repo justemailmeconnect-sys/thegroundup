@@ -57,7 +57,7 @@
       '<button type="button" class="doc-row__thumb" data-view="' + esc(p.id) + '" aria-label="' + (p.files && p.files.length ? 'View files for ' : 'Add a file to ') + esc(p.title) + '">' + thumbHTML(p.files) + '</button>' +
       '<button type="button" class="doc-row__main" data-edit="' + esc(p.id) + '">' +
       '<b>' + esc(p.title) + '</b>' +
-      '<em>' + esc([p.party, fmtDate(p.date, { short: true }), p.reference].filter(Boolean).join(' · ')) + '</em>' +
+      '<em>' + esc([p.party, fmtDate(p.date, { short: true }), p.reference, p.folder ? 'Folder: ' + p.folder : ''].filter(Boolean).join(' · ')) + '</em>' +
       '<span class="doc-row__chips">' + pill(KIND_SHORT[p.kind] || 'Item', 'kind-' + p.kind) + pill(p.context === 'work' ? 'Work' : 'Home', 'muted', p.context === 'work' ? 'briefcase' : 'home') +
       statusPill(p) + (p.claim && !p.claimed ? pill('Claim back', 'info', 'flag') : '') + '</span></button>' +
       '<span class="doc-row__end">' + (p.amount != null ? '<b class="' + (p.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(p.amount)) + '</b>' : '') + act + '</span></li>';
@@ -94,9 +94,7 @@
       text: 'Snap or upload every receipt, invoice and warranty the moment you get it. Your assistant reads it and fills in the details.',
       actions: '<button type="button" class="btn" data-import-orders>' + icon('download') + 'Import Amazon orders</button><button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
     }) +
-      '<label class="dropbar" tabindex="0"><input type="file" multiple accept="' + GU.ui.ACCEPT + '" hidden id="rc-file">' + icon('upload', 'drop__icon') +
-      '<span><b>Drop receipts, invoices or warranty cards here, or a whole folder of them</b><small>or tap to take a photo or choose files. Photos and PDFs both work.</small></span>' +
-      '<button type="button" class="btn btn--sm dropbar__btn" data-rc-folder>' + icon('folder') + 'Choose a folder</button></label>' +
+      GU.ui.dropbar('Drop receipts, invoices or warranties here, or a whole folder', 'Photos and PDFs both work. Everything stays in this tab; subfolders like Home, Work or Warranties are used.') +
       '<div class="ledger">' +
       '<div><span>Invoices to pay</span><b>' + esc(money(sum(toPay, (p) => p.amount || 0))) + '</b><em>' + esc(plural(toPay.length, 'invoice')) + (toPay.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + toPay.filter((p) => p.dueDate && p.dueDate < t).length + ' overdue' : '') + '</em></div>' +
       '<div><span>Owed to you</span><b>' + esc(money(sum(owed, (p) => p.amount || 0))) + '</b><em>' + esc(plural(owed.length, 'invoice')) + ' sent</em></div>' +
@@ -120,23 +118,7 @@
       ui.q = e.target.value;
       draw();
     }, 150));
-    const input = root.querySelector('#rc-file');
-    input.addEventListener('change', () => input.files.length && create({ files: Array.from(input.files) }));
-    root.querySelector('[data-rc-folder]').addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const files = await GU.ui.pickFolder();
-      if (files.length) create({ files });
-    });
-    const bar = root.querySelector('.dropbar');
-    bar.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), input.click()));
-    bar.addEventListener('dragover', (e) => (e.preventDefault(), bar.classList.add('is-over')));
-    bar.addEventListener('dragleave', () => bar.classList.remove('is-over'));
-    bar.addEventListener('drop', (e) => {
-      e.preventDefault();
-      bar.classList.remove('is-over');
-      GU.ui.filesFromDrop(e.dataTransfer).then((files) => files.length && create({ files }));
-    });
+    GU.ui.wireDropbar(root, (files) => create({ files }));
     root.addEventListener('click', (e) => {
       const c = e.target.closest('[data-chip]');
       if (c) {
@@ -200,9 +182,9 @@
       files = await GU.ui.pickFiles();
       if (!files.length) return;
     }
-    // Several files are several receipts: let the assistant read and file each one.
-    if (files && files.length > 1 && !opts.values) {
-      GU.inbox.add({ files });
+    // Several files (or a folder) are several receipts: the assistant reads each one and files it here.
+    if (files && !opts.values && (files.length > 1 || GU.ui.pathOf(files[0]).includes('/'))) {
+      GU.inbox.add({ files, scope: { kind: 'paperwork', name: 'Receipts & invoices' } });
       return null;
     }
     const defaults = { kind: ui.filter === 'to-pay' ? 'invoice-in' : ui.filter === 'owed' ? 'invoice-out' : ui.filter === 'warranty' ? 'warranty' : 'receipt', context: ui.context === 'work' ? 'work' : 'home', date: today(), status: 'unpaid' };

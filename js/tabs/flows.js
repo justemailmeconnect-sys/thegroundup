@@ -63,7 +63,7 @@
       eyebrow: 'Money',
       title: 'Incomings',
       text: 'Money coming in: salary, side work, refunds, benefits. Worked out from your bank transactions, plus the regular income you expect.',
-      actions: '<button type="button" class="btn" data-add-source>' + icon('repeat') + 'Add regular income</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add money in</button>',
+      actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button><button type="button" class="btn" data-add-source>' + icon('repeat') + 'Add regular income</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add money in</button>',
     }) +
       ledger(list, 'in', '<div><span>Expected in the next 30 days</span><b>' + esc(money(next30)) + '</b><em>from ' + esc(plural(sources.length, 'regular source')) + '</em></div>') +
       '<div class="cols cols--main-side">' +
@@ -87,6 +87,7 @@
         period.in = c.dataset.value;
         return GU.render();
       }
+      if (e.target.closest('[data-import]')) return GU.tabs.transactions.importStatement();
       if (e.target.closest('[data-add]')) return GU.tabs.transactions.create({ direction: 'in', category: 'Salary' });
       if (e.target.closest('[data-add-source]')) return createSource();
       const src = e.target.closest('[data-source]');
@@ -157,7 +158,7 @@
       eyebrow: 'Money',
       title: 'Outgoings',
       text: 'Where your money goes, by category. Set a monthly budget for any category and I’ll warn you when you go over.',
-      actions: '<button type="button" class="btn" data-budgets>' + icon('flag') + 'Set budgets</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add spending</button>',
+      actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button><button type="button" class="btn" data-budgets>' + icon('flag') + 'Set budgets</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add spending</button>',
     }) +
       ledger(list, 'out', budgetTotal
         ? '<div><span>Budget left this month</span><b class="' + (budgetUsed > budgetTotal ? 'is-crit' : '') + '">' + esc(money(budgetTotal - budgetUsed)) + '</b><em>of ' + esc(money(budgetTotal, { whole: true })) + ' budgeted</em></div>'
@@ -179,6 +180,7 @@
         period.out = c.dataset.value;
         return GU.render();
       }
+      if (e.target.closest('[data-import]')) return GU.tabs.transactions.importStatement();
       if (e.target.closest('[data-add]')) return GU.tabs.transactions.create({ direction: 'out' });
       if (e.target.closest('[data-budgets]')) return editBudgets();
       const tx = e.target.closest('[data-tx]');

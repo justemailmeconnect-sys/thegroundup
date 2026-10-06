@@ -26,7 +26,7 @@
     return '<li class="row-item" data-id="' + esc(b.id) + '">' +
       '<button type="button" class="row-item__main" data-edit="' + esc(b.id) + '">' +
       '<span class="row-item__icon">' + icon(b.autopay ? 'repeat' : 'bills') + '</span>' +
-      '<span class="row-item__text"><b>' + esc(b.name) + '</b><em>' + esc([b.payee, F.freqLabel(b.frequency), b.method].filter(Boolean).join(' · ')) + '</em></span></button>' +
+      '<span class="row-item__text"><b>' + esc(b.name) + '</b><em>' + esc([b.payee, F.freqLabel(b.frequency), b.method, (b.files || []).length ? plural(b.files.length, 'file') : ''].filter(Boolean).join(' · ')) + '</em></span></button>' +
       '<span class="row-item__date">' + (b.active === false ? '' : '<b>' + esc(fmtDate(b.nextDue, { weekday: true })) + '</b><em>' + esc(relDays(b.nextDue)) + '</em>') + '</span>' +
       '<span class="row-item__status">' + status(b) + '</span>' +
       '<span class="row-item__amt">' + esc(money(b.amount)) + '</span>' +
@@ -60,6 +60,7 @@
       text: 'Your regular payments. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on your Today list until you mark them paid.',
       actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +
+      GU.ui.dropbar('Drop bills and contracts here, or a whole folder', 'Each new company becomes a bill. Letters from a company you already have are added to its bill, not duplicated.') +
       '<div class="ledger">' +
       '<div><span>Bills per month</span><b>' + esc(money(monthly)) + '</b><em>on average</em></div>' +
       '<div><span>Bills per year</span><b>' + esc(money(monthly * 12, { whole: true })) + '</b><em>' + esc(plural(active.length, 'active bill')) + '</em></div>' +
@@ -77,6 +78,7 @@
       '<section class="panel"><div class="panel__body tip">' + icon('info') + '<p>Bills paid by direct debit or standing order move to their next date automatically. If you also import your bank statements, leave “add to transactions” unticked when you mark a bill paid, so it isn’t counted twice.</p></div></section>' +
       '</aside></div>';
 
+    GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'bills', name: 'Bills' } }));
     const det = root.querySelector('.panel--details');
     if (det) det.addEventListener('toggle', () => (showStopped = det.open));
     root.addEventListener('click', (e) => {

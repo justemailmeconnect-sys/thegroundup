@@ -420,8 +420,16 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .thrower__drop span { display: grid; }
 .thrower__drop b { color: var(--ink); font-size: 15px; }
 .thrower__drop small { color: var(--ink-3); font-size: 13px; }
+.bank-list { margin: 0 0 16px; padding-left: 20px; color: var(--ink-2); font-size: 14px; display: grid; gap: 4px; }
+.bank-list b { color: var(--ink); }
+.check-ok { display: flex; gap: 8px; align-items: center; color: var(--good); font-size: 14px; font-weight: 500; margin: -6px 0 14px; }
+.check-ok .ico { width: 16px; height: 16px; }
 .thrower__pick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: -2px; }
 .dropbar__btn { margin-left: auto; }
+.dropbar__text { flex: 1 1 260px; min-width: 0; }
+.dropbar__btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.visa.is-over { border-color: var(--accent-2); background: var(--accent-soft); }
+.visa__drop-hint { font-size: 12.5px; }
 .thrower__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 .thrower__mode { flex: 1 1 260px; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
 .thrower__mode .ico { width: 16px; height: 16px; color: var(--accent-2); }

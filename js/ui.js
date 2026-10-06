@@ -592,6 +592,41 @@
     return '“' + tops[0] + '”' + (tops.length > 1 ? ' and ' + (tops.length - 1) + ' other folder' + (tops.length > 2 ? 's' : '') : '');
   }
 
+  /* A drop area with "Choose files" and "Choose a folder", used by every section. */
+  function dropbar(title, subtitle) {
+    return '<div class="dropbar" data-dropbar tabindex="0" role="button" aria-label="' + esc(title) + '">' + icon('upload', 'drop__icon') +
+      '<span class="dropbar__text"><b>' + esc(title) + '</b><small>' + esc(subtitle || 'Drop files or whole folders here. Subfolders are kept as groups.') + '</small></span>' +
+      '<span class="dropbar__btns"><button type="button" class="btn btn--sm" data-db-files>' + icon('file') + 'Choose files</button>' +
+      '<button type="button" class="btn btn--sm" data-db-folder>' + icon('folder') + 'Choose a folder</button></span>' +
+      '<input type="file" multiple hidden data-db-input accept="' + ACCEPT + '"></div>';
+  }
+  function wireDropbar(root, onFiles) {
+    const bar = root.querySelector('[data-dropbar]');
+    if (!bar) return;
+    const input = bar.querySelector('[data-db-input]');
+    const send = (files) => (files.length ? onFiles(files) : toast('There were no files I can read in that.'));
+    bar.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-db-folder]')) {
+        e.stopPropagation();
+        return send(await pickFolder());
+      }
+      if (e.target === input) return;
+      input.click();
+    });
+    bar.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && e.target === bar && (e.preventDefault(), input.click()));
+    input.addEventListener('change', () => {
+      send(Array.from(input.files).filter(usable));
+      input.value = '';
+    });
+    bar.addEventListener('dragover', (e) => (e.preventDefault(), bar.classList.add('is-over')));
+    bar.addEventListener('dragleave', () => bar.classList.remove('is-over'));
+    bar.addEventListener('drop', (e) => {
+      e.preventDefault();
+      bar.classList.remove('is-over');
+      filesFromDrop(e.dataTransfer).then(send);
+    });
+  }
+
   function pickFiles(accept) {
     return new Promise((resolve) => {
       const input = document.createElement('input');
@@ -621,6 +656,6 @@
 
   GU.ui = {
     icon, pill, emptyState, chips, selectOptions, toast, menu, closeMenu,
-    openDialog, confirmBox, formDialog, attachments, hydrate, thumbHTML, viewFiles, pickFiles, pickFolder, filesFromDrop, pathOf, folderSummary, download, isImage, ACCEPT,
+    openDialog, confirmBox, formDialog, attachments, hydrate, thumbHTML, viewFiles, pickFiles, pickFolder, filesFromDrop, pathOf, folderSummary, dropbar, wireDropbar, download, isImage, ACCEPT,
   };
 })();

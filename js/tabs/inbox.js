@@ -31,9 +31,29 @@
       store.commit((s) => s.inbox.push(item));
       return pump();
     }
-    // Each file is its own item: dropping 200 invoices (or a whole folder) gives 200 records.
-    const from = GU.ui.folderSummary(files);
-    if (files.length > 1 || from) readingToast = toast('Reading ' + plural(files.length, 'file') + (from ? ' from ' + from : '') + '. I’ll tell you when they’re filed.', { timeout: 60000 });
+    // Your own folders decide where things go (Car → Car, Passports → Important documents, Bank statements → importer).
+    let work = files.map((f) => ({ file: f, scope: input.scope || null, sub: input.scope ? GU.folders.subPath(f) : '', ctx: null, root: GU.ui.pathOf(f).includes('/') ? GU.ui.pathOf(f).split('/')[0] : '' }));
+    if (input.scope && input.scope.kind === 'paperwork') work.forEach((w) => (w.ctx = (GU.folders.plan([w.file])[0] || {}).context));
+    if (!input.scope) {
+      work = GU.folders.plan(files).map((p) => ({ file: p.file, scope: p.label, sub: p.sub, ctx: p.context }));
+      const statements = work.filter((w) => w.scope && w.scope.kind === 'statements').map((w) => w.file);
+      if (statements.length) {
+        GU.tabs.transactions.importStatement(statements);
+        work = work.filter((w) => !(w.scope && w.scope.kind === 'statements'));
+      }
+    }
+    // Files for a visa application are attached straight away; nothing needs reading.
+    const visaWork = work.filter((w) => w.scope && w.scope.kind === 'visa');
+    if (visaWork.length) {
+      await attachToVisas(visaWork);
+      work = work.filter((w) => !(w.scope && w.scope.kind === 'visa'));
+    }
+    if (!work.length) return;
+    const labels = Array.from(new Set(work.filter((w) => w.scope).map((w) => w.scope.name || '').filter(Boolean)));
+    const from = GU.ui.folderSummary(work.map((w) => w.file));
+    if (work.length > 1 || from) {
+      readingToast = toast('Reading ' + plural(work.length, 'file') + (labels.length ? ' into ' + labels.slice(0, 3).join(', ') + (labels.length > 3 ? ' and ' + (labels.length - 3) + ' more' : '') : from ? ' from ' + from : '') + '. I’ll tell you when they’re filed.', { timeout: 60000 });
+    }
     let chunk = [];
     const flush = () => {
       const items = chunk;
@@ -41,14 +61,65 @@
       if (items.length) store.commit((s) => s.inbox.push(...items));
       pump();
     };
-    for (const f of files) {
-      const meta = await GU.files.add(f);
-      const path = GU.ui.pathOf(f);
+    for (const w of work) {
+      const meta = await GU.files.add(w.file);
+      const path = GU.ui.pathOf(w.file);
       if (path !== meta.name) meta.path = path;
-      chunk.push({ id: 'in-' + uid(), created: today(), note, files: [meta], status: 'reading' });
+      chunk.push({ id: 'in-' + uid(), created: today(), note, files: [meta], status: 'reading', scope: w.scope || null, sub: w.sub || '', ctx: w.ctx || null, root: w.root || '' });
       if (chunk.length >= 20) flush();
     }
     flush();
+  }
+
+  async function attachToVisas(list) {
+    const groups = new Map();
+    for (const w of list) {
+      let id = w.scope.visaId || (store.state.visas.find((v) => v.visaType.toLowerCase() === String(w.scope.name).toLowerCase()) || {}).id;
+      if (!id) {
+        id = 'v-' + uid();
+        store.commit((s) => s.visas.push({ id, created: today(), visaType: w.scope.name, country: '', applicant: 'Me', status: 'Planning', checklist: [],
+          log: [{ id: uid(), date: today(), text: 'Started from your “' + w.scope.name + '” folder' }], files: [] }));
+      }
+      w.scope.visaId = id;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(await GU.files.add(w.file));
+    }
+    for (const [id, metas] of groups) GU.tabs.visas.attach(id, metas, 'Added ' + plural(metas.length, 'file') + ' from your folders: ' + metas.slice(0, 3).map((m) => m.name).join(', ') + (metas.length > 3 ? '…' : ''));
+    const v = store.find('visas', groups.keys().next().value);
+    toast('Added ' + plural(list.length, 'file') + ' to ' + (groups.size > 1 ? groups.size + ' visa applications' : (v ? v.visaType : 'your visa application')));
+  }
+
+  /* A file you put in a section (or a labelled folder) stays there: the reading only fills in the details. */
+  function applyScope(r, scope, sub, ctx, root) {
+    const out = Object.assign({}, r, { confidence: 1, scoped: true, folder: sub || '' });
+    const unclear = r.destination === 'unsure' || r.confidence < 0.5;
+    const fileTitle = (r._fileName || '').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim();
+    if (unclear && fileTitle) out.title = fileTitle;
+    const paper = ['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty'];
+    if (scope.kind === 'paperwork') {
+      if (scope.paperKind === 'warranty') out.destination = 'warranty';
+      else if (scope.paperKind === 'receipt') out.destination = 'receipt';
+      else if (scope.paperKind === 'invoice') out.destination = ['invoice_to_pay', 'invoice_owed_to_me'].includes(r.destination) ? r.destination : 'invoice_to_pay';
+      else out.destination = paper.includes(r.destination) ? r.destination : 'receipt';
+      if (/paid/i.test(scope.name || '') || /\bpaid\b/i.test(sub || '')) out.paid = true;
+      if (ctx) out.context = ctx;
+    } else if (scope.kind === 'documents') {
+      out.destination = 'document';
+      // Your folder names first (Passports, Insurance…), then what the document itself says, then a Car/Van folder.
+      const named = GU.folders.DOC_TYPES.find(([re]) => re.test(sub || '')) || GU.folders.DOC_TYPES.find(([re]) => re.test(root || ''));
+      const own = r.destination === 'document' && r.document_type && r.document_type !== 'Other' ? r.document_type : null;
+      out.document_type = (named && named[1]) || scope.docType || own || (/\b(car|van|motorbike|motorcycle)\b/i.test(root + ' ' + sub) ? 'Vehicle' : 'Other');
+    } else if (scope.kind === 'bills') {
+      out.destination = 'bill';
+    } else if (scope.kind === 'section') {
+      out.destination = 'section';
+      const sec = scope.sectionId ? store.state.sections.find((x) => x.id === scope.sectionId) : store.state.sections.find((x) => x.name.toLowerCase() === String(scope.name || '').toLowerCase());
+      out.section_id = sec ? sec.id : null;
+      out.new_section_name = sec ? null : scope.name;
+      out.group = sub || '';
+    }
+    out.summary = (r.destination === 'unsure' ? out.title : r.summary || out.title) + (scope.name ? ' (from your “' + scope.name + '” folder)' : '');
+    return out;
   }
 
   const batch = { filed: 0, waiting: 0, seen: 0 };
@@ -70,6 +141,7 @@
             if (rec && rec.blob) blobs.push(new File([rec.blob], m.name, { type: m.type }));
           }
           result = await GU.brain.analyse({ files: blobs, note: next.note, paths: next.files.map((m) => m.path || m.name) });
+          if (next.scope && result) result = applyScope(Object.assign(result, { _fileName: (next.files[0] || {}).name }), next.scope, next.sub, next.ctx, next.root);
         } catch (e) {
           console.warn('[inbox] analyse failed', e);
           error = 'I couldn’t read this one. Pick where it goes.';
@@ -103,6 +175,10 @@
   function settle(item, quiet) {
     const r = item.result;
     if (!r) return false;
+    if (item.scope && r.scoped) {
+      fileItem(item, r, { quiet });
+      return true;
+    }
     const auto = store.state.settings.autoFile !== false;
     if (auto && r.confidence >= AUTO_FILE_AT && !['unsure', 'bank_statement', 'order_history'].includes(r.destination)) {
       fileItem(item, r, { quiet });
@@ -152,6 +228,18 @@
       n++;
     }
     toast('Filed ' + plural(n, 'item') + '. Each one can be undone from Filed recently.');
+  }
+
+  async function importAllStatements() {
+    const items = store.state.inbox.filter((i) => i.result && i.result.destination === 'bank_statement');
+    const files = [];
+    for (const it of items) {
+      const m = (it.files || [])[0];
+      const rec = m && (await GU.files.get(m.id));
+      if (rec) files.push(new File([rec.blob], m.name, { type: m.type }));
+    }
+    items.forEach((it) => discard(it.id, true));
+    if (files.length) GU.tabs.transactions.importStatement(files);
   }
 
   async function openOrders(item) {
@@ -322,6 +410,7 @@
       '</form>' +
       '<section class="panel"><header class="panel__head"><h2>Waiting for you</h2><span class="panel__tools">' +
       (reading.length ? '<span class="reading"><span class="spinner" aria-hidden="true"></span>Reading ' + reading.length + ' more…</span>' : '') +
+      (ready.filter((i) => i.result && i.result.destination === 'bank_statement').length > 1 ? '<button type="button" class="btn btn--sm" data-import-all>' + icon('bank') + 'Import all ' + ready.filter((i) => i.result && i.result.destination === 'bank_statement').length + ' statements</button>' : '') +
       (fileable.length > 1 ? '<button type="button" class="btn btn--sm btn--primary" data-file-all>' + icon('check') + 'File all ' + fileable.length + '</button>' : '') +
       (!reading.length && fileable.length <= 1 ? '<span class="muted">' + (waiting.length ? plural(waiting.length, 'item') : 'all clear') + '</span>' : '') + '</span></header>' +
       (waiting.length ? '<ul class="inbox-list">' + shown.map(cardHTML).join('') + '</ul>' +
@@ -397,6 +486,7 @@
       };
       let hit;
       if (e.target.closest('[data-file-all]')) return fileAll();
+      if (e.target.closest('[data-import-all]')) return importAllStatements();
       if ((hit = find('data-file')) && hit.item) return fileItem(hit.item, hit.item.result);
       if ((hit = find('data-details')) && hit.item) return editAndFile(hit.item);
       if ((hit = find('data-place')) && hit.item) return choosePlace(hit.item, hit.b);
