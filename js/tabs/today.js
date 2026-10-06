@@ -167,6 +167,7 @@
       '<button type="button" class="btn btn--ghost brief__more" data-horizon>' + (horizon === 14 ? 'Show the next 30 days' : 'Show the next 14 days only') + '</button>' +
       '</div>' +
       '<aside class="brief__aside">' +
+      GU.tabs.debts.accountsCard(s) +
       monthCard(s) +
       listCard('Needs attention', attention, 'Nothing needs your attention right now.') +
       listCard('Waiting on', waiting) +
@@ -217,8 +218,16 @@
       if (side) {
         const [title, i] = side.dataset.side.split(':');
         const a = (title === 'Waiting on' ? waiting : attention)[+i];
-        if (a.ref) GU.view.open(a.ref);
+        if (a.account) GU.tabs.transactions.showAccount(a.account);
+        else if (a.ref) GU.view.open(a.ref);
         else GU.view.go(a.tab, a.go ? { filter: a.go } : null);
+        return;
+      }
+      if (e.target.closest('[data-balances]')) return GU.tabs.transactions.updateBalances();
+      const acct = e.target.closest('[data-account]');
+      if (acct) {
+        e.preventDefault();
+        GU.tabs.transactions.showAccount(acct.dataset.account);
         return;
       }
       const view = e.target.closest('[data-view]');

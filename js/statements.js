@@ -396,7 +396,8 @@
     const potList = Object.keys(potNames).concat(Array.from(new Set(real.map((t) => t.section))).filter((x) => x !== 'main' && !potNames[x]))
       .map((sec) => ({ name: potNames[sec] || 'Pot', transactions: inOrder(real.filter((t) => t.section === sec), false) }))
       .filter((p) => p.transactions.length);
-    return { kind: 'transactions', bank, format: 'PDF statement', period, transactions: main, pots: potList, check };
+    const od = allText.match(/(?:arranged\s+)?overdraft limit(?:\s+is)?:?\s*£?\s*([\d,]+(?:\.\d{2})?)/i);
+    return { kind: 'transactions', bank, format: 'PDF statement', period, transactions: main, pots: potList, check, overdraftLimit: od ? parseAmount(od[1]) : null };
   }
 
   /* ---------- the one entry point ---------- */

@@ -1,0 +1,351 @@
+/* The Ground Up: Debts. Cards, loans, buy now pay later, car finance and overdrafts in one place.
+   You add what you owe; your imported bank statements show what you've been paying, so the balance,
+   monthly cost and debt-free date keep themselves up to date. */
+(function () {
+  'use strict';
+  const GU = window.GU;
+  const { esc, uid, today, money, fmtDate, relDays, daysUntil, plural, sum, monthLabel } = GU.util;
+  const { icon, pill, emptyState, formDialog, toast, confirmBox, thumbHTML, viewFiles } = GU.ui;
+  const D = GU.debts;
+  const store = GU.store;
+
+  const TYPE_ICON = { 'Credit card': 'card', 'Store or catalogue card': 'card', 'Car finance': 'car', Mortgage: 'home', 'Student loan': 'book', 'Owed to a person': 'heart', Overdraft: 'bank' };
+  const open = {};
+
+  const clearLabel = (s) => (s.months === Infinity ? 'Never at this rate' : s.clearBy ? monthLabel(s.clearBy.slice(0, 7), true) : '');
+  const pct = (x) => Math.round(x * 100) + '%';
+
+  /* ---------- balances, shared with the Bank and Today tabs ---------- */
+  function balanceLine(info) {
+    if (!info) return '<em>No balance yet. Import a statement or set it by hand.</em>';
+    const od = info.balance < 0 && info.overdraftLimit ? money(-info.balance, { whole: true }) + ' of ' + money(info.overdraftLimit, { whole: true }) + ' overdraft used'
+      : info.balance < 0 ? 'Overdrawn' : info.overdraftLimit ? money(info.available, { whole: true }) + ' available with overdraft' : '';
+    return '<em>' + esc([od, info.staleDays ? 'as of ' + fmtDate(info.asOf, { short: true }) : 'up to today'].filter(Boolean).join(' · ')) + '</em>';
+  }
+  function staleNote(info) {
+    if (!info || info.staleDays < 14) return '';
+    return pill(info.staleDays >= 60 ? Math.round(info.staleDays / 30) + ' months old' : info.staleDays + ' days old', info.staleDays >= 45 ? 'warn' : 'muted', 'clock');
+  }
+  function accountsCard(s) {
+    const list = GU.money.accounts(s).filter((x) => x.info || x.count);
+    if (!list.length) return '';
+    const known = list.filter((x) => x.info);
+    const total = sum(known, (x) => x.info.balance);
+    const old = known.some((x) => x.info.staleDays >= 3) || known.length < list.length;
+    return '<section class="side-card"><div class="side-card__head"><h2>Your accounts</h2><button type="button" class="btn btn--sm' + (old ? ' btn--soft' : ' btn--ghost') + '" data-balances>' + icon('edit') + 'Update balances</button></div>' +
+      (old ? '<p class="side-card__note">Some of these are from older statements. Tap Update balances and put in what your banking apps show now.</p>' : '') +
+      '<ul class="acct-mini">' + list.map((x) =>
+      '<li><a href="#transactions" data-account="' + esc(x.account.id) + '"><span><b>' + esc(x.account.name) + '</b>' + balanceLine(x.info) + '</span>' +
+      '<strong class="' + (x.info && x.info.balance < 0 ? 'is-neg' : '') + '">' + (x.info ? esc(money(x.info.balance)) : '–') + '</strong></a></li>').join('') + '</ul>' +
+      (known.length > 1 ? '<p class="side-card__foot">Together <b class="' + (total < 0 ? 'is-neg' : '') + '">' + esc(money(total)) + '</b></p>' : '') +
+      debtLine(s) + '</section>';
+  }
+  function debtLine(s) {
+    const tot = D.totals(s);
+    if (!tot.count) return '';
+    return '<a class="link" href="#debts">' + esc('You owe about ' + money(tot.owed, { whole: true }) + (tot.monthly ? ', paying ' + money(tot.monthly, { whole: true }) + ' a month' : '')) + icon('chevron') + '</a>';
+  }
+
+  /* ---------- page ---------- */
+  function debtCard(d) {
+    const s = D.summary(store.state, d);
+    const pills = [];
+    if (s.finished && !s.balanceKnown) pills.push(pill('No payments since ' + fmtDate(s.lastPayment.date, { short: true }) + '. Paid off?', 'info'));
+    else if (!s.balanceKnown) pills.push(pill('Add the balance', 'warn', 'alert'));
+    else if (s.estBalance === 0) pills.push(pill('Paid off', 'good', 'check'));
+    if (s.nextPayment && !s.finished) {
+      const n = daysUntil(s.nextPayment);
+      pills.push(pill('Next payment ' + relDays(s.nextPayment) + (d.paymentDay ? '' : ' (estimate)'), n <= 3 ? 'warn' : 'muted', 'clock'));
+    }
+    if (s.months === Infinity) pills.push(pill('Payments don’t cover the interest', 'crit', 'alert'));
+    const lender = D.lenderFor(d.lender) || D.lenderFor(d.name);
+    const files = d.files || [];
+    const rows = s.payments.map((p) => ({ t: p, kind: 'pay' })).concat(s.borrowed.map((p) => ({ t: p, kind: 'borrow' }))).sort((a, b) => b.t.date.localeCompare(a.t.date));
+    const acct = (id) => (store.state.accounts.find((a) => a.id === id) || {}).name || '';
+    return '<article class="debt" data-debt="' + esc(d.id) + '">' +
+      '<header class="debt__head"><span class="debt__icon">' + icon(TYPE_ICON[d.type] || 'coin') + '</span>' +
+      '<div><h2>' + esc(d.name) + '</h2><p class="muted">' + esc([d.lender && d.lender !== d.name ? d.lender : '', d.type, d.apr ? d.apr + '% APR' : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      '<div class="debt__pills">' + pills.join('') + '</div>' +
+      '<div class="debt__actions">' +
+      (files.length ? '<button type="button" class="thumb-btn" data-files="' + esc(d.id) + '" aria-label="View ' + plural(files.length, 'file') + '">' + thumbHTML(files) + '</button>' : '') +
+      (s.finished ? '<button type="button" class="btn btn--sm" data-close="' + esc(d.id) + '">' + icon('check') + 'Mark paid off</button>' : '<button type="button" class="btn btn--sm" data-balance="' + esc(d.id) + '">Update balance</button>') +
+      '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.name) + '">' + icon('edit') + '</button></div></header>' +
+      '<div class="debt__figs">' +
+      '<div><span>Left to pay</span><b>' + (s.balanceKnown ? esc(money(s.estBalance)) : '–') + '</b><em>' + esc(s.byTerm ? s.months + ' of ' + d.termMonths + ' payments to go' : s.balanceKnown ? (s.paidSince || s.borrowedSince || s.interest >= 1 ? 'estimated from ' + money(d.balance, { whole: true }) + ' on ' + fmtDate(d.balanceDate, { short: true }) + (s.interest >= 1 ? ', with about ' + money(s.interest, { whole: true }) + ' interest' : '') : 'as of ' + fmtDate(d.balanceDate, { short: true })) : 'not set yet') + '</em></div>' +
+      '<div><span>Paying</span><b>' + (s.payment ? esc(money(s.payment)) : '–') + '</b><em>' + esc(d.monthlyPayment ? 'a month' + (s.monthlyAvg && Math.abs(s.monthlyAvg - d.monthlyPayment) > 1 ? ', ' + money(s.monthlyAvg) + ' on average lately' : '') : s.monthlyAvg ? 'a month, on average lately' : 'no payments found yet') + '</em></div>' +
+      '<div><span>Clear by</span><b class="' + (s.months === Infinity ? 'is-crit' : '') + '">' + (clearLabel(s) ? esc(clearLabel(s)) : '–') + '</b><em>' + esc(s.months && isFinite(s.months) ? plural(s.months, 'more payment') + (s.asOf < today() ? ' from ' + fmtDate(s.asOf, { short: true }) : '') : s.finished ? 'nothing left, it seems' : s.balanceKnown ? 'add a monthly payment' : 'needs the balance') + '</em></div>' +
+      '</div>' +
+      (s.progress != null && (s.progress >= 0.005 || s.byTerm) ? '<div class="debt__bar" role="img" aria-label="' + esc(pct(s.progress) + ' paid off') + '"><i style="width:' + s.progress * 100 + '%"></i></div><p class="debt__barlabel"><span>' + esc(pct(s.progress)) + ' paid off</span><span>' +
+        esc(s.byTerm ? money(s.start, { whole: true }) + ' to pay in all' : 'of ' + money(s.start, { whole: true })) + '</span></p>' : '') +
+      (rows.length
+        ? '<details class="debt__pays"' + (open[d.id] ? ' open' : '') + ' data-pays="' + esc(d.id) + '"><summary>' + icon('chevron') + '<span>' + esc(plural(s.payments.length, 'payment') + ' found in your statements, ' + money(s.paidTotal) + ' in all') +
+          (s.lastPayment ? '<span class="muted"> · last ' + esc(money(-s.lastPayment.amount)) + ' on ' + esc(fmtDate(s.lastPayment.date, { short: true })) + '</span>' : '') + '</span></summary>' +
+          '<div class="table-wrap"><table class="tbl tbl--compact"><tbody>' + rows.slice(0, 60).map((r) =>
+            '<tr class="clickable" data-tx="' + esc(r.t.id) + '" tabindex="0"><td class="nowrap muted">' + esc(fmtDate(r.t.date, { short: true })) + '</td><td>' + esc(r.t.description) +
+            (r.kind === 'borrow' ? ' ' + pill('Added to the debt', 'info') : '') + '</td><td class="hide-sm muted">' + esc(acct(r.t.account)) + '</td><td class="num' + (r.kind === 'borrow' ? ' is-in' : '') + '">' + esc(money(r.t.amount, { sign: true })) + '</td></tr>').join('') +
+          '</tbody></table></div>' + (rows.length > 60 ? '<p class="muted small">Showing the latest 60.</p>' : '') + '</details>'
+        : '<p class="debt__none">' + icon('search') + '<span>No payments to ' + esc(lender ? lender.name : d.lender || d.name) + ' in your bank statements yet. ' +
+          (store.state.transactions.length ? 'If they show up under another name, add it under “How it shows on your statement”.' : 'Import a statement from the Bank tab and I’ll find them.') + '</span></p>') +
+      (d.notes ? '<p class="debt__notes">' + esc(d.notes) + '</p>' : '') +
+      '</article>';
+  }
+
+  function render(root) {
+    const s = store.state;
+    const active = (s.debts || []).filter((d) => !d.closed);
+    const closed = (s.debts || []).filter((d) => d.closed);
+    const tot = D.totals(s);
+    const spotted = D.spotted(s);
+    const ods = D.overdrafts(s);
+    const stale = daysUntil(tot.dataEnd) < -14;
+    const owedItems = active.map((d) => ({ label: d.name, value: D.summary(s, d).estBalance || 0 })).concat(ods.map((o) => ({ label: o.account.name + ' overdraft', value: o.used }))).filter((x) => x.value > 0).sort((a, b) => b.value - a.value);
+
+    root.innerHTML = GU.view.head({
+      eyebrow: 'Money',
+      title: 'Debts',
+      text: 'Everything you owe in one place. Add a debt, or drop in a statement, agreement or screenshot, and I’ll find your payments to it in your bank statements and work out what’s left and when you’ll be clear.',
+      actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>',
+    }) +
+      GU.ui.dropbar('Drop credit card statements, loan agreements or Klarna screenshots here', 'I’ll read the balance, monthly payment and interest rate, and add it to the right debt.') +
+      '<div class="ledger">' +
+      '<div><span>You owe about</span><b class="' + (tot.owed ? 'is-crit' : '') + '">' + esc(money(tot.owed)) + '</b><em>' + esc(tot.count ? plural(tot.count, 'debt') + (ods.length ? ' incl. overdraft' : '') + (tot.unknown ? ', ' + tot.unknown + ' without a balance' : '') : 'nothing added yet') + '</em></div>' +
+      '<div><span>Monthly payments</span><b>' + esc(money(tot.monthly)) + '</b><em>' + esc(tot.monthly ? money(tot.monthly * 12, { whole: true }) + ' a year' : 'none found yet') + '</em></div>' +
+      '<div><span>Paid in the last 3 months</span><b>' + esc(money(tot.paid90)) + '</b><em>' + esc(!s.transactions.length ? 'import a statement to see this' : stale ? 'to ' + fmtDate(tot.dataEnd, { short: true }) + ', your latest statement' : 'from your statements') + '</em></div>' +
+      '<div><span>Debt-free by</span><b class="' + (tot.never ? 'is-crit' : '') + '">' + esc(tot.never ? 'Not yet' : tot.clearBy ? monthLabel(tot.clearBy.slice(0, 7), true) : '–') + '</b><em>' + esc(tot.never ? 'one debt won’t clear at its current payment' : tot.clearBy ? 'at your current payments' : 'add balances and payments') + '</em></div>' +
+      '</div>' +
+      (stale && s.transactions.length ? '<p class="note-line">' + icon('clock') + '<span>Your latest bank statement runs to ' + esc(fmtDate(tot.dataEnd)) + '. Import newer statements and I’ll bring these figures up to date.</span><button type="button" class="btn btn--sm" data-import>Import statements</button></p>' : '') +
+      '<div class="cols cols--main-side"><div class="stack">' +
+      (spotted.length ? '<section class="panel panel--spotted"><header class="panel__head"><h2>' + icon('search') + 'Payments that look like debts</h2><span class="muted">from your statements</span></header><ul class="rows">' +
+        spotted.map((x, i) => '<li class="spot"><span class="row-item__icon">' + icon(TYPE_ICON[x.type] || 'coin') + '</span><span class="spot__text"><b>' + esc(x.lender) + '</b><em>' +
+          esc(plural(x.count, 'payment') + ' over ' + plural(x.months, 'month') + ', ' + money(x.total) + ' in all · last ' + fmtDate(x.last, { short: true })) + '</em></span>' +
+          '<span class="spot__act"><button type="button" class="btn btn--sm btn--primary" data-track="' + i + '">Track it</button><button type="button" class="btn btn--sm btn--ghost" data-ignore="' + i + '">Not a debt</button></span></li>').join('') +
+        '</ul></section>' : '') +
+      (ods.length ? '<section class="panel"><header class="panel__head"><h2>' + icon('bank') + 'Overdrafts</h2></header><ul class="rows">' + ods.map((o) =>
+        '<li class="spot"><span class="row-item__icon">' + icon('bank') + '</span><span class="spot__text"><b>' + esc(o.account.name) + '</b><em>' +
+        esc((o.limit ? money(o.used) + ' of your ' + money(o.limit, { whole: true }) + ' overdraft used' : money(o.used) + ' overdrawn') + (o.fees90 ? ' · ' + money(o.fees90) + ' in overdraft fees over 3 months' : '') + ' · ' + fmtDate(o.asOf, { short: true })) + '</em></span>' +
+        (o.limit ? '<span class="od-meter" role="img" aria-label="' + esc(pct(Math.min(1, o.used / o.limit)) + ' of the overdraft used') + '"><i style="width:' + Math.min(100, (o.used / o.limit) * 100) + '%"></i></span>' : '') + '</li>').join('') + '</ul></section>' : '') +
+      (active.length ? active.map(debtCard).join('')
+        : '<section class="panel">' + emptyState({ icon: 'card', title: 'No debts added yet', text: spotted.length ? 'Start with the payments I found above, or add a card, loan or finance agreement yourself.' : 'Add a credit card, loan, Klarna, car finance or money you owe someone. Your bank statements fill in the payments.', action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>' }) + '</section>') +
+      (closed.length ? '<details class="panel panel--details"><summary class="panel__head"><h2>Paid off</h2><span class="muted">' + closed.length + '</span></summary><ul class="rows">' + closed.map((d) =>
+        '<li class="spot"><span class="row-item__icon">' + icon('check') + '</span><span class="spot__text"><b>' + esc(d.name) + '</b><em>' + esc(['Closed ' + (d.closedDate ? fmtDate(d.closedDate, { short: true }) : ''), d.lender].filter(Boolean).join(' · ')) + '</em></span><span class="spot__act"><button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(d.id) + '">' + icon('edit') + 'Edit</button></span></li>').join('') + '</ul></details>' : '') +
+      '</div><aside class="stack">' +
+      accountsCard(s) +
+      (owedItems.length > 1 ? '<section class="panel"><header class="panel__head"><h2>Who you owe</h2></header><div class="panel__body">' + GU.charts.barList(owedItems, { color: '--series-out' }) + '</div></section>' : '') +
+      '<section class="panel"><div class="panel__body tip">' + icon('info') + '<p>I match payments by the lender’s name on your bank statement (for example KLARNA, PAYPAL PAYIN3 or Flex on Monzo). Left to pay is the balance you gave me, less what you’ve paid since, plus interest if you gave me the rate. Update the balance now and then from a real statement to keep it exact.</p></div></section>' +
+      '</aside></div>';
+
+    GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'debts', name: 'Debts' } }));
+    root.querySelectorAll('[data-pays]').forEach((el) => el.addEventListener('toggle', () => (open[el.dataset.pays] = el.open)));
+    root.addEventListener('click', async (e) => {
+      const b = (sel) => e.target.closest(sel);
+      if (b('[data-add]')) return create();
+      if (b('[data-import]')) return GU.tabs.transactions.importStatement();
+      if (b('[data-balances]')) return GU.tabs.transactions.updateBalances();
+      let el;
+      if ((el = b('[data-track]'))) {
+        const x = spotted[+el.dataset.track];
+        return create({ name: x.lender, lender: x.lender, type: x.type, monthlyPayment: x.monthlyAvg || null });
+      }
+      if ((el = b('[data-ignore]'))) {
+        const x = spotted[+el.dataset.ignore];
+        store.commit((st) => (st.settings.ignoredLenders = (st.settings.ignoredLenders || []).concat([x.lender])));
+        toast('I won’t suggest ' + x.lender + ' again', { action: 'Undo', onAction: () => store.commit((st) => (st.settings.ignoredLenders = (st.settings.ignoredLenders || []).filter((n) => n !== x.lender))) });
+        return;
+      }
+      if ((el = b('[data-balance]'))) return updateBalance(el.dataset.balance);
+      if ((el = b('[data-close]'))) {
+        const id = el.dataset.close;
+        const d = store.find('debts', id);
+        store.commit((st) => Object.assign(st.debts.find((x) => x.id === id), { closed: true, closedDate: today() }));
+        toast(d.name + ' marked as paid off', { action: 'Undo', onAction: () => store.commit((st) => Object.assign(st.debts.find((x) => x.id === id), { closed: false, closedDate: undefined })) });
+        return;
+      }
+      if ((el = b('[data-edit]'))) return edit(el.dataset.edit);
+      if ((el = b('[data-files]'))) {
+        const d = store.find('debts', el.dataset.files);
+        if (d) viewFiles(d.files, 0, d.name);
+        return;
+      }
+      if ((el = b('tr[data-tx]'))) return GU.tabs.transactions.edit(el.dataset.tx);
+      if ((el = b('[data-account]'))) {
+        e.preventDefault();
+        GU.tabs.transactions.showAccount(el.dataset.account);
+      }
+    });
+    root.addEventListener('keydown', (e) => {
+      const row = e.target.closest && e.target.closest('tr[data-tx]');
+      if (row && e.key === 'Enter') GU.tabs.transactions.edit(row.dataset.tx);
+    });
+  }
+
+  /* ---------- add and edit ---------- */
+  function fields(isNew) {
+    return [
+      { name: 'name', label: 'What is it?', required: true, placeholder: 'e.g. Barclaycard, Car finance, Klarna', list: D.LENDERS.map((l) => l.name) },
+      { name: 'type', label: 'Type', type: 'select', options: D.TYPES, default: 'Credit card', half: true },
+      { name: 'lender', label: 'Lender', optional: true, half: true, placeholder: 'Who you pay', list: D.LENDERS.map((l) => l.name) },
+      { name: 'balance', label: 'Balance owed', type: 'money', optional: true, half: true, help: 'From your latest statement or app.' },
+      { name: 'balanceDate', label: 'Balance on', type: 'date', half: true },
+      { name: 'monthlyPayment', label: 'Monthly payment', type: 'money', optional: true, half: true, help: 'Leave empty and I’ll use what you’ve been paying.' },
+      { name: 'paymentDay', label: 'Payment day', type: 'number', optional: true, half: true, placeholder: '1 to 31', help: 'Day of the month it’s taken.' },
+      { name: 'apr', label: 'Interest rate (APR %)', type: 'number', optional: true, half: true, placeholder: 'e.g. 24.9' },
+      { name: 'startBalance', label: 'Amount first borrowed', type: 'money', optional: true, half: true, help: 'Shows how much you’ve paid off.' },
+      { name: 'termMonths', label: 'Number of monthly payments', type: 'number', optional: true, half: true, placeholder: 'e.g. 48', help: 'For loans and finance with a fixed end.' },
+      { name: 'startDate', label: 'First payment date', type: 'date', optional: true, half: true },
+      { name: 'match', label: 'How it shows on your statement', optional: true, placeholder: 'e.g. BARCLAYCARD, PAYPAL *PAYIN3', help: 'Leave empty for well-known lenders. Separate several names with commas.' },
+      { name: 'files', label: 'Statements and agreements', type: 'files', dropLabel: 'Attach a statement, agreement or screenshot' },
+      { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, optional: true, placeholder: 'Account number, promo end date, how to pay it off early…' },
+    ].concat(isNew ? [] : [{ name: 'closed', label: 'Paid off', type: 'checkbox', checkLabel: 'This debt is paid off and closed' }]);
+  }
+
+  /* Previews how many statement payments a debt would pick up, inside the form. */
+  function matchHint(v, form) {
+    const wrap = form.querySelector('[data-field="match"] .field__help');
+    if (!wrap) return;
+    if (!v.name && !v.lender && !v.match) return;
+    const n = D.payments(store.state, v).length;
+    wrap.textContent = store.state.transactions.length
+      ? (n ? 'I can see ' + plural(n, 'payment') + ' to this in your statements.' : 'No matching payments in your statements yet. Try the name exactly as your bank shows it.') + ' Separate several names with commas.'
+      : 'Leave empty for well-known lenders. Separate several names with commas.';
+  }
+
+  function save(v, existing) {
+    const t = today();
+    const rec = Object.assign(existing ? Object.assign({}, existing) : { id: 'debt-' + uid(), created: t, history: [] }, v);
+    if (!rec.lender) {
+      const l = D.lenderFor(rec.name);
+      if (l) rec.lender = l.name;
+    }
+    if (rec.balance != null && !rec.balanceDate) rec.balanceDate = t;
+    if (rec.paymentDay != null) rec.paymentDay = Math.min(31, Math.max(1, Math.round(rec.paymentDay))) || null;
+    if (rec.balance != null && (!existing || existing.balance !== rec.balance || existing.balanceDate !== rec.balanceDate)) {
+      rec.history = (rec.history || []).concat([{ date: rec.balanceDate, balance: rec.balance }]).slice(-60);
+      if (rec.startBalance == null && (!existing || existing.startBalance == null)) rec.startBalance = rec.balance;
+    }
+    if (rec.closed && !rec.closedDate) rec.closedDate = t;
+    if (!rec.closed) delete rec.closedDate;
+    let changed = [];
+    store.commit((st) => {
+      const i = st.debts.findIndex((x) => x.id === rec.id);
+      if (i >= 0) st.debts[i] = rec;
+      else st.debts.push(rec);
+      changed = D.claim(st, rec);
+    });
+    return { rec, changed };
+  }
+  function undoClaim(st, changed) {
+    for (const c of changed) {
+      const t = st.transactions.find((x) => x.id === c.id);
+      if (t) t.category = c.before;
+    }
+  }
+
+  function create(prefill, opts) {
+    opts = opts || {};
+    prefill = prefill || {};
+    if (!prefill.type && prefill.name) {
+      const l = D.lenderFor(prefill.name);
+      if (l) prefill.type = l.type;
+    }
+    formDialog({
+      title: 'Add a debt',
+      intro: 'Add what you owe. I’ll find the payments in your bank statements and keep the balance up to date.',
+      fields: fields(true),
+      values: Object.assign({ balanceDate: today(), type: 'Credit card' }, prefill),
+      initialFiles: opts.files,
+      submitLabel: 'Add debt',
+      onChange: matchHint,
+      onSubmit: (v) => {
+        const { rec, changed } = save(v, null);
+        const s = D.summary(store.state, rec);
+        toast('Added ' + rec.name + (s.payments.length ? '. Found ' + plural(s.payments.length, 'payment') + ' in your statements' : ''),
+          changed.length ? { action: 'Undo', onAction: () => store.commit((st) => {
+            undoClaim(st, changed);
+            st.debts = st.debts.filter((x) => x.id !== rec.id);
+          }) } : undefined);
+        if (opts.onSaved) opts.onSaved(rec);
+      },
+    });
+  }
+
+  function edit(id) {
+    const d = store.find('debts', id);
+    if (!d) return;
+    formDialog({
+      title: 'Edit ' + d.name,
+      fields: fields(false),
+      values: d,
+      onChange: matchHint,
+      onSubmit: (v) => {
+        save(v, d);
+      },
+      onDelete: () => {
+        store.remove('debts', id);
+        toast('Debt removed. Your bank transactions are kept.');
+      },
+      deleteMessage: 'This removes the debt and its notes. Your bank transactions are kept.',
+    });
+  }
+
+  function updateBalance(id) {
+    const d = store.find('debts', id);
+    if (!d) return;
+    const s = D.summary(store.state, d);
+    formDialog({
+      title: 'Update the balance for ' + d.name,
+      intro: s.balanceKnown ? 'I estimate ' + esc(money(s.estBalance)) + ' is left. Put in the figure from your latest statement or app and I’ll work forward from there.' : 'Put in the figure from your latest statement or app.',
+      fields: [
+        { name: 'balance', label: 'Balance owed', type: 'money', required: true, half: true },
+        { name: 'balanceDate', label: 'On', type: 'date', required: true, half: true },
+      ],
+      values: { balance: s.balanceKnown ? s.estBalance : null, balanceDate: today() },
+      submitLabel: 'Update',
+      onSubmit: (v) => {
+        save(Object.assign({}, d, v, { closed: v.balance === 0 ? d.closed : false }), d);
+        toast(d.name + ' updated');
+      },
+    });
+  }
+
+  /* From the inbox: a statement or agreement for a debt, read by the assistant. Adds to the debt you already have from that lender. */
+  function fromInbox(r, metas) {
+    const s = store.state;
+    const name = String(r.party || r.title || '').trim();
+    const l = D.lenderFor(name) || D.lenderFor(r.title);
+    const key = (l ? l.name : name).toLowerCase();
+    const existing = key && s.debts.find((d) => [d.name, d.lender].filter(Boolean).some((n) => n.toLowerCase() === key || (key.length > 3 && n.toLowerCase().includes(key))));
+    const v = {};
+    if (r.amount != null) {
+      v.balance = r.amount;
+      v.balanceDate = r.date || today();
+    }
+    if (r.monthly_payment != null) v.monthlyPayment = r.monthly_payment;
+    if (r.borrowed_amount != null) v.startBalance = r.borrowed_amount;
+    // An agreement with a fixed term: what's left comes from the payments still to make.
+    if (r.term_months && r.amount == null) {
+      v.termMonths = r.term_months;
+      v.startDate = r.date ? GU.util.addMonths(r.date, 1) : today();
+    }
+    if (r.interest_rate != null) v.apr = r.interest_rate;
+    if (r.due_date) v.paymentDay = +r.due_date.slice(8, 10);
+    if (existing) {
+      const keep = {};
+      for (const k of Object.keys(v)) if (v[k] != null && !(k === 'balance' && existing.balanceDate && v.balanceDate < existing.balanceDate)) keep[k] = v[k];
+      if (keep.balance == null) delete keep.balanceDate;
+      const before = JSON.parse(JSON.stringify(existing));
+      const { rec, changed } = save(Object.assign({}, existing, keep, { files: (existing.files || []).concat(metas) }), existing);
+      return { rec, added: false, undo: () => store.commit((st) => {
+        undoClaim(st, changed);
+        st.debts = st.debts.map((x) => (x.id === rec.id ? before : x));
+      }) };
+    }
+    const type = (r.debt_type && D.TYPES.includes(r.debt_type) && r.debt_type) || (l ? l.type : 'Other');
+    const { rec, changed } = save(Object.assign({ name: l ? l.name : r.title || name || 'Debt', lender: l ? l.name : name, type, files: metas, notes: [r.reference ? 'Ref ' + r.reference : '', r.notes].filter(Boolean).join('\n') }, v), null);
+    return { rec, added: true, undo: () => store.commit((st) => {
+      undoClaim(st, changed);
+      st.debts = st.debts.filter((x) => x.id !== rec.id);
+    }) };
+  }
+
+  GU.tabs.debts = { label: 'Debts', short: 'Debts', icon: 'card', render, create, edit, updateBalance, fromInbox, accountsCard, balanceLine, staleNote };
+})();

@@ -88,10 +88,19 @@
       if (k % 2 === 0) push(at(15), pick(['BLOOM BAKERY LTD', 'KITE CYCLES LTD']), amt(380, 650), 'Freelance & side work');
       if (k === -4) push(at(10), 'HOME OFFICE UKVI VISA FEE', -827, 'Visa & immigration');
       if (k === -1) push(at(21), 'TRAINLINE.COM', -amt(48, 96), 'Transport');
+      push(at(7), 'BARCLAYCARD PAYMENT', -120, 'Debt repayments');
+      if (k >= -1) push(at(15), 'KLARNA*ASOS.COM', -33.33, 'Debt repayments');
     }
     push(d(-3), 'SQ *BRIXTON MARKET STALL', -14, '');
     push(d(-6), 'PAYPAL *JSMITH', -25, '');
     push(d(-11), 'CARD PAYMENT 0042 ZETTLE', -9.5, '');
+
+    const first = tx.reduce((m, x) => (x.date < m ? x.date : m), t);
+    const debts = [
+      Object.assign({ id: 'debt-' + uid(), name: 'Barclaycard', lender: 'Barclaycard', type: 'Credit card', balance: 2860, balanceDate: addDays(first, -1), startBalance: 3400, apr: 24.9, monthlyPayment: 120, paymentDay: 7,
+        notes: '0% on balance transfers ended in January.', history: [] }, D),
+      Object.assign({ id: 'debt-' + uid(), name: 'Klarna (ASOS order)', lender: 'Klarna', type: 'Buy now pay later', balance: 99.99, balanceDate: addMonths(t.slice(0, 8) + '01', -1).slice(0, 8) + '14', monthlyPayment: 33.33, paymentDay: 15, history: [] }, D),
+    ];
 
     const bill = (o) => Object.assign({ id: 'b-' + uid(), history: [], active: true, account: cur, anchorDay: +o.nextDue.slice(8) }, D, o, { autopay: o.method !== 'Pay manually' });
     const bills = [
@@ -196,7 +205,9 @@
     ];
 
     store.commit((s) => {
-      s.accounts.push({ id: cur, name: 'Monzo current account', demo: true }, { id: sav, name: 'Savings pot', demo: true });
+      s.accounts.push({ id: cur, name: 'Monzo current account', bank: 'Monzo', type: 'current', overdraftLimit: 500, balanceAnchor: { date: addDays(first, -1), amount: 2412.37 }, demo: true },
+        { id: sav, name: 'Savings pot', bank: 'Monzo', type: 'savings', balanceAnchor: { date: addDays(first, -1), amount: 2150 }, demo: true });
+      s.debts.push(...debts);
       s.transactions.push(...tx);
       s.bills.push(...bills);
       s.incomeSources.push(...incomeSources);
@@ -215,7 +226,7 @@
     });
   }
 
-  const COLLECTIONS = ['transactions', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog'];
+  const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog'];
   function clear(silent) {
     const s = store.state;
     const files = [];

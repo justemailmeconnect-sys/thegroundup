@@ -7,7 +7,7 @@
   const EXPENSE = [
     'Housing', 'Bills & utilities', 'Groceries', 'Eating out', 'Transport', 'Shopping', 'Subscriptions',
     'Health & fitness', 'Entertainment', 'Travel', 'Personal care', 'Education', 'Family & kids',
-    'Gifts & donations', 'Visa & immigration', 'Insurance', 'Fees & charges', 'Savings & investments',
+    'Gifts & donations', 'Visa & immigration', 'Insurance', 'Fees & charges', 'Debt repayments', 'Savings & investments',
     'Cash', 'Work expenses', 'Other spending',
   ];
   const INCOME = ['Salary', 'Freelance & side work', 'Benefits', 'Refunds', 'Interest', 'Gifts received', 'Rental income', 'Other income'];
@@ -27,7 +27,8 @@
     [['boots', 'superdrug', 'pharmacy', 'dentist', 'optician', 'specsavers', 'puregym', 'gym', 'nuffield', 'bupa'], 'Health & fitness'],
     [['odeon', 'vue ', 'cineworld', 'ticketmaster', 'steam', 'cinema', 'theatre'], 'Entertainment'],
     [['ryanair', 'easyjet', 'british airways', 'jet2', 'wizz', 'booking.com', 'airbnb', 'expedia', 'hotel', 'premier inn'], 'Travel'],
-    [['amazon', 'amzn', 'argos', 'ebay', 'asos', 'john lewis', 'ikea', 'primark', 'currys', 'b&q', 'wickes', 'tk maxx', 'zara', 'h&m', 'uniqlo', 'etsy', 'tiktok', 'temu', 'shein', 'klarna', 'clearpay', 'payin3', 'pay in 3', 'jd sports', 'sports direct', 'sportsdirect', 'footlocker', 'foot locker', 'menswear', 'fashion', 'clothing', 'shoes', 'next retail', 'matalan', 'b&m', 'home bargains', 'poundland', 'the range', 'wilko', 'boohoo', 'very.co.uk'], 'Shopping'],
+    [['klarna', 'clearpay', 'payin3', 'pay in 3', 'zilch', 'laybuy', 'barclaycard', 'capital one', 'vanquis', 'mbna', 'american express', 'amex', 'paypal credit', 'zopa', 'lendable', 'moneybarn', 'student loan', 'tymit', 'aqua card', 'newday'], 'Debt repayments'],
+    [['amazon', 'amzn', 'argos', 'ebay', 'asos', 'john lewis', 'ikea', 'primark', 'currys', 'b&q', 'wickes', 'tk maxx', 'zara', 'h&m', 'uniqlo', 'etsy', 'tiktok', 'temu', 'shein', 'jd sports', 'sports direct', 'sportsdirect', 'footlocker', 'foot locker', 'menswear', 'fashion', 'clothing', 'shoes', 'next retail', 'matalan', 'b&m', 'home bargains', 'poundland', 'the range', 'wilko', 'boohoo', 'very.co.uk'], 'Shopping'],
     [['moneybox', 'vanguard', 'trading 212', 'freetrade', 'hargreaves', 'premium bonds', 'ns&i'], 'Savings & investments'],
     [['atm', 'cash withdrawal', 'cashpoint'], 'Cash'],
     [['overdraft', 'interest charge', 'late fee', 'non-sterling', 'transaction fee', 'overdraft fees', 'arranged overdraft'], 'Fees & charges'],

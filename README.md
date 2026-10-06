@@ -10,10 +10,11 @@ Everything lives in your own browser. There is no server and no account, and not
 | --- | --- |
 | **Today** | Your daily briefing: one timeline of everything due (bills, invoices, tasks, visa appointments, document expiries, expected income), plus this month's money, things needing attention and things you're waiting on. Type a note or drop a file straight onto it. |
 | **Inbox** | Throw anything here: files, photos, pasted text or whole folders (subfolders included). The assistant reads each item, files it automatically when it's sure (with undo) and keeps the rest for you to check, with a **File all** button for big batches. Your folder names help: things in a "Car" folder go to a Car section, things in "Work receipts" are tagged Work. |
-| **Bank** | Every transaction across your accounts. Import CSV statements from any UK bank; categories are filled in automatically and learn from your corrections. |
+| **Bank** | Every transaction across your accounts, with each account's current balance and a balance-over-time chart. Import statements from any UK bank; categories are filled in automatically and learn from your corrections. |
 | **Bills** | Regular payments with next due dates. Direct debits roll on by themselves; bills you pay by hand wait for you to mark them paid. |
 | **In** (Incomings) | Money coming in, by source and month, plus regular income you expect (salary, retainers). |
 | **Out** (Outgoings) | Spending by category, monthly budgets with warnings, and your biggest payments. |
+| **Debts** | Credit cards, loans, car finance, Klarna, PayPal Pay in 3, Monzo Flex, overdrafts and money owed to people. Your bank statements show what you're paying each one, so the balance left, monthly cost and debt-free date keep themselves up to date. |
 | **Receipts** | Receipts, invoices you need to pay, invoices someone owes you, paid invoices and warranties, for home and for work, each with its photo or PDF. |
 | **Documents** | Passports, licences, certificates, contracts and policies, with scans, where the original is kept, and reminders before anything expires. Reference numbers stay hidden until you tap Show. |
 | **Visas** | Each application from planning to decision: stage, document checklist, appointments, notes and files, and a warning before an approved visa runs out. |
@@ -64,11 +65,22 @@ Anything you've already imported is skipped, money moved between your own accoun
 
 Live bank connections (Open Banking) need a small server and an account with a provider such as GoCardless Bank Account Data or TrueLayer, so they're not built in yet.
 
+## Balances and debts
+
+**Account balances** come from the running balance printed on your statements (PDF, the Santander .txt export and HSBC's CSV all have one). Each account on the Bank tab shows its latest balance, how much overdraft is used or left, and how old the figures are. To match your banking apps right now, tap **Update balances** on Today or the Bank tab and type what each account holds (a minus for overdrawn). That figure becomes the starting point and every transaction you import after that date is added on top; it's also how to give a balance to files that don't carry one (Monzo's CSV export, Quicken, OFX). Today shows all your accounts at a glance and warns you when an account is overdrawn, near its overdraft limit, or hasn't had a statement for two weeks.
+
+**Debts** work from what you tell me plus what your statements show:
+
+- Add a debt by hand, or drop a credit card statement, loan or finance agreement, or a Klarna / Pay in 3 screenshot onto the Debts tab or the Inbox. I read the lender, balance, monthly payment, interest rate and payment date. A later statement from the same lender updates that debt instead of adding a new one.
+- Payments to the lender are found in your bank transactions by name (KLARNA, PAYPAL PAYIN3, BARCLAYCARD, "Flex" on Monzo and around 25 other UK lenders; you can add your own names). They're labelled **Debt repayments** in your spending.
+- **Left to pay** is the balance you gave me, less what you've paid since, plus interest if you gave me the rate, worked out only over days your statements cover. For a fixed-term loan or car finance with no current balance, it's the payments still to make.
+- Regular payments to lenders you haven't added show up as **Payments that look like debts**, ready to track in one tap. Plans with no payments for two months are flagged as probably paid off.
+
 ## Uploading folders
 
 Every tab that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts & invoices, Important documents, Bills, Bank, each visa application and each of your own sections. Files uploaded there stay in that tab; the assistant only reads them to fill in the details. Subfolders are kept as groups.
 
-In the Inbox, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, that visa application). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
+In the Inbox, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements*, *Debts* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, the Debts tab, that visa application). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
 
 ## Your data and backups
 
@@ -85,11 +97,12 @@ js/util.js            dates, money, CSV parsing
 js/store.js           saving, file storage, backup and restore
 js/finance.js         categories, auto-categorising rules, recurring dates, totals
 js/ui.js              icons, dialogs, forms, attachments, toasts, menus
-js/charts.js          monthly column chart and category bars
+js/charts.js          monthly column chart, category bars and the balance line
 js/agenda.js          the Today timeline, attention list and tab badges
 js/brain.js           reading and filing: Claude, API key and offline readers
 js/statements.js      bank statements: PDF, CSV, Excel, Santander .txt, QIF and OFX
 js/folders.js         using your own folder names to decide where files go
+js/debts.js           account balances, lenders, matching debt payments, payoff maths
 js/sample.js          example data
 js/app.js             the icon rail, routing and redraws
 js/tabs/*.js          one file per tab

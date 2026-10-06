@@ -25,6 +25,7 @@
     invoice_owed_to_me: 'Receipts & invoices',
     warranty: 'Receipts & invoices',
     bill: 'Bills',
+    debt: 'Debts',
     document: 'Important documents',
     visa: 'Visa applications',
     task: 'To-do lists',
@@ -37,7 +38,7 @@
   };
   const DEST_LABEL = {
     receipt: 'Receipt', invoice_to_pay: 'Invoice to pay', invoice_owed_to_me: 'Invoice someone owes you', warranty: 'Warranty',
-    bill: 'Regular bill', document: 'Important document', visa: 'Visa application', task: 'Task', transaction_out: 'Money out',
+    bill: 'Regular bill', debt: 'Debt', document: 'Important document', visa: 'Visa application', task: 'Task', transaction_out: 'Money out',
     transaction_in: 'Money in', bank_statement: 'Bank statement', order_history: 'Online order list', section: 'New or custom section', unsure: 'Not sure yet',
   };
 
@@ -127,7 +128,7 @@
     type: 'object',
     additionalProperties: false,
     required: ['destination', 'confidence', 'summary', 'title', 'party', 'amount', 'date', 'due_date', 'expiry_date', 'reference', 'context', 'category',
-      'document_type', 'frequency', 'paid', 'visa_id', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes'],
+      'document_type', 'frequency', 'paid', 'visa_id', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes', 'monthly_payment', 'interest_rate', 'debt_type', 'term_months', 'borrowed_amount'],
     properties: {
       destination: { type: 'string', enum: Object.keys(DESTINATIONS) },
       confidence: { type: 'number' },
@@ -150,6 +151,11 @@
       task_title: NULLABLE('string'),
       task_due: NULLABLE('string'),
       notes: NULLABLE('string'),
+      monthly_payment: NULLABLE('number'),
+      interest_rate: NULLABLE('number'),
+      debt_type: NULLABLE('string'),
+      term_months: NULLABLE('number'),
+      borrowed_amount: NULLABLE('number'),
     },
   };
 
@@ -164,6 +170,7 @@
       '- invoice_to_pay: an invoice or one-off bill the user has to pay. If it shows it has already been paid, still use this and set paid to true. Invoices for online orders (Amazon, eBay and similar) are already paid: set paid to true and put the order number in reference.',
       '- invoice_owed_to_me: an invoice the user or their business sent to someone else, so someone owes the user money.',
       '- warranty: a warranty, guarantee or protection plan. Put the cover end date in expiry_date (work it out from the purchase date and length if needed).',
+      '- debt: money the user owes and is paying off: a credit card or store card statement, loan or car finance agreement or statement, Klarna, PayPal Pay in 3, Clearpay or Monzo Flex plans and screenshots, overdraft letters, or money owed to a person. Put the balance still owed in amount (null if it only shows what was first borrowed, as a new agreement does), the date of that balance or of the agreement in date, the lender in party, the minimum or monthly payment in monthly_payment, the interest rate (APR) as a number in interest_rate, the number of monthly payments in term_months, the amount first borrowed in borrowed_amount, the next payment due date in due_date, and the account or agreement number in reference. Set debt_type to one of: ' + GU.debts.TYPES.join('; ') + '. A credit card statement is a debt, not a bank_statement.',
       '- bill: a regular payment being set up or changed (direct debit notice, subscription, contract with a monthly cost). Set frequency and put the next payment date in due_date.',
       '- document: an important document to keep: passport, ID, driving licence, certificates, contracts, tenancy, insurance policy, payslip, P60, tax letters, medical letters, pension or bank letters. Set document_type to one of: ' + ctx.documentTypes.join('; ') + '. Put any expiry or renewal date in expiry_date and the issue date in date.',
       '- visa: anything about a visa or immigration application (UKVI, Home Office, eVisa, biometrics, TLScontact, VFS, Certificate of Sponsorship, embassy letters). If it belongs to one of these existing applications, set visa_id to its id: ' + JSON.stringify(ctx.visas) + '.',
@@ -184,12 +191,14 @@
       '- summary: one short, friendly sentence to the user saying what it is, for example "Receipt from Currys for a Samsung TV, £549.00, with a 2-year guarantee."',
       '- confidence: 0 to 1, how sure you are about the destination.',
       '- notes: anything else worth keeping (policy numbers, what is covered, account numbers). null if nothing.',
+      '- monthly_payment, interest_rate, debt_type, term_months and borrowed_amount: only for debts. null otherwise.',
     ].join('\n');
   }
 
   function blankResult() {
     return { destination: 'unsure', confidence: 0.3, summary: '', title: '', party: null, amount: null, date: null, due_date: null, expiry_date: null, reference: null,
-      context: 'home', category: null, document_type: null, frequency: null, paid: false, visa_id: null, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null };
+      context: 'home', category: null, document_type: null, frequency: null, paid: false, visa_id: null, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null,
+      monthly_payment: null, interest_rate: null, debt_type: null, term_months: null, borrowed_amount: null };
   }
   function clean(r) {
     const out = Object.assign(blankResult(), r || {});
@@ -203,6 +212,12 @@
     if (out.section_id && !(store.state.sections || []).some((x) => x.id === out.section_id)) out.section_id = null;
     if (out.document_type && !GU.tabs.documents.TYPES.includes(out.document_type)) out.document_type = 'Other';
     if (out.category && !F.EXPENSE.concat(F.INCOME, [F.TRANSFER]).includes(out.category)) out.category = null;
+    for (const k of ['monthly_payment', 'interest_rate', 'borrowed_amount', 'term_months']) {
+      if (typeof out[k] === 'string') out[k] = parseAmount(out[k]);
+      out[k] = out[k] != null && !isNaN(out[k]) ? Math.abs(round2(out[k])) : null;
+    }
+    if (out.term_months != null) out.term_months = Math.round(out.term_months) || null;
+    if (out.debt_type && !GU.debts.TYPES.includes(out.debt_type)) out.debt_type = 'Other';
     out.title = (out.title || '').trim() || (out.party || DEST_LABEL[out.destination]);
     return out;
   }
@@ -282,6 +297,33 @@
     const block = res.content.find((b) => b.type === 'text');
     if (!block) throw new Error('No answer came back.');
     return clean(JSON.parse(block.text));
+  }
+
+  /* Credit card statements, loan and finance agreements, BNPL plans. */
+  const DEBT_WORDS = ['credit card', 'minimum payment', 'credit limit', 'statement balance', 'new balance', 'outstanding balance', 'balance outstanding', 'amount owed', 'loan agreement',
+    'finance agreement', 'credit agreement', 'hire purchase', 'pay in 3', 'payin3', 'klarna', 'clearpay', 'monzo flex', 'representative apr', 'purchase rate', 'remaining balance', 'instalments', 'settlement figure', 'arrears'];
+  function debtScore(t) {
+    return has(String(t || '').toLowerCase(), DEBT_WORDS);
+  }
+  function looksLikeDebt(text) {
+    const t = String(text || '').toLowerCase();
+    if (/current account|personal account|everyday account/.test(t) && !/credit card/.test(t)) return false;
+    return debtScore(t) >= 3 || (debtScore(t) >= 2 && /minimum payment|credit limit|loan agreement|finance agreement|credit agreement/.test(t));
+  }
+  /* Reads the figures off a debt statement or agreement. */
+  function debtFigures(raw, t) {
+    const num = (re) => {
+      const m = raw.match(re);
+      return m ? parseAmount(m[1]) : null;
+    };
+    const balance = num(/(?:new balance|statement balance|outstanding balance|balance outstanding|amount owed|total (?:amount )?(?:owed|outstanding|payable)|remaining balance|current balance|settlement figure|balance to pay)[^£\d\n]{0,30}£?\s?(-?[\d,]+\.\d{2})/i);
+    const payment = num(/(?:minimum payment|monthly payment|monthly instalment|monthly repayment|instalment amount|payment amount|each instalment|next instalment|next payment|instalments? of)[^£\d\n]{0,30}£?\s?([\d,]+\.\d{2})/i);
+    const borrowed = num(/(?:amount of credit|loan amount|amount borrowed|credit amount|cash price|total credit)[^£\d\n]{0,30}£?\s?([\d,]+\.\d{2})/i);
+    const term = raw.match(/\bfor (\d{1,3}) months\b|\b(\d{1,3}) monthly (?:payments|instalments|repayments)\b|\bterm(?: of agreement)?:?\s*(\d{1,3}) months\b|\b(\d{1,3})[- ]month (?:term|agreement|loan)\b/i);
+    const apr = raw.match(/(\d{1,2}(?:\.\d{1,2})?)\s?%\s?(?:apr|p\.?a\.?|\(variable\)|variable|purchase)/i) || raw.match(/\bapr\b[^\d\n]{0,25}(\d{1,2}(?:\.\d{1,2})?)\s?%/i);
+    const lender = GU.debts.LENDERS.find((l) => t.includes(l.name.toLowerCase()) || l.keys.some((k) => !l.exact && t.includes(k)));
+    const type = lender ? lender.type : /credit card|credit limit/.test(t) ? 'Credit card' : /car finance|hire purchase|vehicle/.test(t) ? 'Car finance' : /loan/.test(t) ? 'Loan' : /klarna|clearpay|pay in 3|instalments/.test(t) ? 'Buy now pay later' : 'Other';
+    return { balance, payment, borrowed, term: term ? +(term[1] || term[2] || term[3] || term[4]) : null, apr: apr ? parseFloat(apr[1]) : null, lender, type };
   }
 
   function looksLikeStatement(text) {
@@ -455,7 +497,7 @@
       return Object.assign(r, { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check the columns.' });
     }
     // Typed notes (or a short note saved as a .txt file): tasks or quick money notes.
-    const noteLike = !input.files.length || (input.files.every((f) => /\.txt$/i.test(f.name)) && raw.length < 240 && !/receipt|invoice|statement|total|policy|certificate|booking/i.test(raw));
+    const noteLike = (!input.files.length || (input.files.every((f) => /\.txt$/i.test(f.name)) && raw.length < 240 && !/receipt|invoice|statement|total|policy|certificate|booking/i.test(raw))) && debtScore(raw) < 2;
     if (noteLike && raw.length < 240) {
       const amt = raw.match(/(?:£|\$|€)\s?(\d+(?:\.\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s?(?:quid|pounds|gbp)/i);
       if (amt && /\b(paid|spent|bought|gave|cost)\b/i.test(raw)) {
@@ -493,6 +535,18 @@
     const fromMe = biz && t.includes(biz) && !new RegExp('bill(?:ed)? to:?\\s*' + biz.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(t);
     const warrantyYears = t.match(/(\d+)[\s-]*year (?:manufacturer'?s? )?(?:warranty|guarantee)/);
 
+    const debtSc = debtScore(t);
+    if (debtSc >= 2 && (looksLikeDebt(t) || debtSc * 2 >= sc.invoice) && sc.visa < 3) {
+      const f = debtFigures(raw, t);
+      const name = f.lender ? f.lender.name : r.party || 'Debt';
+      // The next instalment date is when to pay, not the date of the balance.
+      const due = dates.find((d) => /due|next (?:instalment|payment)|instalment.{0,20}on\s*$|collected on|pay by/.test(d.before));
+      const issued = dates.find((d) => d !== due && /statement date|date of (?:agreement|statement)|agreement date|as (?:of|at)|balance on|dated?:?\s*$/.test(d.before)) || dates.find((d) => d !== due);
+      Object.assign(r, { destination: 'debt', confidence: Math.min(0.92, 0.66 + debtSc * 0.06), party: f.lender ? f.lender.name : r.party, title: name, amount: f.balance != null ? Math.abs(f.balance) : null,
+        date: issued ? issued.iso : null, due_date: due ? due.iso : null, monthly_payment: f.payment, interest_rate: f.apr, debt_type: f.type, term_months: f.term, borrowed_amount: f.borrowed,
+        summary: (f.type === 'Credit card' ? 'A credit card statement' : 'Details of a debt') + (f.lender || r.party ? ' from ' + name : '') + (f.balance != null ? ': ' + money(Math.abs(f.balance)) + ' owed' : '') + (f.payment ? ', ' + money(f.payment) + ' a month' : '') + '.' });
+      return clean(r);
+    }
     if (sc.visa >= 3 && sc.visa >= sc.invoice && docType !== 'Passport') {
       const v = matchVisa(t);
       Object.assign(r, { destination: 'visa', confidence: v ? 0.82 : 0.7, visa_id: v ? v.id : null, title: v ? v.visaType : 'Visa letter',
@@ -610,8 +664,8 @@
       }
       input.text = parts.join('\n\n');
     }
-    // Bank statements are spotted on this device and read by the statement importer.
-    if (looksLikeStatement(input.text)) {
+    // Bank statements are spotted on this device and read by the statement importer (credit card statements are debts).
+    if (looksLikeStatement(input.text) && !looksLikeDebt(input.text)) {
       return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', via: 'offline',
         summary: 'A ' + ((GU.statements && GU.statements.detectBank(input.text, input.files[0] && input.files[0].name)) || 'bank') + ' statement. I’ll open the importer so you can check it.' });
     }
@@ -649,6 +703,7 @@
       return v ? 'Visa applications › ' + v.visaType : 'Visa applications › new application';
     }
     if (r.destination === 'document') return 'Important documents › ' + (r.document_type || 'Other');
+    if (r.destination === 'debt') return 'Debts › ' + (r.party || r.title || 'new debt');
     if (['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty'].includes(r.destination)) return 'Receipts & invoices › ' + (r.context === 'work' ? 'Work' : 'Home');
     return DESTINATIONS[r.destination];
   }
@@ -656,6 +711,10 @@
   /* Files the item. metas: already-stored file metadata. Returns {tab, ref, label, undo} or null if it needs the user. */
   function file(result, metas, note) {
     const r = result;
+    if (r.destination === 'debt') {
+      const res = GU.tabs.debts.fromInbox(Object.assign({}, r, { notes: [r.notes, note && note !== r.title ? note : ''].filter(Boolean).join('\n') || null }), metas);
+      return { tab: 'debts', ref: { c: 'debts', id: res.rec.id }, label: 'Debts › ' + res.rec.name + (res.added ? '' : ' (updated)'), undo: res.undo };
+    }
     const s = store.state;
     const created = [];
     const t = today();

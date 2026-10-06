@@ -1,4 +1,4 @@
-/* The Ground Up: small HTML charts. Columns for months, bars for categories. */
+/* The Ground Up: small HTML charts. Columns for months, bars for categories, a line for balances. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -64,5 +64,46 @@
     }).join('') + '</div>';
   }
 
-  GU.charts = { columns, barList, niceScale };
+  /* Ticks covering lo..hi (which may be below zero). */
+  function niceRange(lo, hi, ticks) {
+    lo = Math.min(0, lo);
+    hi = Math.max(0, hi);
+    if (hi - lo < 1) hi = lo + 1;
+    const { step } = niceScale(hi - lo, ticks || 4);
+    return { lo: Math.floor(lo / step) * step, hi: Math.ceil(hi / step) * step, step };
+  }
+
+  /* One line over time. points: [{date, value, tip}], o: {height, color, limit (a floor to mark, e.g. -overdraft), labels: [{i, text}], table} */
+  function line(points, o) {
+    o = o || {};
+    if (points.length < 2) return '';
+    const vals = points.map((p) => p.value);
+    let lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const showLimit = o.limit != null && o.limit < 0 && lo < o.limit * 0.5;
+    if (showLimit) lo = Math.min(lo, o.limit);
+    const r = niceRange(lo, hi);
+    const ticks = [];
+    for (let v = r.lo; v <= r.hi + r.step / 2; v += r.step) ticks.push(Math.round(v * 100) / 100);
+    const y = (v) => 100 - ((v - r.lo) / (r.hi - r.lo)) * 100;
+    const x = (i) => (i / (points.length - 1)) * 1000;
+    const d = points.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.value).toFixed(2)).join(' ');
+    const zero = y(0);
+    const area = d + ' L1000 ' + zero.toFixed(2) + ' L0 ' + zero.toFixed(2) + ' Z';
+    const color = 'var(' + (o.color || '--series-in') + ')';
+    return '<figure class="linechart" style="--h:' + (o.height || 180) + 'px">' +
+      '<div class="colchart__body">' +
+      '<div class="colchart__y" aria-hidden="true">' + ticks.map((v) => '<span style="bottom:' + (100 - y(v)) + '%">' + esc(money(v, { compact: true })) + '</span>').join('') + '</div>' +
+      '<div class="linechart__plot">' +
+      ticks.map((v) => '<i class="colchart__grid' + (v === 0 ? ' is-zero' : '') + '" style="bottom:' + (100 - y(v)) + '%"></i>').join('') +
+      (showLimit ? '<i class="linechart__limit" style="bottom:' + (100 - y(o.limit)) + '%"><span>Overdraft limit</span></i>' : '') +
+      '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path d="' + area + '" fill="' + color + '" fill-opacity=".08"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>' +
+      '<div class="linechart__hits">' + points.map((p, i) => '<span data-tip="' + esc(p.tip || '') + '"' + (i === points.length - 1 ? ' class="is-last"' : '') + ' style="--y:' + y(p.value) + '%"></span>').join('') + '</div>' +
+      '</div><span></span>' +
+      '<div class="linechart__x" aria-hidden="true">' + (o.labels || []).map((l) => '<span' + (l.i / (points.length - 1) > 0.92 ? ' class="is-end"' : '') + ' style="left:' + (l.i / (points.length - 1)) * 100 + '%">' + esc(l.text) + '</span>').join('') + '</div>' +
+      '</div>' + (o.table ? tableView(o.table) : '') + '</figure>';
+  }
+
+  GU.charts = { columns, barList, line, niceScale };
 })();

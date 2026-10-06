@@ -15,6 +15,7 @@
     visa: { label: 'Visa', tab: 'visas' },
     document: { label: 'Document', tab: 'documents' },
     warranty: { label: 'Warranty', tab: 'receipts' },
+    debt: { label: 'Debt', tab: 'debts' },
     item: { label: 'Reminder', tab: null },
   };
 
@@ -77,6 +78,11 @@
       const sec = (state.sections || []).find((x) => x.id === it.sectionId);
       push({ kind: 'item', date: it.dueDate, title: it.title, meta: sec ? sec.name : '', ref: { c: 'sectionItems', id: it.id }, tab: sec ? 's-' + sec.id : null });
     }
+    if (GU.debts) {
+      for (const p of GU.debts.upcoming(state, to)) {
+        push({ kind: 'debt', date: p.date, title: 'Payment to ' + p.debt.name, meta: p.debt.paymentDay ? 'Monthly payment' : 'Expected, going by your past payments', amount: p.amount ? -p.amount : null, ref: { c: 'debts', id: p.debt.id } });
+      }
+    }
     for (const d of state.documents) {
       if (d.expiryDate && d.expiryDate >= t && d.expiryDate <= to)
         push({ kind: 'document', date: d.expiryDate, title: d.title + ' expires', meta: d.holder || d.type, ref: { c: 'documents', id: d.id } });
@@ -106,6 +112,27 @@
         const left = v.checklist.filter((c) => !c.done).length;
         if (left) out.push({ level: 'info', tab: 'visas', title: plural(left, 'document') + ' still to gather', detail: name, ref: { c: 'visas', id: v.id } });
       }
+    }
+    if (GU.money) {
+      for (const x of GU.money.accounts(state)) {
+        const b = x.info;
+        if (!b) continue;
+        const name = x.account.name;
+        const when = b.staleDays > 3 ? ' on ' + fmtDate(b.asOf, { short: true }) : '';
+        const go = { account: x.account.id };
+        if (b.balance < 0 && b.overdraftLimit && -b.balance >= b.overdraftLimit * 0.9) out.push(Object.assign({ level: 'crit', tab: 'transactions', title: name + (b.staleDays > 3 ? ' was ' : ' is ') + 'near its overdraft limit', detail: money(-b.balance) + ' of ' + money(b.overdraftLimit, { whole: true }) + ' used' + when }, go));
+        else if (b.balance < 0) out.push(Object.assign({ level: 'warn', tab: 'transactions', title: name + (b.staleDays > 3 ? ' was' : ' is') + ' overdrawn by ' + money(-b.balance), detail: (b.overdraftLimit ? money(b.available, { whole: true }) + ' of overdraft left' : 'Overdraft fees may apply') + when }, go));
+        if (b.staleDays >= 14 && x.count) out.push(Object.assign({ level: 'info', tab: 'transactions', title: 'Import your latest ' + (x.account.bank || name) + ' statement', detail: 'I only know your balance up to ' + fmtDate(b.asOf, { short: true }) }, go));
+      }
+    }
+    if (GU.debts) {
+      for (const d of state.debts || []) {
+        if (d.closed) continue;
+        const sm = GU.debts.summary(state, d);
+        if (sm.months === Infinity) out.push({ level: 'warn', tab: 'debts', title: d.name + ': payments don’t cover the interest', detail: 'At ' + money(sm.payment) + ' a month the balance won’t go down', ref: { c: 'debts', id: d.id } });
+        else if (!sm.balanceKnown) out.push({ level: 'info', tab: 'debts', title: 'Add the balance for ' + d.name, detail: 'So I can work out when it’ll be paid off', ref: { c: 'debts', id: d.id } });
+      }
+      for (const x of GU.debts.spotted(state).slice(0, 2)) out.push({ level: 'info', tab: 'debts', title: plural(x.count, 'payment') + ' to ' + x.lender + ' look like a debt', detail: 'Track it to see what’s left to pay' });
     }
     const uncategorised = state.transactions.filter((x) => !x.category).length;
     if (uncategorised) out.push({ level: 'info', tab: 'transactions', title: plural(uncategorised, 'transaction') + ' need a category', detail: 'Sorting them keeps your spending totals right', go: 'uncategorised' });
@@ -140,13 +167,13 @@
     const counts = {};
     const bump = (tab) => (counts[tab] = (counts[tab] || 0) + 1);
     for (const it of timeline(state, 0)) {
-      if (it.kind === 'income' || it.kind === 'warranty') continue;
+      if (it.kind === 'income' || it.kind === 'warranty' || it.kind === 'debt') continue;
       if (it.kind === 'bill' && !it.action) continue;
       bump(it.tab || KINDS[it.kind].tab);
     }
     counts.inbox = (state.inbox || []).filter((i) => i.status !== 'reading').length;
     for (const a of attention(state)) if (a.level !== 'info') bump(a.tab);
-    counts.today = timeline(state, 0).filter((i) => i.date <= t && i.kind !== 'income' && !(i.kind === 'bill' && !i.action)).length;
+    counts.today = timeline(state, 0).filter((i) => i.date <= t && i.kind !== 'income' && i.kind !== 'debt' && !(i.kind === 'bill' && !i.action)).length;
     return counts;
   }
 

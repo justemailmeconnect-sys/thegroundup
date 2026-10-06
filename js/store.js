@@ -40,6 +40,7 @@
         { id: 'list-work', name: 'Work' },
       ],
       tasks: [],
+      debts: [],
       sections: [],
       sectionItems: [],
       inbox: [],

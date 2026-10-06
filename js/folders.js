@@ -25,7 +25,8 @@
     const low = n.toLowerCase();
     const sec = (store.state.sections || []).find((x) => x.name.toLowerCase() === low);
     if (sec) return { kind: 'section', sectionId: sec.id, name: sec.name, strong: true };
-    if (/statement|^bank|\bbank\b|monzo|santander|hsbc|barclays|lloyds|natwest|nationwide|starling|revolut|halifax|first direct|credit card/i.test(n)) return { kind: 'statements', name: n, strong: true };
+    if (/\bdebts?\b|\bloans?\b|credit cards?|klarna|clearpay|pay ?in ?3|car finance|finance agreements?|\bhp agreement|overdraft|\bbnpl\b|buy now pay later|catalogue/i.test(n)) return { kind: 'debts', name: n, strong: true };
+    if (/statement|^bank|\bbank\b|monzo|santander|hsbc|barclays|lloyds|natwest|nationwide|starling|revolut|halifax|first direct/i.test(n)) return { kind: 'statements', name: n, strong: true };
     if (/warrant|guarantee/i.test(n)) return { kind: 'paperwork', paperKind: 'warranty', name: n, strong: true };
     if (/receipt/i.test(n)) return { kind: 'paperwork', paperKind: 'receipt', name: n, strong: true };
     if (/invoice|bills?\b|utilit/i.test(n)) return { kind: 'paperwork', paperKind: 'invoice', name: n, strong: true };

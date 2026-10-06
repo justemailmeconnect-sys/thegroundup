@@ -111,6 +111,9 @@
       out.document_type = (named && named[1]) || scope.docType || own || (/\b(car|van|motorbike|motorcycle)\b/i.test(root + ' ' + sub) ? 'Vehicle' : 'Other');
     } else if (scope.kind === 'bills') {
       out.destination = 'bill';
+    } else if (scope.kind === 'debts') {
+      // A card's own transaction export still goes to the statement importer.
+      if (r.destination !== 'bank_statement') out.destination = 'debt';
     } else if (scope.kind === 'section') {
       out.destination = 'section';
       const sec = scope.sectionId ? store.state.sections.find((x) => x.id === scope.sectionId) : store.state.sections.find((x) => x.name.toLowerCase() === String(scope.name || '').toLowerCase());
@@ -295,6 +298,9 @@
         return GU.tabs.transactions.create({ direction: r.destination === 'transaction_in' ? 'in' : 'out', description: r.party || r.title, amount: r.amount, date: r.date || today(), category: r.category, notes: r.notes }, { onSaved: done });
       case 'section':
         return GU.sections.createItem(r.section_id || { name: r.new_section_name || 'New section' }, { title: r.title, party: r.party, amount: r.amount, date: r.date, dueDate: r.due_date || r.expiry_date, reference: r.reference, notes: [r.summary, r.notes].filter(Boolean).join('\n'), files }, { onSaved: done, byAssistant: true });
+      case 'debt':
+        return GU.tabs.debts.create({ name: r.party || r.title, lender: r.party || '', type: r.debt_type || undefined, balance: r.amount, balanceDate: r.date || today(), monthlyPayment: r.monthly_payment,
+          apr: r.interest_rate, paymentDay: r.due_date ? +r.due_date.slice(8, 10) : null, notes: [r.reference ? 'Ref ' + r.reference : '', r.notes].filter(Boolean).join('\n'), files }, { onSaved: done });
       case 'bank_statement':
         return openImporter(item);
       case 'order_history':
@@ -320,6 +326,7 @@
       { icon: 'coin', label: 'Invoice someone owes me', onClick: () => set({ destination: 'invoice_owed_to_me' }) },
       { icon: 'shield', label: 'Warranty or guarantee', onClick: () => set({ destination: 'warranty' }) },
       { icon: 'bills', label: 'Regular bill', onClick: () => set({ destination: 'bill' }) },
+      { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance', onClick: () => set({ destination: 'debt' }) },
       { icon: 'folder', label: 'Important document', onClick: () => set({ destination: 'document', document_type: (item.result && item.result.document_type) || 'Other' }) },
     ].concat(s.visas.filter((v) => !['Refused', 'Withdrawn'].includes(v.status)).map((v) => ({ icon: 'globe', label: 'Visa: ' + v.visaType, hint: v.applicant || v.country, onClick: () => set({ destination: 'visa', visa_id: v.id }) })))
       .concat([
@@ -345,7 +352,9 @@
   function detailChips(r) {
     const out = [];
     if (r.party) out.push(r.party);
-    if (r.amount != null) out.push(money(r.amount));
+    if (r.amount != null) out.push((r.destination === 'debt' ? 'balance ' : '') + money(r.amount));
+    if (r.monthly_payment != null) out.push(money(r.monthly_payment) + ' a month');
+    if (r.interest_rate != null) out.push(r.interest_rate + '% APR');
     if (r.date) out.push(fmtDate(r.date, { short: true }));
     if (r.due_date) out.push('due ' + fmtDate(r.due_date, { short: true }));
     if (r.expiry_date) out.push((r.destination === 'warranty' ? 'covered until ' : 'expires ') + fmtDate(r.expiry_date, { short: true }));

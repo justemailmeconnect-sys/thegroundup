@@ -54,6 +54,122 @@
       '<td class="num ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</td></tr>').join('');
   }
 
+  /* ---------- account balances ---------- */
+  const ACCOUNT_TYPES = [{ value: 'current', label: 'Current account' }, { value: 'savings', label: 'Savings' }, { value: 'joint', label: 'Joint account' }, { value: 'business', label: 'Business account' }, { value: 'credit', label: 'Credit card' }];
+  function accountsStrip(s) {
+    const list = GU.money.accounts(s).filter((x) => x.info || x.count);
+    if (!list.length) return '';
+    const D = GU.tabs.debts;
+    return '<div class="acct-strip">' + list.map((x) => {
+      const b = x.info;
+      const on = ui.account === x.account.id;
+      return '<div class="acct' + (on ? ' is-on' : '') + (b && b.balance < 0 ? ' is-neg' : '') + '">' +
+        '<button type="button" class="acct__main" data-acct="' + esc(x.account.id) + '" aria-pressed="' + on + '">' +
+        '<span class="acct__name">' + esc(x.account.name) + (x.account.bank && !x.account.name.toLowerCase().includes(x.account.bank.toLowerCase()) ? ' <small>' + esc(x.account.bank) + '</small>' : '') + '</span>' +
+        '<b class="acct__bal">' + (b ? esc(money(b.balance)) : '–') + '</b>' + D.balanceLine(b) + '</button>' +
+        '<span class="acct__foot">' + D.staleNote(b) + '<button type="button" class="btn btn--sm btn--ghost" data-acct-edit="' + esc(x.account.id) + '">' + icon('edit') + (b ? 'Update' : 'Set balance') + '</button></span></div>';
+    }).join('') + '</div>';
+  }
+
+  function balanceChart(s) {
+    const id = ui.account || (GU.money.accounts(s).filter((x) => x.info).length === 1 ? GU.money.accounts(s).find((x) => x.info).account.id : '');
+    if (!id) return '';
+    const info = GU.money.accountBalance(s, id);
+    const pts = GU.money.balanceSeries(s, id, 120);
+    if (!info || pts.length < 3) return '';
+    const name = accountName(id);
+    const low = pts.reduce((m, p) => (p.value < m.value ? p : m));
+    const step = Math.max(1, Math.round(pts.length / 4));
+    const labels = [];
+    for (let i = 0; i < pts.length; i += step) labels.push({ i, text: fmtDate(pts[i].date, { short: true }) });
+    const weekly = pts.filter((p, i) => (pts.length - 1 - i) % 7 === 0);
+    const to = pts[pts.length - 1].date;
+    return '<section class="panel balance-panel"><header class="panel__head"><h2>' + icon('trend') + esc(name) + ' balance' + (to < info.asOf ? ' from your statements' : '') + '</h2><span class="muted">' +
+      esc('Lowest ' + money(low.value) + ' on ' + fmtDate(low.date, { short: true }) + ' · to ' + fmtDate(to, { short: true }) + (to < info.asOf ? ' · ' + money(info.balance) + ' now' : '')) + '</span></header><div class="panel__body">' +
+      GU.charts.line(pts.map((p) => ({ value: p.value, tip: fmtDate(p.date, { weekday: true }) + ': ' + money(p.value) })), {
+        height: 170, limit: info.overdraftLimit ? -info.overdraftLimit : null, labels,
+        table: { head: ['Date', 'Balance'], rows: weekly.reverse().map((p) => [fmtDate(p.date), money(p.value)]) },
+      }) + '</div></section>';
+  }
+
+  function editAccount(id) {
+    const a = store.state.accounts.find((x) => x.id === id);
+    if (!a) return;
+    const info = GU.money.accountBalance(store.state, id);
+    const n = store.state.transactions.filter((t) => t.account === id).length;
+    formDialog({
+      title: a.name,
+      intro: info ? 'I work the balance out from your statements: ' + esc(money(info.balance)) + ' on ' + esc(fmtDate(info.asOf)) + '. If your banking app shows something different, put today’s figure below and I’ll carry on from there.' : 'Import a statement and I’ll read the balance from it, or put today’s balance below.',
+      fields: [
+        { name: 'name', label: 'Name', required: true },
+        { name: 'bank', label: 'Bank', optional: true, half: true, list: ['Monzo', 'Santander', 'HSBC', 'Barclays', 'Lloyds', 'NatWest', 'Nationwide', 'Starling', 'Revolut', 'Halifax'] },
+        { name: 'type', label: 'Type', type: 'select', options: ACCOUNT_TYPES, default: 'current', half: true },
+        { name: 'overdraftLimit', label: 'Arranged overdraft', type: 'money', optional: true, half: true, showIf: (v) => v.type !== 'credit' && v.type !== 'savings' },
+        { name: 'anchorAmount', label: 'Balance now', type: 'text', optional: true, half: true, placeholder: info ? money(info.balance) : 'e.g. 1250.00 or -85.40', help: 'Only if it’s different. Put a minus for overdrawn.' },
+        { name: 'anchorDate', label: 'On', type: 'date', half: true },
+      ],
+      values: { name: a.name, bank: a.bank || '', type: a.type || 'current', overdraftLimit: a.overdraftLimit || null, anchorDate: today() },
+      onSubmit: (v) => {
+        const amt = v.anchorAmount ? parseAmount(v.anchorAmount) : null;
+        if (v.anchorAmount && isNaN(amt)) {
+          toast('Enter the balance as a number, for example -85.40');
+          return false;
+        }
+        store.commit((st) => {
+          const x = st.accounts.find((y) => y.id === id);
+          Object.assign(x, { name: v.name, bank: v.bank, type: v.type, overdraftLimit: v.overdraftLimit || 0 });
+          if (amt != null) x.balanceAnchor = { date: v.anchorDate || today(), amount: amt };
+        });
+      },
+      onDelete: n || store.state.accounts.length < 2 ? null : () => store.commit((st) => (st.accounts = st.accounts.filter((x) => x.id !== id))),
+      deleteMessage: 'This account has no transactions, so nothing else is removed.',
+    });
+  }
+
+  /* Tell me what every account holds right now, in one go. Blank boxes are left as they are. */
+  function updateBalances() {
+    const s = store.state;
+    const list = GU.money.accounts(s).filter((x) => x.info || x.count);
+    const accts = list.length ? list : GU.money.accounts(s);
+    const fields = accts.map((x) => ({
+      name: 'bal_' + x.account.id, label: x.account.name, type: 'text', optional: true, half: true, placeholder: x.info ? money(x.info.balance) : 'e.g. 250.00',
+      help: x.info ? 'I have ' + esc(money(x.info.balance)) + ' from ' + (x.info.staleDays ? esc(fmtDate(x.info.asOf, { short: true })) : 'today') : 'No balance yet',
+    })).concat([{ name: 'date', label: 'These are the balances on', type: 'date', required: true }]);
+    formDialog({
+      title: 'Update your balances',
+      intro: 'Put in what your banking apps show right now. Use a minus for an overdrawn account, for example -233. Leave a box empty to keep my figure. From now on, everything you import after this date is added on top.',
+      fields,
+      values: { date: today() },
+      submitLabel: 'Update balances',
+      onSubmit: (v) => {
+        const set = [];
+        for (const x of accts) {
+          const raw = v['bal_' + x.account.id];
+          if (!raw) continue;
+          const amt = parseAmount(raw);
+          if (isNaN(amt)) {
+            toast('“' + raw + '” for ' + x.account.name + ' isn’t an amount. Try something like -233.00');
+            return false;
+          }
+          set.push([x.account.id, amt]);
+        }
+        if (!set.length) return;
+        store.commit((st) => {
+          for (const [id, amt] of set) st.accounts.find((a) => a.id === id).balanceAnchor = { date: v.date || today(), amount: amt };
+        });
+        const total = sum(GU.money.accounts(store.state).filter((x) => x.info), (x) => x.info.balance);
+        toast('Balances updated. Together you have ' + money(total));
+      },
+    });
+  }
+
+  function showAccount(id) {
+    ui.account = id;
+    ui.limit = 100;
+    if (location.hash === '#transactions') GU.render();
+    else GU.view.go('transactions');
+  }
+
   function render(root) {
     const s = store.state;
     const intent = GU.view.intent('transactions');
@@ -66,11 +182,13 @@
     root.innerHTML = GU.view.head({
       eyebrow: 'Money',
       title: 'Bank transactions',
-      text: 'Every payment in and out of your accounts. Import a statement from your bank as a CSV file and I’ll sort each line into a category.',
-      actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button>' +
+      text: 'Every payment in and out of your accounts, with each account’s balance worked out from your statements. Import statements from your bank and I’ll sort each line into a category.',
+      actions: (s.transactions.length || s.accounts.length > 1 ? '<button type="button" class="btn" data-balances>' + icon('coin') + 'Update balances</button>' : '') +
+        '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button>' +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add transaction</button>',
     }) +
       GU.ui.dropbar('Drop bank statements here, or a whole folder of them', 'PDF statements from Monzo, Santander, HSBC and most banks, or CSV, Excel, .txt, Quicken and Money files.') +
+      accountsStrip(s) + balanceChart(s) +
       '<div class="toolbar">' +
       '<label class="search">' + icon('search') + '<input type="search" id="tx-search" placeholder="Search descriptions" value="' + esc(ui.q) + '" aria-label="Search transactions"></label>' +
       '<select id="tx-month" aria-label="Month">' + selectOptions(months.map((m) => ({ value: m, label: monthLabel(m, true) })), ui.month, 'All months') + '</select>' +
@@ -105,12 +223,22 @@
       root.querySelector(sel).addEventListener('change', (e) => {
         ui[key] = e.target.value;
         ui.limit = 100;
-        draw();
+        if (key === 'account') GU.render();
+        else draw();
       });
     });
     root.addEventListener('click', (e) => {
       if (e.target.closest('[data-add]')) return create();
       if (e.target.closest('[data-import]')) return importCSV();
+      if (e.target.closest('[data-balances]')) return updateBalances();
+      const ae = e.target.closest('[data-acct-edit]');
+      if (ae) return editAccount(ae.dataset.acctEdit);
+      const ac = e.target.closest('[data-acct]');
+      if (ac) {
+        ui.account = ui.account === ac.dataset.acct ? '' : ac.dataset.acct;
+        ui.limit = 100;
+        return GU.render();
+      }
       if (e.target.closest('[data-more]')) {
         ui.limit += 100;
         return draw();
@@ -210,6 +338,7 @@
     let paidIn = find('paid in', 'credit', 'money in', 'in (');
     let paidOut = find('paid out', 'debit', 'money out', 'out (');
     if (amount >= 0 && (h[amount].includes('balance'))) amount = -1;
+    let balance = find('balance');
     const mode = paidIn >= 0 && paidOut >= 0 && (amount < 0 || paidIn !== amount) ? 'split' : 'single';
     if (date < 0 || desc < 0 || (mode === 'single' && amount < 0)) {
       // No useful headers (some banks, e.g. HSBC): look at the data itself.
@@ -223,8 +352,13 @@
       if (date < 0) date = best(dateScore, []);
       if (desc < 0) desc = best(textScore, [date]);
       if (amount < 0 && mode === 'single') amount = best(numScore, [date, desc]);
+      // HSBC's current layout has a running balance after the amount.
+      if (balance < 0) {
+        const b = best(numScore, [date, desc, amount]);
+        if (b > amount && numScore[b] >= Math.max(2, sample.length * 0.8)) balance = b;
+      }
     }
-    return { date, desc, amount, paidIn, paidOut, mode };
+    return { date, desc, amount, paidIn, paidOut, mode, balance };
   }
 
   /* ---------- statement import (CSV, Excel, Santander .txt, QIF, OFX, PDF) ---------- */
@@ -286,9 +420,21 @@
       if (!date || !raw || isNaN(amount) || amount === 0) continue;
       if (map.flip) amount = -amount;
       const type = map.type >= 0 ? r[map.type] || '' : '';
-      out.push({ date, raw: raw + (type ? ' ' + type : ''), description: GU.statements.cleanDescription(raw), amount, bankCategory: map.category >= 0 ? GU.statements.bankCategory(r[map.category]) : '' });
+      const bal = map.balance >= 0 ? parseAmount(r[map.balance]) : NaN;
+      out.push({ date, raw: raw + (type ? ' ' + type : ''), description: GU.statements.cleanDescription(raw), amount, bankCategory: map.category >= 0 ? GU.statements.bankCategory(r[map.category]) : '', balance: isNaN(bal) ? null : bal });
     }
+    // Most bank downloads list newest first: keep them in date order so the last line holds the latest balance.
+    if (out.length > 1 && out[0].date > out[out.length - 1].date) out.reverse();
     return out;
+  }
+
+  /* Remembers what a statement tells us about the account: its bank and overdraft limit. */
+  function noteAccount(st, accountId, res) {
+    const a = st.accounts.find((x) => x.id === accountId);
+    if (!a || !res) return;
+    if (res.bank && !a.bank) a.bank = res.bank;
+    if (!a.type) a.type = /credit card/i.test(res.format || '') ? 'credit' : 'current';
+    if (res.overdraftLimit && !a.overdraftLimit) a.overdraftLimit = res.overdraftLimit;
   }
 
   /* Opens the importer. preset: one File, or several Files (a folder of statements). */
@@ -434,8 +580,10 @@
             count++;
             st.transactions.push({ id, date: t.date, description: t.description, amount: t.amount,
               category: t.pot ? F.TRANSFER : F.categorise(t.description + ' ' + (t.raw || ''), t.amount, st.rules) || t.bankCategory || '',
-              account: acct, notes: t.pot ? t.pot + ' Pot' : '', source: 'import', importBatch: batch, created: today() });
+              account: acct, notes: t.pot ? t.pot + ' Pot' : '', source: 'import', importBatch: batch, created: today(),
+              balance: !t.pot && typeof t.balance === 'number' && !isNaN(t.balance) ? t.balance : null });
           }
+          noteAccount(st, acct, e.res);
         }
         transfers = GU.statements.matchTransfers(st, ids);
       });
@@ -622,8 +770,10 @@
           const text = t.description + ' ' + (t.raw || '');
           st.transactions.push({ id, date: t.date, description: t.description, amount: t.amount,
             category: t.pot ? F.TRANSFER : F.categorise(text, t.amount, st.rules) || t.bankCategory || '',
-            account: accountId, notes: t.pot ? t.pot + ' Pot' : '', source: 'import', importBatch: batch, created: today() });
+            account: accountId, notes: t.pot ? t.pot + ' Pot' : '', source: 'import', importBatch: batch, created: today(),
+            balance: !t.pot && typeof t.balance === 'number' && !isNaN(t.balance) ? t.balance : null });
         }
+        noteAccount(st, accountId, res);
         transfers = GU.statements.matchTransfers(st, ids);
       });
       if (keepPdf && file) {
@@ -665,5 +815,5 @@
   }
   const importCSV = importStatement;
 
-  GU.tabs.transactions = { label: 'Bank transactions', short: 'Bank', icon: 'bank', render, create, edit, importCSV, importStatement };
+  GU.tabs.transactions = { label: 'Bank transactions', short: 'Bank', icon: 'bank', render, create, edit, importCSV, importStatement, editAccount, showAccount, updateBalances };
 })();

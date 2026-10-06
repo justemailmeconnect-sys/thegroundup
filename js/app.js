@@ -6,7 +6,7 @@
   const { icon } = GU.ui;
   const store = GU.store;
 
-  const ORDER = ['today', 'inbox', 'transactions', 'bills', 'incomings', 'outgoings', 'receipts', 'documents', 'visas', 'todos'];
+  const ORDER = ['today', 'inbox', 'transactions', 'bills', 'incomings', 'outgoings', 'debts', 'receipts', 'documents', 'visas', 'todos'];
   GU.tabs = GU.tabs || {};
   const intents = {};
   let current = null;
@@ -32,7 +32,7 @@
     /* Opens the right editor for any record, wherever it lives. */
     open(ref) {
       if (ref.c === 'sectionItems') return GU.sections.editItem(ref.id);
-      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions' };
+      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts' };
       const tab = GU.tabs[map[ref.c]];
       if (tab && tab.edit) tab.edit(ref.id, ref.c);
     },
@@ -51,6 +51,7 @@
         { icon: 'todo', label: 'Task', hint: 'Something to do', onClick: () => GU.tabs.todos.create() },
         { icon: 'bills', label: 'Bill', hint: 'A regular payment', onClick: () => GU.tabs.bills.create() },
         { icon: 'coin', label: 'Transaction', hint: 'Money in or out', onClick: () => GU.tabs.transactions.create() },
+        { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance…', onClick: () => GU.tabs.debts.create() },
         { icon: 'upload', label: 'Bank statement', hint: 'Import a CSV file', onClick: () => GU.tabs.transactions.importCSV() },
         { icon: 'folder', label: 'Document', hint: 'Passport, contract, certificate…', onClick: () => GU.tabs.documents.create() },
         { icon: 'globe', label: 'Visa application', hint: 'Track a new application', onClick: () => GU.tabs.visas.create() },
@@ -61,7 +62,7 @@
   GU.view = view;
 
   function hasDemo(s) {
-    return ['transactions', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks'].some((k) => s[k].some((x) => x.demo));
+    return ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks'].some((k) => (s[k] || []).some((x) => x.demo));
   }
 
   function shell() {
