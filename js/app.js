@@ -164,12 +164,22 @@
   async function start() {
     store.init();
     await GU.files.open();
-    if (store.isFirstRun) await GU.sample.load();
-    store.commit((s) => GU.finance.rollForward(s));
+    const fresh = store.isFirstRun;
+    const sync = GU.sync.possible();
+    // With sync, wait for your other devices' data before showing examples or moving bill dates on.
+    if (fresh && !sync) await GU.sample.load();
+    if (!sync) store.commit((s) => GU.finance.rollForward(s));
     shell();
     store.subscribe(render);
     window.addEventListener('hashchange', render);
     render();
+    if (sync) {
+      GU.sync.start({ fresh }).then(async (r) => {
+        const empty = !['transactions', 'bills', 'paperwork', 'documents', 'visas', 'tasks', 'debts'].some((k) => (store.state[k] || []).length);
+        if (fresh && !r.remote && empty) await GU.sample.load();
+        store.commit((s) => GU.finance.rollForward(s));
+      });
+    }
     GU.inbox.resume();
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);

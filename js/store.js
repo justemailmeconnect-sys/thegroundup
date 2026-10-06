@@ -45,6 +45,7 @@
       sectionItems: [],
       inbox: [],
       filedLog: [],
+      remoteFiles: {},
     };
   }
 
@@ -166,7 +167,7 @@
       }
       await files._req(() => files._store('readwrite').put(rec));
     },
-    async get(id) {
+    async getLocal(id) {
       if (!files.db) return files.memory.get(id) || null;
       try {
         return (await files._req(() => files._store('readonly').get(id))) || null;
@@ -174,10 +175,17 @@
         return null;
       }
     },
+    /* A file from this device, or one added on another device (downloaded once, then kept here). */
+    async get(id) {
+      const rec = await files.getLocal(id);
+      if (rec || !GU.sync) return rec;
+      return GU.sync.fetchFile(id);
+    },
     async remove(id) {
       const u = urlCache.get(id);
       if (u) URL.revokeObjectURL(u);
       urlCache.delete(id);
+      if (GU.sync) GU.sync.forget(id);
       if (!files.db) return files.memory.delete(id);
       try {
         await files._req(() => files._store('readwrite').delete(id));
@@ -213,6 +221,7 @@
       };
       if (extra) Object.assign(rec, extra);
       await files.put(rec);
+      if (GU.sync && !rec.demo) GU.sync.queueUpload(rec.id);
       if (!files.persisted && navigator.storage && navigator.storage.persist) {
         files.persisted = true;
         navigator.storage.persist().catch(() => {});

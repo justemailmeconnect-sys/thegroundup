@@ -82,10 +82,11 @@ Every tab that holds files has a drop area with **Choose files** and **Choose a 
 
 In the Inbox, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements*, *Debts* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, the Debts tab, that visa application). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
 
-## Your data and backups
+## Your data, sync and backups
 
-- Records are kept in the browser's `localStorage`; uploaded files are kept in IndexedDB. Large photos are scaled down to save space.
-- Data does not sync between devices or browsers. Use **Settings → Export backup** regularly. The backup is a single JSON file that includes your uploaded files, and **Restore from backup** brings everything back on any device.
+- **On claude.ai** (opened from your artifact link while signed in) everything syncs across your devices: open the same link on your phone, tablet or another computer and it's all there, and changes appear on your other devices within seconds. Records are kept in your own private space in the artifact's database (`data/users/<you>/`), which nobody else can read even if you share the link. Uploaded files are stored as artifact assets and downloaded to a device the first time you open them there. Word, Excel and HEIC photos can't be stored this way, so they stay on the device that added them. Your Anthropic API key is never synced. **Settings → Sync across your devices** shows the status.
+- Each device also keeps a full copy in the browser (`localStorage` for records, IndexedDB for files), so it works offline and catches up when it reconnects. If the same thing is changed on two devices while one is offline, the device that reconnects keeps its version and adds anything new from the other.
+- **Anywhere else** (opened as a file or from your own web host) data stays in that browser only. Use **Settings → Export backup** to move it: the backup is a single JSON file that includes your uploaded files, and **Restore from backup** brings everything back on any device.
 - Clearing your browser's site data deletes everything, so keep a recent backup somewhere safe.
 
 ## Project layout
@@ -95,6 +96,7 @@ index.html            page shell and script order
 css/styles.css        all styling (light and dark themes)
 js/util.js            dates, money, CSV parsing
 js/store.js           saving, file storage, backup and restore
+js/sync.js            syncing records and files across your devices on claude.ai
 js/finance.js         categories, auto-categorising rules, recurring dates, totals
 js/ui.js              icons, dialogs, forms, attachments, toasts, menus
 js/charts.js          monthly column chart, category bars and the balance line

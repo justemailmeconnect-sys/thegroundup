@@ -27,11 +27,32 @@
     GU.ui.download(blob, filename);
   }
 
+  function syncHTML() {
+    const sy = GU.sync.status();
+    const on = GU.sync.active();
+    const rf = Object.values(store.state.remoteFiles || {});
+    const up = rf.filter((f) => f.asset).length;
+    const local = rf.filter((f) => f.skip).length;
+    const when = sy.savedAt ? new Date(sy.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    const tone = sy.mode === 'error' ? 'crit' : on ? 'good' : 'muted';
+    return '<header class="panel__head"><h2>' + icon('repeat') + 'Sync across your devices</h2>' + GU.ui.pill(on ? (sy.mode === 'saving' ? 'Saving…' : 'On') : sy.mode === 'connecting' ? 'Connecting…' : sy.mode === 'error' ? 'Problem' : 'Off', tone) + '</header>' +
+      '<div class="panel__body stack"><p>' + esc(sy.message) + (on && when && sy.mode === 'on' ? ' Last saved at ' + esc(when) + '.' : '') + '</p>' +
+      (on ? '<p class="muted">Open this same dashboard link on your phone, tablet or another computer while signed in to claude.ai, and everything is there. Changes show up on your other devices within a few seconds. Your records are kept in your own private space: even if you share the link, nobody else can read them.</p>' +
+        '<p class="muted">' + esc(plural(up, 'file') + ' synced' + (sy.files.waiting ? ', ' + sy.files.waiting + ' uploading' : '') + (local ? '. ' + plural(local, 'file') + ' (Word, Excel or iPhone HEIC photos) can only be opened on the device that added them' : '') + '.') + ' Anyone you give edit access to this dashboard could open synced files, so keep the link to yourself.</p>'
+        : '<p class="muted">Sync works when you open this dashboard from claude.ai while signed in. Anywhere else, move your data with Export backup and Restore below.</p>') +
+      '</div>';
+  }
+  GU.sync.onStatus(() => {
+    const el = document.querySelector('[data-sync]');
+    if (el) el.innerHTML = syncHTML();
+  });
+
   function render(root) {
     const s = store.state;
     const st = s.settings;
-    root.innerHTML = GU.view.head({ eyebrow: 'You', title: 'Settings', text: 'How your assistant works for you. Everything here is saved in this browser only.' }) +
+    root.innerHTML = GU.view.head({ eyebrow: 'You', title: 'Settings', text: 'How your assistant works for you.' + (GU.sync.active() ? ' Your data syncs across your devices.' : ' Everything here is saved in this browser only.') }) +
       '<div class="settings">' +
+      '<section class="panel" data-sync>' + syncHTML() + '</section>' +
 
       '<section class="panel"><header class="panel__head"><h2>About you</h2></header><form class="panel__body form-grid" data-form="about">' +
       '<div class="field field--half"><label class="field__label" for="set-name">Your first name</label><input id="set-name" name="name" value="' + esc(st.name) + '" placeholder="Used in your greeting"></div>' +
