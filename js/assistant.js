@@ -19,12 +19,19 @@
   /* ---------- reading what Claude and the records send ---------- */
   /* Tool input is shaped by the schema but never checked for us, and record text was written by other people:
      coerce it, cap it, and keep it out of the tags that fence the data. */
-  const str = (v, n) => (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : '').trim().slice(0, n || 200);
+  /* Text cut to n UTF-16 units never ends in half an emoji: a lone surrogate isn't valid text to send, or to save. */
+  const cut = (s, n) => String(s).slice(0, n).replace(/[\ud800-\udfff]/gu, ''); // with u, only unpaired halves match
+  const str = (v, n) => cut((typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : '').trim(), n || 200);
   /* On one line: runs of spaces, line breaks and control characters (U+0085 too, which \s misses) become one space. */
   const squash = (v, n) => str(v, n).replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim();
-  /* Record text for Claude: on one line, capped, and with no angle brackets, including look-alikes (＜ ﹤ fold
-     into < under NFKC; the rest are stripped by name), so it can never close or open the data fence. */
-  const clip = (v, n) => squash(typeof v === 'string' ? v.normalize('NFKC') : v, n || 80).replace(/[<>‹›〈〉《》⟨⟩⟪⟫❮❯❬❭]/g, '');
+  /* Record text for Claude: on one line and capped. Invisible characters go (format characters such as the Unicode
+     "tag" letters, which can spell out hidden words, private-use ones and variation selectors), and so do angle
+     brackets and their look-alikes (＜ ﹤ fold into < under NFKC; the rest go by name). The fence's own name is
+     broken up too, so record text can never open or close the data fence, even with brackets this misses. */
+  const clip = (v, n) => squash(typeof v === 'string' ? v.normalize('NFKC') : v, n || 80)
+    .replace(/[\p{Cf}\p{Co}\ufe00-\ufe0f\u{e0100}-\u{e01ef}]/gu, '')
+    .replace(/[<>‹›〈〉《》⟨⟩⟪⟫❮❯❬❭˂˃ᐸᐳ≺≻⧼⧽]/g, '')
+    .replace(/dashboard[\W_]*data/gi, (m) => m.slice(0, 9) + ' ' + m.slice(-4)).trim();
   const day = (v) => clip(v, 10); // a date from a record
   const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   /* A yes/no from Claude, which may come as text ("False", "no", "0"). Anything else gives the default. */
@@ -210,7 +217,7 @@
     const waiting = (s.inbox || []).filter((i) => i.status !== 'reading').length;
     if (waiting) line('INBOX: ' + plural(waiting, 'item') + ' waiting to be filed.');
     if ((s.sections || []).length) line('USER SECTIONS: ' + s.sections.map((x) => clip(x.name, 40)).join(', '));
-    return L.join('\n').slice(0, 40000);
+    return cut(L.join('\n'), 40000);
   }
 
   /* Who the user works for and their own business, from Settings. Either may be missing. */
@@ -244,7 +251,19 @@
 
   /* ---------- tools: look things up, make undoable changes ---------- */
   let pending = null; // changes made during the current answer: [{label, undo}]
+  let madeWork = null; // the Work list, when Claude made it on this page
 
+  /* Saves a change. store.commit saves before it redraws the page, so a page that then fails to redraw must not turn
+     a saved change into a reported failure with no Undo: Claude would add it again, and the first could never be undone.
+     saved() says whether the change is in place. */
+  function save(fn, saved) {
+    try {
+      store.commit(fn);
+    } catch (e) {
+      if (!saved()) throw e;
+      console.warn('Ask Claude: the change was saved, but the page didn’t redraw:', e);
+    }
+  }
   function record(label, undo, extra) {
     if (!pending) return;
     pending.push(Object.assign({ label, undo }, extra || {}));
@@ -256,7 +275,7 @@
     const snap = JSON.stringify(store.find(coll, id) || null);
     return () => {
       let kept = false;
-      store.commit((s) => {
+      save((s) => {
         const rec = (s[coll] || []).find((x) => x.id === id);
         if (rec) {
           s[coll] = s[coll].filter((x) => x.id !== id);
@@ -266,7 +285,7 @@
           }
         }
         if (after) after(s, kept);
-      });
+      }, () => !store.find(coll, id));
       return kept;
     };
   }
@@ -315,7 +334,7 @@
     },
     {
       name: 'find_records',
-      description: 'Find saved records with their ids: bills, debts, tasks, receipts (receipts and invoices), documents, projects, cost_ideas, income or section_items. Optional words to match. Returns the total count and up to 40 compact rows, newest first (open tasks first); narrow it with query when count is over 40.',
+      description: 'Find saved records with their ids: bills, debts, tasks, receipts (receipts and invoices), documents, projects, cost_ideas, income or section_items. Optional words to match. Returns the total count and up to 40 compact rows. receipts and section_items come newest first; the others soonest first (bills by next due, tasks by due date, documents by expiry, projects by deadline, debts and income by next payment, cost_ideas by want-by date), with done, closed or inactive ones last. Narrow it with query when count is over 40.',
       inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['bills', 'debts', 'tasks', 'receipts', 'documents', 'projects', 'cost_ideas', 'income', 'section_items'] }, query: { type: 'string' } }, required: ['kind'] },
       execute(i) {
         progress('Looking that up…');
@@ -323,18 +342,22 @@
         const q = squash(i.query, 80).toLowerCase();
         const has = (...v) => !q || v.join(' ').toLowerCase().includes(q);
         const listName = (id) => clip((s.todoLists.find((l) => l.id === id) || {}).name, 30);
+        // Soonest first by a date, with no date last; and current records before finished ones.
+        const soon = (f) => (a, b) => (day(f(a)) || '9999').localeCompare(day(f(b)) || '9999');
+        const ended = (f) => (a, b) => !!f(a) - !!f(b);
         const pick = {
-          bills: () => s.bills.filter((b) => has(b.name, b.payee, b.category)).sort((a, b) => (a.active === false) - (b.active === false) || day(a.nextDue).localeCompare(day(b.nextDue)))
+          bills: () => s.bills.filter((b) => has(b.name, b.payee, b.category)).sort((a, b) => ended((x) => x.active === false)(a, b) || soon((x) => x.nextDue)(a, b))
             .map((b) => ({ id: b.id, name: clip(b.name), amount: num(b.amount), every: freq(b.frequency), next: day(b.nextDue), active: b.active !== false, automatic: !!b.autopay, work: b.context === 'work' })),
-          debts: () => (s.debts || []).filter((d) => has(d.name, d.lender, d.type)).map((d) => { const m = GU.debts.summary(s, d); return { id: d.id, name: clip(d.name), type: clip(d.type, 30), left: num(m.estBalance), paying: num(m.payment), next: day(m.nextPayment), closed: !!d.closed }; }),
-          tasks: () => s.tasks.filter((k) => has(k.title, k.notes)).sort((a, b) => (!!a.done - !!b.done) || (day(a.due) || '9999').localeCompare(day(b.due) || '9999'))
+          debts: () => (s.debts || []).filter((d) => has(d.name, d.lender, d.type)).map((d) => { const m = GU.debts.summary(s, d); return { id: d.id, name: clip(d.name), type: clip(d.type, 30), left: num(m.estBalance), paying: num(m.payment), next: day(m.nextPayment), closed: !!d.closed }; })
+            .sort((a, b) => ended((x) => x.closed)(a, b) || soon((x) => x.next)(a, b)),
+          tasks: () => s.tasks.filter((k) => has(k.title, k.notes)).sort((a, b) => ended((x) => x.done)(a, b) || soon((x) => x.due)(a, b))
             .map((k) => ({ id: k.id, title: clip(k.title), due: day(k.due), done: !!k.done, list: listName(k.listId) })),
           receipts: () => s.paperwork.filter((p) => has(p.title, p.party, p.reference, p.category)).sort(newestFirst)
             .map((p) => ({ id: p.id, title: clip(p.title), kind: clip(p.kind, 20), party: clip(p.party, 60), amount: num(p.amount), date: day(p.date), status: clip(p.status, 20), work: p.context === 'work', claimBack: !!p.claim && !p.claimed })),
-          documents: () => s.documents.filter((d) => has(d.title, d.type, d.holder)).map((d) => ({ id: d.id, title: clip(d.title), type: clip(d.type, 40), expires: day(d.expiryDate) })),
-          projects: () => (s.projects || []).filter((p) => has(p.name, p.client)).map((p) => ({ id: p.id, name: clip(p.name), client: clip(p.client, 60), status: clip(p.status, 20), start: day(p.start), due: day(p.deadline), value: Number(p.value) || null })),
-          cost_ideas: () => (s.costIdeas || []).filter((c) => has(c.name)).map((c) => ({ id: c.id, name: clip(c.name), cost: num(c.cost), monthly: num(c.monthly) || 0, status: clip(c.status || 'open', 20), wantBy: day(c.wantBy) })),
-          income: () => (s.incomeSources || []).filter((x) => has(x.name, x.from)).map((x) => ({ id: x.id, name: clip(x.name), from: clip(x.from, 60), amount: num(x.amount), every: freq(x.frequency), next: day(x.nextDate) })),
+          documents: () => s.documents.filter((d) => has(d.title, d.type, d.holder)).sort(soon((d) => d.expiryDate)).map((d) => ({ id: d.id, title: clip(d.title), type: clip(d.type, 40), expires: day(d.expiryDate) })),
+          projects: () => (s.projects || []).filter((p) => has(p.name, p.client)).sort((a, b) => ended((p) => ['Done', 'Cancelled'].includes(p.status))(a, b) || soon((p) => p.deadline)(a, b)).map((p) => ({ id: p.id, name: clip(p.name), client: clip(p.client, 60), status: clip(p.status, 20), start: day(p.start), due: day(p.deadline), value: Number(p.value) || null })),
+          cost_ideas: () => (s.costIdeas || []).filter((c) => has(c.name)).sort((a, b) => ended((c) => GU.costs ? !GU.costs.isOpen(c) : (c.status || 'open') !== 'open')(a, b) || soon((c) => c.wantBy)(a, b)).map((c) => ({ id: c.id, name: clip(c.name), cost: num(c.cost), monthly: num(c.monthly) || 0, status: clip(c.status || 'open', 20), wantBy: day(c.wantBy) })),
+          income: () => (s.incomeSources || []).filter((x) => has(x.name, x.from)).sort((a, b) => ended((x) => x.active === false)(a, b) || soon((x) => x.nextDate)(a, b)).map((x) => ({ id: x.id, name: clip(x.name), from: clip(x.from, 60), amount: num(x.amount), every: freq(x.frequency), next: day(x.nextDate) })),
           section_items: () => (s.sectionItems || []).filter((x) => has(x.title, x.party, x.group)).sort(newestFirst)
             .map((x) => ({ id: x.id, section: clip(((s.sections || []).find((y) => y.id === x.sectionId) || {}).name, 40), group: clip(x.group, 40), title: clip(x.title), amount: num(x.amount), date: day(x.date) })),
         };
@@ -378,20 +401,25 @@
         const id = 'k-' + uid();
         const label = 'Added task “' + title + '”' + (due ? ' for ' + fmtDate(due, { short: true }) : '') + (work ? ' (work)' : '');
         let made = false;
-        store.commit((s) => {
+        save((s) => {
           if (work) {
             made = !!GU.work && !GU.work.workListId(s);
             listId = GU.work ? GU.work.ensureWorkList(s) : (s.todoLists.find((x) => /^work$/i.test(x.name)) || s.todoLists[0] || {}).id;
           }
           s.tasks.push({ id, listId, context: work ? 'work' : undefined, title, due, priority: 'normal', notes, done: false, created: today() });
-        });
-        // If this answer made the Work list, undoing any of its work tasks takes the list away again once it's empty,
-        // in whichever order they're undone. Not when the task was kept in Recently deleted: restoring it needs the list.
-        if (made && pending) pending.madeList = listId;
-        const ours = work && pending && pending.madeList === listId;
+        }, () => !!store.find('tasks', id));
+        // If Claude made the Work list, undoing any of its work tasks takes the list away again once it's empty, in
+        // whichever order and from whichever answer they're undone. Not while a task from it is kept in Recently
+        // deleted: restoring that needs the list.
+        if (made) madeWork = listId;
+        const ours = work && madeWork === listId;
         record(label, undoAdd('tasks', id, title, ours ? (s, kept) => {
-          if (!kept && !s.tasks.some((k) => k.listId === listId)) s.todoLists = s.todoLists.filter((l) => l.id !== listId);
-        } : null));
+          const binned = (s.trash || []).some((x) => x.c === 'tasks' && x.record && x.record.listId === listId);
+          if (!kept && !binned && !s.tasks.some((k) => k.listId === listId)) {
+            s.todoLists = s.todoLists.filter((l) => l.id !== listId);
+            madeWork = null; // a Work list made after this one is gone isn't Claude's
+          }
+        } : null), { task: id });
         return { ok: true, id, due: due || null, list: work ? 'work' : want };
       },
     },
@@ -409,26 +437,26 @@
         const prev = pending && pending.find((a) => a.ref === ref && !a.undone);
         const before = prev ? prev.before : { done: k.done, doneAt: k.doneAt, had: own(k, 'doneAt') };
         const label = (done ? 'Ticked off “' : 'Reopened “') + clip(k.title, 80) + '”'; // record text: it goes back to Claude in the history
-        store.commit((s) => {
+        save((s) => {
           const x = s.tasks.find((y) => y.id === k.id);
           x.done = done;
           x.doneAt = done ? today() : '';
-        });
+        }, () => (store.find('tasks', k.id) || {}).done === done);
         if (prev) {
           prev.label = label;
           saveTurns();
           paint(true);
         } else {
           record(label, () => {
-            store.commit((s) => {
+            save((s) => {
               const x = s.tasks.find((y) => y.id === k.id);
               if (!x) return;
               x.done = before.done;
               if (before.had) x.doneAt = before.doneAt;
               else delete x.doneAt;
-            });
+            }, () => (store.find('tasks', k.id) || before).done === before.done);
             return false;
-          }, { ref, before });
+          }, { ref, before, task: k.id });
         }
         return { ok: true, done };
       },
@@ -450,7 +478,7 @@
         const bill = { id, name, payee: '', amount, frequency, anchorDay: +due.slice(8, 10), nextDue: due, autopay: auto, method: auto ? 'Direct debit' : 'Pay manually',
           category: work ? 'Work expenses' : 'Bills & utilities', context: work ? 'work' : undefined, active: true, created: today(), history: [] };
         const label = 'Added bill “' + name + '”, ' + money(amount) + ' ' + String(F.freqLabel(frequency)).toLowerCase() + ', next ' + fmtDate(due, { short: true });
-        store.commit((s) => s.bills.push(bill));
+        save((s) => s.bills.push(bill), () => !!store.find('bills', id));
         record(label, undoAdd('bills', id, name));
         return { ok: true, id, frequency, next_due: due, automatic: auto, work };
       },
@@ -465,7 +493,7 @@
         const areas = ['general'].concat(GU.work ? GU.work.AREAS.map((a) => a.id) : ['tasks', 'invoices', 'projects', 'bills', 'contracts', 'costs']);
         const area = oneOf(i.area, 'area', areas, 'general');
         const id = 'wn-' + uid();
-        store.commit((s) => s.workNotes.push({ id, area, folder: '', title, body: str(i.body, 8000), created: today(), updated: today() }));
+        save((s) => s.workNotes.push({ id, area, folder: '', title, body: str(i.body, 8000), created: today(), updated: today() }), () => !!store.find('workNotes', id));
         record('Saved note “' + title + '” in Work', undoAdd('workNotes', id, title));
         return { ok: true, id };
       },
@@ -482,7 +510,7 @@
         const priority = oneOf(i.priority, 'priority', ['must', 'should', 'could'], 'should');
         const wantBy = realDate(i.want_by, 'want_by');
         const id = 'ci-' + uid();
-        store.commit((s) => s.costIdeas.push({ id, name, cost, monthly, priority, wantBy, status: 'open', files: [], created: today() }));
+        save((s) => s.costIdeas.push({ id, name, cost, monthly, priority, wantBy, status: 'open', files: [], created: today() }), () => !!store.find('costIdeas', id));
         record('Added “' + name + '” (' + money(cost, { whole: true }) + ') to the cost forecast', undoAdd('costIdeas', id, name));
         const r = GU.costs ? GU.costs.schedule(store.state).results.find((x) => x.idea.id === id) : null;
         return { ok: true, id, earliest: r && r.date ? r.date : null, from: r && r.account ? clip(r.account, 40) : null, shortBy: r && !r.date ? r.shortfall : 0 };
@@ -544,6 +572,8 @@
     return null;
   }
   const failure = (code, msg) => Object.assign(new Error(msg || code), { code });
+  /* The model the user chose in Settings, if any. */
+  const chosenModel = () => String(store.state.settings.model || '').trim();
 
   /* The SDK's errors, as codes the panel has words for. */
   function apiFailure(e, m) {
@@ -603,7 +633,7 @@
       for (let round = 0; round < ROUNDS; round++) {
         if (signal.aborted) throw failure('cancelled');
         const stream = client.beta.messages.stream({
-          model: store.state.settings.model || MODEL, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+          model: chosenModel() || MODEL, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
           thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, system: lead, tools, messages,
         }, { signal });
         const before = shown;
@@ -625,7 +655,7 @@
           try {
             if (!tool) throw new Error('No tool called ' + u.name);
             if (!u.input || typeof u.input !== 'object' || Array.isArray(u.input)) throw new Error('The input must be an object');
-            results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(await tool.execute(u.input)).slice(0, 30000) });
+            results.push({ type: 'tool_result', tool_use_id: u.id, content: cut(JSON.stringify(await tool.execute(u.input)), 30000) });
           } catch (e) {
             results.push({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: 'Error: ' + (e && e.message ? e.message : 'failed') });
           }
@@ -663,7 +693,9 @@
   };
   /* Codes that mean this view can never use Claude: hide the feature, never ask again. */
   const HIDE = ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'];
-  const why = (code, partial) => COPY[code] || (partial ? 'Claude stopped partway. Try again.' : 'Couldn’t get an answer from Claude just now. Try again.');
+  const why = (code, partial) => (code === 'model_missing' && !chosenModel()
+    ? 'Your API key can’t use the recommended Claude model. Enter one it can use as the Claude model in Settings → How your assistant reads things.'
+    : COPY[code] || (partial ? 'Claude stopped partway. Try again.' : 'Couldn’t get an answer from Claude just now. Try again.'));
 
   /* The chat so far, as Claude should see it: only what was really said, plus the changes made. Never the page's own messages. */
   function history(skip) {
@@ -758,6 +790,7 @@
     el = document.createElement('aside');
     el.className = 'chat';
     el.setAttribute('aria-label', 'Ask Claude');
+    el.tabIndex = -1; // a click on the conversation keeps focus in the panel, so Escape still reaches it
     el.hidden = true;
     el.innerHTML = '<header class="chat__head"><span class="chat__mark">' + icon('spark') + '</span><div><h2>Ask Claude</h2><p>About your money, bills, work or anything here. It can make changes you can undo.</p></div>' +
       '<button type="button" class="icon-btn" data-chat-new aria-label="New chat" data-tip="New chat">' + icon('plus') + '</button>' +
@@ -807,6 +840,13 @@
       grow();
       send(q);
     });
+    /* After a chip or Undo, whose button is gone once the chat redraws. From the keyboard, carry on in the box (or on
+       Close, when the box can't be used). From a pointer, keep focus in the panel without raising a phone's keyboard,
+       so Escape still closes it. */
+    const refocus = (e) => {
+      if (e.detail === 0) (box.disabled ? el.querySelector('[data-chat-close]') : box).focus();
+      else if (!el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    };
     el.addEventListener('click', (e) => {
       if (e.target.closest('[data-chat-close]')) return toggle(false);
       if (e.target.closest('[data-chat-new]')) {
@@ -835,7 +875,7 @@
       const sg = e.target.closest('[data-suggest]');
       if (sg) {
         send(sg.dataset.suggest);
-        if (e.detail === 0) box.focus(); // from the keyboard: the chip is gone, so carry on in the box
+        refocus(e);
         return;
       }
       const u = e.target.closest('[data-undo]');
@@ -843,20 +883,25 @@
         const [ti, ai] = u.dataset.undo.split(':').map(Number);
         const a = turns[ti] && turns[ti].actions && turns[ti].actions[ai];
         if (a && !a.undone) {
-          const trashed = a.undo();
-          a.undone = true;
-          // Undo puts a task back the way it was before this change, which also wipes out any later change to the
-          // same task: those count as undone too, so undoing them afterwards can't bring this one back.
-          if (a.ref) {
+          // Later changes Claude made to the same task are undone first, newest first, so this one finds the task the
+          // way it left it: an added task that Claude then ticked off goes away, rather than counting as changed by you.
+          const later = [];
+          if (a.task) {
             turns.slice(ti).forEach((t, n) => (t.actions || []).forEach((b, j) => {
-              if (b.ref === a.ref && !b.undone && (n > 0 || j > ai)) b.undone = true;
+              if (b.task === a.task && !b.undone && (n > 0 || j > ai)) later.push(b);
             }));
           }
+          later.reverse().forEach((b) => {
+            b.undo();
+            b.undone = true;
+          });
+          const trashed = a.undo();
+          a.undone = true;
           saveTurns();
-          toast('Undone: ' + a.label + (trashed ? '. You’d changed it since, so it’s in Settings → Recently deleted.' : ''));
+          toast('Undone: ' + a.label + (later.length ? ' and ' + (later.length === 1 ? 'the later change' : plural(later.length, 'later change')) + ' to it' : '') +
+            (trashed ? '. You’d changed it since, so it’s in Settings → Recently deleted.' : ''));
           draw();
-          // From the keyboard: the button is gone, so carry on in the box (or on Close, when the box can't be used).
-          if (e.detail === 0) (box.disabled ? el.querySelector('[data-chat-close]') : box).focus();
+          refocus(e);
         }
       }
     });
@@ -901,7 +946,8 @@
     const none = conn === null;
     const empty = el.querySelector('.chat__empty');
     const name = clip(store.state.settings.name, 40);
-    const writes = !conn || TOOLS.slice(0, conn.tools).some((t) => WRITES.test(t.name));
+    // Until it's known how Claude is reached here, assume it can make changes; once known, say only what it can do.
+    const writes = conn === undefined || (!!conn && TOOLS.slice(0, conn.tools).some((t) => WRITES.test(t.name)));
     const html = none ? '<p class="chat__hello">' + (off ? esc(COPY[off]) : 'Claude isn’t connected here. Open your dashboard in the Claude app, or <a href="#settings" data-chat-settings>add an Anthropic API key in Settings → How your assistant reads things</a>.') + '</p>'
       : turns.length ? '' : '<p class="chat__hello">Hi' + (name ? ' ' + esc(name) : '') + '. I can see your accounts, bills, instalments, debts, work and paperwork. Try:</p>' +
         '<div class="chat__suggest">' + SUGGEST.filter((x) => writes || !x.write).map((x) => '<button type="button" class="chip" data-suggest="' + esc(x.q) + '">' + esc(x.q) + '</button>').join('') + '</div>';
@@ -931,8 +977,11 @@
     box.disabled = none && !busy;
     if (was && box.disabled) (el.querySelector('[data-chat-settings]') || el.querySelector('[data-chat-close]')).focus();
     // One line on a narrow phone, and no offer to add things where Claude can't.
-    const hint = !writes ? 'Ask anything' : narrow.matches ? 'Ask, or say what to add' : 'Ask anything, or tell me to add something';
+    const hint = none ? (off ? 'Claude isn’t available here' : 'Claude isn’t connected here') : !writes ? 'Ask anything' : narrow.matches ? 'Ask, or say what to add' : 'Ask anything, or tell me to add something';
     if (box.placeholder !== hint) box.placeholder = hint;
+    const head = 'About your money, bills, work or anything here.' + (writes ? ' It can make changes you can undo.' : '');
+    const sub = el.querySelector('.chat__head p');
+    if (sub.textContent !== head) sub.textContent = head;
     el.querySelector('.chat__foot').textContent = !conn ? ''
       : conn.kind === 'claude' ? 'Uses your Claude account. Claude sees a summary of your dashboard with each message.' + (conn.tools ? '' : ' Looking things up and making changes aren’t available in this view.')
         : 'Uses your Anthropic API key from Settings. Claude sees a summary of your dashboard with each message, and each message costs a few pence.';
@@ -965,7 +1014,7 @@
     const changes = (t.actions || []).filter((a) => !a.undone).map((a) => a.label);
     const made = changes.length ? ' ' + plural(changes.length, 'change') + ' made: ' + changes.join('; ') + '.' : '';
     const said = plain(t.content);
-    const short = said.length > 300 ? said.slice(0, 300).replace(/\s+\S*$/, '') + '… The rest is in the chat.' : said;
+    const short = said.length > 300 ? cut(said, 300).replace(/\s+\S*$/, '') + '… The rest is in the chat.' : said;
     if (t.error) return (said && !/^Claude stopped partway/.test(t.note) ? 'Claude stopped partway. ' : '') + t.note + made;
     if (t.stopped) return 'Stopped.' + (said ? ' What Claude wrote so far is in the chat.' : '') + made;
     return 'Claude replied: ' + short + (t.truncated ? ' The answer was cut short.' : '') + made;
@@ -1078,8 +1127,9 @@
     const was = open;
     open = force == null ? !open : !!force;
     if (open && !was) opener = document.activeElement;
-    // Closing: give focus back to where it was before, never leave it on a hidden panel.
-    if (!open && was && el.contains(document.activeElement)) {
+    // Closing: give focus back to where it was before, never leave it on a hidden panel (or on nothing).
+    const lost = !document.activeElement || document.activeElement === document.body;
+    if (!open && was && (lost || el.contains(document.activeElement))) {
       const back = opener && opener.isConnected && opener !== document.body && !el.contains(opener) ? opener : document.querySelector('[data-chat-toggle]');
       if (back) back.focus();
     }
@@ -1113,6 +1163,15 @@
       toggle();
     }
   });
+  /* Escape closes the chat even when focus has fallen out of it onto the page itself, but not while a dialog or a
+     menu is showing (this runs before the menu's own Escape handler closes it). */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !open || e.defaultPrevented) return;
+    const a = document.activeElement;
+    if ((a && a !== document.body && a !== document.documentElement) || modalOpen() || document.querySelector('.popover')) return;
+    e.preventDefault();
+    toggle(false);
+  }, true);
   document.addEventListener('click', (e) => {
     if (e.target.closest('[data-chat-toggle]')) toggle();
   });
