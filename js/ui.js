@@ -54,6 +54,9 @@
     card: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 9.5h19M6 15h4"/>',
     trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
     star: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+    spark: '<path d="M11 3.5c.7 4.3 2.3 5.9 6.5 6.5-4.2.6-5.8 2.2-6.5 6.5-.7-4.3-2.3-5.9-6.5-6.5 4.2-.6 5.8-2.2 6.5-6.5z"/><path d="M18.5 14.5c.3 1.9 1 2.6 2.5 2.9-1.5.3-2.2 1-2.5 2.9-.3-1.9-1-2.6-2.5-2.9 1.5-.3 2.2-1 2.5-2.9z"/>',
+    send: '<path d="M4.5 11.5 19.5 4l-4.8 15.5-3.4-6.4z"/><path d="m11.3 13.1 8.2-9.1"/>',
+    stop: '<rect x="7" y="7" width="10" height="10" rx="2"/>',
   };
   function icon(name, cls) {
     return '<svg class="ico' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || P.info) + '</svg>';

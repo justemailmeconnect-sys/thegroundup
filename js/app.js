@@ -95,6 +95,7 @@
     };
     document.querySelector('.rail__items').innerHTML =
       '<button type="button" class="rail__item rail__add" data-quick-add aria-label="Add something"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">Add</span></button>' +
+      '<button type="button" class="rail__item rail__claude" data-chat-toggle aria-pressed="false" aria-label="Ask Claude (Ctrl or Cmd + K)"><span class="rail__ico">' + icon('spark') + '</span><span class="rail__label">Claude</span></button>' +
       GROUPS.map((g) => g.map(item).join('')).join('<span class="rail__sep" aria-hidden="true"></span>') +
       (custom.length ? '<span class="rail__sep" aria-hidden="true"></span>' + custom.map(item).join('') : '') +
       '<a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>';
