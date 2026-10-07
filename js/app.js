@@ -300,7 +300,15 @@
         const empty = !['transactions', 'bills', 'paperwork', 'documents', 'visas', 'tasks', 'debts'].some((k) => (store.state[k] || []).length);
         if (fresh && !r.remote && empty) await GU.sample.load();
         rollForward();
-        settle();
+        // The re-sort only runs on data that's caught up with your other devices, never on an old copy.
+        if (GU.sync.active() || GU.sync.status().mode === 'off') settle();
+        else {
+          const off = GU.sync.onStatus(() => {
+            if (!GU.sync.active()) return;
+            off();
+            settle();
+          });
+        }
       });
     } else settle();
     GU.inbox.resume();

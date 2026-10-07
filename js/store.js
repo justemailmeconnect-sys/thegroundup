@@ -25,7 +25,8 @@
         model: '',
         autoFile: true,
         ocr: true,
-        employer: null, // the business you work for: {name, short, match, wageSource, payInto, repayDays, nudgeDays, chaseDays, since}
+        // employer is left out on purpose: {name, short, match, wageSource, payInto, repayDays, nudgeDays, chaseDays, since}
+        // once set. A blank key here would count as a local edit and wipe the synced one on your other devices.
       },
       accounts: [{ id: 'acc-main', name: 'Current account' }],
       transactions: [],
