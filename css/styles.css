@@ -955,7 +955,7 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .rail__claude[aria-pressed="true"] .rail__ico { background: var(--rail-active); }
 .rail__claude.is-busy .rail__ico::after, .rail__claude.is-new .rail__ico::after { content: ''; position: absolute; top: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--rail); }
 .rail__claude.is-busy .rail__ico::after { animation: chat-pulse 1.2s ease-in-out infinite; }
-@keyframes chat-pulse { 50% { opacity: 0.35; } }
+@keyframes chat-pulse { 50% { transform: scale(0.6); } } /* pulses in size, so the dot keeps its contrast */
 @media (prefers-reduced-motion: reduce) { .rail__claude.is-busy .rail__ico::after { animation: none; } }
 .chat { position: fixed; top: 0; right: 0; bottom: 0; z-index: 800; width: min(440px, 100vw); display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, auto) auto auto; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -18px 0 40px rgba(0, 0, 0, 0.12); }
 .chat[hidden] { display: none; }

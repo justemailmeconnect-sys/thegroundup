@@ -84,6 +84,7 @@
   let busy = null; // {ctl, reply, el, status}
   let el = null;
   let said = null; // the screen-reader status line
+  const narrow = window.matchMedia ? window.matchMedia('(max-width: 480px)') : { matches: false }; // a phone held upright
   let opener = null; // what had focus before the panel opened
   let conn; // how Claude is reached here: {kind, tools}, null when it can't be, undefined until checked
   let off = ''; // a reason this view can never use Claude (the Claude app said so)
@@ -785,6 +786,7 @@
       if (stick) list.scrollTop = list.scrollHeight;
     };
     box.addEventListener('input', grow);
+    if (narrow.addEventListener) narrow.addEventListener('change', chrome);
     box.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault();
@@ -928,6 +930,9 @@
     btn.disabled = none && !busy;
     box.disabled = none && !busy;
     if (was && box.disabled) (el.querySelector('[data-chat-settings]') || el.querySelector('[data-chat-close]')).focus();
+    // One line on a narrow phone, and no offer to add things where Claude can't.
+    const hint = !writes ? 'Ask anything' : narrow.matches ? 'Ask, or say what to add' : 'Ask anything, or tell me to add something';
+    if (box.placeholder !== hint) box.placeholder = hint;
     el.querySelector('.chat__foot').textContent = !conn ? ''
       : conn.kind === 'claude' ? 'Uses your Claude account. Claude sees a summary of your dashboard with each message.' + (conn.tools ? '' : ' Looking things up and making changes aren’t available in this view.')
         : 'Uses your Anthropic API key from Settings. Claude sees a summary of your dashboard with each message, and each message costs a few pence.';
