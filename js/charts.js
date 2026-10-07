@@ -77,7 +77,8 @@
   function line(points, o) {
     o = o || {};
     if (points.length < 2) return '';
-    const vals = points.map((p) => p.value);
+    // o.base: a second, dashed line (say, before your plans); o.floor: {value, label} line; o.marks: [{i, tip}] dots on the line.
+    const vals = points.map((p) => p.value).concat(o.base || [], o.floor ? [o.floor.value] : []);
     let lo = Math.min(...vals);
     const hi = Math.max(...vals);
     const showLimit = o.limit != null && o.limit < 0 && lo < o.limit * 0.5;
@@ -97,8 +98,11 @@
       '<div class="linechart__plot">' +
       ticks.map((v) => '<i class="colchart__grid' + (v === 0 ? ' is-zero' : '') + '" style="bottom:' + (100 - y(v)) + '%"></i>').join('') +
       (showLimit ? '<i class="linechart__limit" style="bottom:' + (100 - y(o.limit)) + '%"><span>Overdraft limit</span></i>' : '') +
+      (o.floor ? '<i class="linechart__limit linechart__floor" style="bottom:' + (100 - y(o.floor.value)) + '%"><span>' + esc(o.floor.label) + '</span></i>' : '') +
       '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path d="' + area + '" fill="' + color + '" fill-opacity=".08"/>' +
+      (o.base ? '<path d="' + o.base.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(2)).join(' ') + '" fill="none" stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>' : '') +
       '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>' +
+      (o.marks || []).map((m) => '<b class="linechart__mark" style="left:' + (m.i / (points.length - 1)) * 100 + '%;top:' + y(points[m.i].value) + '%" data-tip="' + esc(m.tip || '') + '"></b>').join('') +
       '<div class="linechart__hits">' + points.map((p, i) => '<span data-tip="' + esc(p.tip || '') + '"' + (i === points.length - 1 ? ' class="is-last"' : '') + ' style="--y:' + y(p.value) + '%"></span>').join('') + '</div>' +
       '</div><span></span>' +
       '<div class="linechart__x" aria-hidden="true">' + (o.labels || []).map((l) => '<span' + (l.i / (points.length - 1) > 0.92 ? ' class="is-end"' : '') + ' style="left:' + (l.i / (points.length - 1)) * 100 + '%">' + esc(l.text) + '</span>').join('') + '</div>' +

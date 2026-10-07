@@ -159,6 +159,12 @@
       { id: 'pj-' + uid(), name: 'Kite Cycles brand guide', client: 'Kite Cycles', status: 'In progress', start: d(-9), deadline: d(6), value: 450, workFolder: clientsFolder.id, notes: '', files: [], created: d(-20), demo: true },
       { id: 'pj-' + uid(), name: 'Portfolio website refresh', status: 'Idea', notes: 'Add the bakery and cycles work once they’re live.', files: [], created: d(-5), demo: true },
     ];
+    const costIdeas = [
+      { id: 'ci-' + uid(), name: 'New laptop', cost: 1200, priority: 'must', wantBy: d(75), status: 'open', notes: 'The old one is slowing down on design work.', files: [], created: d(-6), demo: true },
+      { id: 'ci-' + uid(), name: 'Product photography kit', cost: 350, priority: 'should', projectId: projects[0].id, notBefore: d(5), status: 'open', files: [], created: d(-4), demo: true },
+      { id: 'ci-' + uid(), name: 'Co-working desk', cost: 0, monthly: 180, priority: 'could', status: 'open', notes: 'Two days a week would do.', files: [], created: d(-2), demo: true },
+      { id: 'ci-' + uid(), name: 'Trade show stand', cost: 2400, priority: 'could', wantBy: d(150), status: 'open', files: [], created: d(-1), demo: true },
+    ];
     const workNotes = [
       { id: 'wn-' + uid(), area: 'projects', folder: clientsFolder.id, title: 'Call with Bloom Bakery', body: 'They want online ordering for cakes, click and collect only.\nBudget agreed at £1,800. Send the quote by Friday.', created: d(-3), updated: d(-3), demo: true },
     ];
@@ -228,6 +234,7 @@
       s.projects.push(...projects);
       s.workFolders.push(clientsFolder);
       s.workNotes.push(...workNotes);
+      s.costIdeas.push(...costIdeas);
       s.sections.push(...sections);
       s.sectionItems.push(...sectionItems);
       s.inbox.push(...inbox);
@@ -239,7 +246,7 @@
     });
   }
 
-  const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog', 'projects', 'workFolders', 'workNotes'];
+  const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog', 'projects', 'workFolders', 'workNotes', 'costIdeas'];
   function clear(silent) {
     const s = store.state;
     const files = [];

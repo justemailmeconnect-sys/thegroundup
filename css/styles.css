@@ -897,3 +897,29 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
   .wk-area__actions .btn { flex: 1 1 auto; }
 }
 .lists__item b.is-crit { color: var(--crit); font-weight: 600; }
+.linechart__floor { border-top-color: var(--warn); }
+.linechart__floor span { color: var(--warn); right: 4px; left: auto; }
+.linechart__mark { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); z-index: 2; cursor: default; }
+
+/* ---------- Work: cost forecast ---------- */
+.cf .tally__sum { border-bottom: 1px solid var(--line); }
+.cf-chart { padding-top: 14px; }
+.cf-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+.cf-legend > span { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.cf-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--series-in); }
+.cf-key--base { border-top: 1.5px dashed var(--ink-3); }
+.cf-key--mark { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--accent); }
+.cf-room { padding: 4px 18px 14px; border-top: 1px solid var(--line); }
+.cf-room h3 { font-size: 14px; margin: 12px 0 2px; }
+.cf-room .muted { font-size: 12.5px; margin: 0 0 10px; }
+.cf-room ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.cf-room li { display: grid; gap: 1px; padding: 7px 10px; border-radius: 9px; background: var(--surface-2); }
+.cf-room li span { font-size: 12px; color: var(--ink-3); }
+.cf-room li b { font: 600 14px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-3); }
+.cf-room li.is-room { background: var(--accent-soft); }
+.cf-room li.is-room b { color: var(--good); }
+.cf-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 12px; }
+.cf-note .ico { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--ink-3); }
+.cf-empty { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 26px 16px; }
+.cf-empty .ico { width: 28px; height: 28px; color: var(--accent-2); }
+.wk-row__end em { display: block; font-style: normal; font-size: 11.5px; color: var(--ink-3); text-align: right; white-space: nowrap; }

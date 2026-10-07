@@ -14,9 +14,11 @@
     { id: 'projects', label: 'Upcoming projects', icon: 'star', one: 'project' },
     { id: 'bills', label: 'Bills', icon: 'bills', one: 'bill' },
     { id: 'contracts', label: 'Contracts', icon: 'file', one: 'contract' },
+    { id: 'costs', label: 'Cost forecast', icon: 'trend', one: 'idea' },
   ];
-  const COLL = { tasks: 'tasks', invoices: 'paperwork', projects: 'projects', bills: 'bills', contracts: 'documents' };
-  const AREA_OF = { tasks: 'tasks', paperwork: 'invoices', projects: 'projects', bills: 'bills', documents: 'contracts' };
+  const COLL = { tasks: 'tasks', invoices: 'paperwork', projects: 'projects', bills: 'bills', contracts: 'documents', costs: 'costIdeas' };
+  const AREA_OF = { tasks: 'tasks', paperwork: 'invoices', projects: 'projects', bills: 'bills', documents: 'contracts', costIdeas: 'costs' };
+  const PRIORITIES = [{ value: 'must', label: 'Must have' }, { value: 'should', label: 'Should have' }, { value: 'could', label: 'Nice to have' }];
   const STATUSES = ['Idea', 'Planned', 'Booked', 'In progress', 'Done', 'Cancelled'];
   const CLOSED = ['Done', 'Cancelled'];
   const CONTRACT = 'Contract or agreement';
@@ -47,9 +49,11 @@
     if (area === 'projects') return s.projects || [];
     if (area === 'bills') return s.bills.filter(isWorkBill);
     if (area === 'contracts') return s.documents.filter((d) => d.context === 'work');
+    if (area === 'costs') return s.costIdeas || [];
     return [];
   }
-  const nameOf = (c, r) => (c === 'bills' || c === 'projects' || c === 'workFolders' ? r.name : r.title) || '';
+  const NAMED = ['bills', 'projects', 'workFolders', 'costIdeas'];
+  const nameOf = (c, r) => (NAMED.includes(c) ? r.name : r.title) || '';
   const foldersOf = (s, area) => (s.workFolders || []).filter((f) => f.area === area).sort((a, b) => a.name.localeCompare(b.name));
   /* The folder a record sits in, if that folder still exists. */
   const folderOf = (s, rec, area) => (rec.workFolder && (s.workFolders || []).some((f) => f.id === rec.workFolder && f.area === area) ? rec.workFolder : '');
@@ -104,6 +108,18 @@
       if (n < 0 && n >= -60) add('crit', 'contracts', d.title + ' ended ' + fmtDate(d.expiryDate, { short: true }), 'Renew it, replace it or mark it finished', { c: 'documents', id: d.id });
       else if (n >= 0 && n <= 60) add(n <= 30 ? 'warn' : 'info', 'contracts', d.title + ' ends ' + relDays(d.expiryDate), 'Check the notice period and decide whether to renew', { c: 'documents', id: d.id });
     }
+    if ((s.costIdeas || []).some(GU.costs.isOpen)) {
+      const plan = GU.costs.schedule(s);
+      for (const r of plan.results) {
+        const i = r.idea;
+        const ref = { c: 'costIdeas', id: i.id };
+        if (r.fixed && r.short > 0) add('warn', 'costs', i.name + ' on ' + fmtDate(r.date, { short: true }) + ' would leave you ' + money(r.short) + ' short', 'Booked date · move it later or free up money first', ref);
+        else if (!r.date && i.wantBy) add('warn', 'costs', i.name + ' can’t be afforded by ' + fmtDate(i.wantBy, { short: true }), 'About ' + money(r.shortfall, { whole: true }) + ' short in the time ahead', ref);
+        else if (r.date && r.onTime === false) add('info', 'costs', i.name + ': earliest ' + fmtDate(r.date, { short: true }), r.lateDays + ' days after you wanted it', ref);
+      }
+      const now = plan.results.filter((r) => r.date && !r.fixed && daysUntil(r.date) <= 0);
+      if (now.length) add('info', 'costs', now.length === 1 ? 'You can afford ' + now[0].idea.name + ' now' : 'You can afford ' + plural(now.length, 'idea') + ' now', now.map((r) => r.idea.name + ' (' + money(r.cost, { whole: true }) + (r.account ? ', from ' + r.account : '') + ')').join(', '), now.length === 1 ? { c: 'costIdeas', id: now[0].idea.id } : null);
+    }
     const rank = { crit: 0, warn: 1, info: 2 };
     return out.sort((a, b) => rank[a.level] - rank[b.level]);
   }
@@ -152,6 +168,13 @@
       const ending = items.filter((d) => d.expiryDate && daysUntil(d.expiryDate) >= 0 && daysUntil(d.expiryDate) <= 90);
       const next = items.filter((d) => d.expiryDate && d.expiryDate >= t).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))[0];
       return { big: String(items.length), unit: items.length === 1 ? 'contract' : 'contracts', lines: [ending.length ? ending.length + ' ending in 90 days' : 'none ending soon', next ? 'Next ends ' + fmtDate(next.expiryDate, { short: true }) : 'no end dates'], bad: ending.some((d) => daysUntil(d.expiryDate) <= 30) };
+    }
+    if (area === 'costs') {
+      const open = items.filter(GU.costs.isOpen);
+      if (!open.length) return { big: money(0), unit: 'of ideas to fund', lines: ['Add ideas and what they’ll cost', 'and I’ll find when you can afford them'] };
+      const plan = GU.costs.schedule(s);
+      const next = plan.results.filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date))[0];
+      return { big: money(plan.outstanding, { whole: true }), unit: 'of ideas to fund', lines: [next ? 'Next: ' + next.idea.name + ', ' + (daysUntil(next.date) <= 0 ? 'now' : fmtDate(next.date, { short: true })) : 'none fit yet', plan.notFitting ? plural(plan.notFitting, 'idea') + ' don’t fit in ' + plan.base.cfg.months + ' months' : plan.allBy ? 'All done by ' + fmtDate(plan.allBy, { short: true }) : ''], bad: plan.notFitting > 0 };
     }
     return {};
   }
@@ -218,6 +241,27 @@
         '<span class="wk-row__chips">' + due + chipF + '</span></button>' +
         '<span class="wk-row__end"><b>' + esc(money(r.amount)) + '</b></span>' +
         '<span class="wk-row__act">' + (!stopped && !r.autopay ? '<button type="button" class="btn btn--sm btn--soft" data-billpaid="' + esc(r.id) + '">' + icon('check') + 'Paid</button>' : '') + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
+    }
+    if (area === 'costs') {
+      const plan = GU.costs.schedule(s);
+      const x = plan.results.find((y) => y.idea.id === r.id);
+      const pr = PRIORITIES.find((p) => p.value === (r.priority || 'should'));
+      const proj = r.projectId && (s.projects || []).find((p) => p.id === r.projectId);
+      let when = '';
+      if (r.status === 'done') when = pill('Done' + (r.doneDate ? ' ' + fmtDate(r.doneDate, { short: true }) : ''), 'good', 'check');
+      else if (r.status === 'dropped') when = pill('Dropped', 'muted');
+      else if (x && x.date) {
+        when = x.fixed ? pill('Booked ' + fmtDate(x.date, { short: true }), x.short > 0 ? 'crit' : 'info', 'clock') + (x.short > 0 ? pill(money(x.short, { whole: true }) + ' short', 'crit', 'alert') : '')
+          : pill(daysUntil(x.date) <= 0 ? 'You can afford it now' : 'Earliest ' + fmtDate(x.date, { short: true }), daysUntil(x.date) <= 0 ? 'good' : 'info', 'clock');
+        if (x.account) when += pill('from ' + x.account, 'muted', 'bank');
+        if (r.wantBy) when += x.onTime ? pill('In time for ' + fmtDate(r.wantBy, { short: true }), 'good', 'check') : pill(x.lateDays + ' days after you wanted', 'warn', 'alert');
+      } else if (x) when = pill('Not in the next ' + plan.base.cfg.months + ' months', 'crit', 'alert') + (x.shortfall ? pill('about ' + money(x.shortfall, { whole: true }) + ' short', 'warn') : '');
+      return '<li class="wk-row' + (GU.costs.isOpen(r) ? '' : ' is-done') + '"><span class="wk-row__lead wk-row__ico">' + icon('coin') + '</span>' +
+        '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' +
+        esc([pr ? pr.label : '', proj ? 'for ' + proj.name : '', r.notBefore ? 'not before ' + fmtDate(r.notBefore, { short: true }) : '', r.wantBy ? 'wanted by ' + fmtDate(r.wantBy, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em>' +
+        '<span class="wk-row__chips">' + when + chipF + '</span></button>' +
+        '<span class="wk-row__end"><b>' + esc(money(r.cost)) + '</b>' + (Number(r.monthly) > 0 ? '<em>+ ' + esc(money(r.monthly)) + ' a month</em>' : '') + '</span>' +
+        '<span class="wk-row__act">' + (GU.costs.isOpen(r) ? '<button type="button" class="btn btn--sm btn--soft" data-idea-done="' + esc(r.id) + '">' + icon('check') + 'Done</button>' : '') + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
     }
     // contracts
     const n = r.expiryDate ? daysUntil(r.expiryDate) : null;
@@ -298,6 +342,14 @@
       groups = [{ title: 'In progress', items: by(['In progress']) }, { title: 'Coming up', items: by(['Booked', 'Planned']) }, { title: 'Ideas', items: by(['Idea']) }, { title: 'Done or cancelled', items: by(CLOSED), closed: true }];
     } else if (area === 'bills') {
       groups = [{ title: '', items: list.filter((b) => b.active !== false).sort((a, b) => (a.nextDue || '9').localeCompare(b.nextDue || '9')) }, { title: 'Stopped', items: list.filter((b) => b.active === false), closed: true }];
+    } else if (area === 'costs') {
+      extra = forecastHTML(s);
+      const plan = GU.costs.schedule(s);
+      const at = (i) => (plan.results.find((r) => r.idea.id === i.id) || {}).date || '9999';
+      const open = list.filter(GU.costs.isOpen);
+      groups = [{ title: 'Can be done', items: open.filter((i) => at(i) !== '9999').sort((a, b) => at(a).localeCompare(at(b))) },
+        { title: 'Doesn’t fit yet', items: open.filter((i) => at(i) === '9999') },
+        { title: 'Done or dropped', items: list.filter((i) => !GU.costs.isOpen(i)).sort((a, b) => (b.doneDate || '').localeCompare(a.doneDate || '')), closed: true }];
     } else {
       groups = [{ title: '', items: list.sort((a, b) => (a.expiryDate || '9999').localeCompare(b.expiryDate || '9999')) }];
     }
@@ -343,6 +395,7 @@
     if (area === 'invoices') return '<button type="button" class="btn" data-add="invoices" data-kind="receipt">' + icon('receipt') + 'Receipt or expense</button><button type="button" class="btn" data-add="invoices" data-kind="invoice-in">' + icon('out') + 'Invoice to pay</button>' +
       '<button type="button" class="btn btn--primary" data-add="invoices" data-kind="invoice-out">' + icon('in') + 'Invoice I’ve sent</button>';
     if (area === 'projects') return '<button type="button" class="btn btn--primary" data-add="projects">' + icon('plus') + 'New project</button>';
+    if (area === 'costs') return '<button type="button" class="btn" data-cf-settings>' + icon('settings') + 'Forecast settings</button><button type="button" class="btn btn--primary" data-add="costs">' + icon('plus') + 'New idea</button>';
     if (area === 'bills') return '<button type="button" class="btn" data-bring="bills">' + icon('list') + 'Choose from your bills</button><button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New bill</button>';
     return '<button type="button" class="btn" data-bring="contracts">' + icon('list') + 'Choose from your documents</button><button type="button" class="btn btn--primary" data-add="contracts">' + icon('plus') + 'New contract</button>';
   }
@@ -441,6 +494,9 @@
       const [c, id] = el.dataset.more.split(':');
       return moreMenu(el, c, id);
     }
+    if (b('[data-cf-settings]')) return forecastSettings();
+    if (b('[data-balances]')) return GU.tabs.transactions.updateBalances();
+    if ((el = b('[data-idea-done]'))) return ideaStatus(el.dataset.ideaDone, 'done');
     if ((el = b('[data-paid]'))) return GU.tabs.receipts.markPaid(el.dataset.paid);
     if ((el = b('[data-claimed]'))) return GU.tabs.receipts.markClaimed([el.dataset.claimed]);
     if ((el = b('[data-billpaid]'))) return GU.tabs.bills.markPaid(el.dataset.billpaid);
@@ -477,6 +533,7 @@
     }
     if (area === 'invoices') return GU.tabs.receipts.create({ values: { kind: kind || 'invoice-out', context: 'work', date: today(), status: 'unpaid', claim: kind === 'receipt' }, onSaved: (r) => tag('paperwork', r.id, folder) });
     if (area === 'projects') return editProject(null, { folder });
+    if (area === 'costs') return editIdea(null, { folder });
     if (area === 'bills') return GU.tabs.bills.create({ category: 'Work expenses' }, { onSaved: (r) => tag('bills', r.id, folder) });
     if (area === 'contracts') return GU.tabs.documents.create({ type: CONTRACT, title: '' }, { onSaved: (r) => tag('documents', r.id, folder) });
     if (area === 'note') return editNote(null, { area: ui.area === 'overview' ? 'general' : ui.area, folder });
@@ -492,6 +549,7 @@
       { icon: 'star', label: 'Project', hint: labelOf('projects'), onClick: () => add('projects') },
       { icon: 'bills', label: 'Bill', hint: 'A regular work cost', onClick: () => add('bills') },
       { icon: 'file', label: 'Contract', hint: 'With its start and end dates', onClick: () => add('contracts') },
+      { icon: 'trend', label: 'Idea to cost', hint: 'I’ll work out when you can afford it', onClick: () => add('costs') },
       { icon: 'note', label: 'Note', hint: 'Anything to remember', onClick: () => add('note') },
       { icon: 'folder', label: 'Folder', hint: 'To group things in a category', onClick: () => add('folder') },
       { icon: 'upload', label: 'Upload files', hint: 'I’ll read them and file them under Work', onClick: async () => {
@@ -583,6 +641,107 @@
       },
       onDelete: p ? () => store.remove('projects', p.id, p.name) : null,
       deleteMessage: 'This deletes the project and its files. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
+    });
+  }
+
+  /* ---------- cost forecast ---------- */
+  function forecastHTML(s) {
+    const plan = GU.costs.schedule(s);
+    const b = plan.base;
+    if (!b.known) {
+      return '<section class="panel"><div class="panel__body cf-empty">' + icon('bank') + '<p>Put in what’s in your accounts first, and I’ll work out when you can afford each idea.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
+    }
+    const n = b.dates.length;
+    // Four month labels, with the year once it changes.
+    const step = Math.max(1, Math.round(n / 4));
+    const labels = [];
+    for (let i = 0; i < n - step / 2; i += step) labels.push({ i, text: GU.util.monthLabel(b.dates[i].slice(0, 7)) + (b.dates[i].slice(0, 4) !== today().slice(0, 4) ? ' ' + b.dates[i].slice(2, 4) : '') });
+    const marks = plan.results.filter((r) => r.date).map((r) => ({ i: b.dates.indexOf(r.date), tip: r.idea.name + ': ' + money(r.cost, { whole: true }) + ', ' + fmtDate(r.date, { short: true }) + (r.account ? ' from ' + r.account : '') })).filter((m) => m.i >= 0);
+    const keep = b.cfg.buffer ? money(b.cfg.buffer, { whole: true }) : '£0';
+    const floorLabel = 'Keep ' + keep + (b.cfg.overdraft ? ', using your overdraft' : '');
+    const spareTone = plan.spare < 0 ? 'is-crit' : 'is-in';
+    const room = plan.months.slice(0, b.cfg.months);
+    return '<section class="panel cf"><header class="panel__head"><h2>' + icon('trend') + 'When you can afford things</h2><span class="muted">next ' + b.cfg.months + ' months</span></header>' +
+      '<div class="tally__sum">' +
+      '<div><span>Spare each month</span><b class="' + spareTone + '">' + esc(money(plan.spare, { whole: true })) + '</b><em>' + esc(plan.spare < 0 ? 'more goes out than comes in' : 'on average, after bills, debts and everyday spending') + '</em></div>' +
+      '<div><span>You could spend now</span><b>' + esc(money(plan.freeNow, { whole: true })) + '</b><em>' + esc('and never drop below ' + keep + (b.cfg.overdraft ? ' (with overdraft)' : '')) + '</em></div>' +
+      '<div><span>Ideas to fund</span><b>' + esc(money(plan.outstanding, { whole: true })) + '</b><em>' + esc(plural(plan.results.length, 'idea') + ' on the list') + '</em></div>' +
+      '<div><span>' + (plan.notFitting ? 'Don’t fit yet' : 'All done by') + '</span><b class="' + (plan.notFitting ? 'is-crit' : '') + '">' + esc(plan.notFitting ? String(plan.notFitting) : plan.allBy ? fmtDate(plan.allBy, { short: true }) : '–') + '</b><em>' + esc(plan.notFitting ? 'not affordable in ' + b.cfg.months + ' months at this rate' : plan.results.length ? 'at the earliest' : 'add an idea below') + '</em></div>' +
+      '</div>' +
+      '<div class="panel__body cf-chart">' + GU.charts.line(plan.after.map((v, i) => ({ value: v, tip: fmtDate(b.dates[i], { weekday: true }) + ': ' + money(v) + (plan.after[i] !== b.total[i] ? ' (' + money(b.total[i]) + ' before your ideas)' : '') })),
+        { height: 170, labels, base: plan.results.some((r) => r.date) ? b.total : null, floor: { value: b.floor, label: floorLabel }, marks }) +
+      '<p class="cf-legend"><span><i class="cf-key cf-key--after"></i>With your ideas</span><span><i class="cf-key cf-key--base"></i>Before them</span><span><i class="cf-key cf-key--mark"></i>When each idea happens</span></p></div>' +
+      '<div class="cf-room"><h3>Room to spend, month by month</h3><p class="muted">The most you could spend from the start of each month, after the ideas above, without dropping below ' + esc(keep) + ' later on.</p><ol>' +
+      room.map((m) => '<li class="' + (m.room > 0 ? 'is-room' : '') + '"><span>' + esc(GU.util.monthLabel(m.key) + (m.key.slice(0, 4) !== today().slice(0, 4) ? ' ' + m.key.slice(0, 4) : '')) + '</span><b>' + esc(money(m.room, { whole: true })) + '</b></li>').join('') + '</ol></div>' +
+      '<footer class="panel__foot cf-note">' + icon('info') + '<span>' + esc('Starts from ' + money(b.plan.start) + ' across your accounts. Counts your income, bills, debt and instalment payments and invoices due, plus about ' + money(b.everyday, { whole: true }) + ' a month of everyday spending' +
+        (b.cfg.everyday != null && b.cfg.everyday !== '' ? ' (your figure)' : b.est ? ' (from your last ' + plural(b.est.months.length, 'month') + ' of statements)' : '') + '. It keeps at least ' + keep + ' in your accounts' + (b.cfg.overdraft ? ', counting your overdraft' : '') + '. Must-haves are planned first. ') + '<button type="button" class="link link--btn" data-cf-settings>Change these</button></span></footer></section>';
+  }
+
+  function editIdea(id, opts) {
+    const s = store.state;
+    const i = id ? store.find('costIdeas', id) : null;
+    formDialog({
+      title: i ? 'Edit idea' : 'New idea to cost',
+      intro: i ? null : 'Add what it is and what it’ll cost. I’ll find the earliest date you can afford it without dropping below what you keep, and which account it could come from.',
+      fields: [
+        { name: 'name', label: 'What is it?', required: true, placeholder: 'e.g. New laptop, Shop signage, Marketing campaign' },
+        { name: 'cost', label: 'What it’ll cost', type: 'money', required: true, half: true },
+        { name: 'monthly', label: 'Ongoing cost a month', type: 'money', optional: true, half: true, help: 'For things that keep costing, like software or rent.' },
+        { name: 'priority', label: 'How important', type: 'segmented', options: PRIORITIES, default: 'should' },
+        { name: 'notBefore', label: 'Not before', type: 'date', optional: true, half: true },
+        { name: 'wantBy', label: 'Want it by', type: 'date', optional: true, half: true },
+        { name: 'plannedDate', label: 'Already booked for', type: 'date', optional: true, half: true, help: 'Leave empty and I’ll find the earliest date you can afford it.' },
+        { name: 'projectId', label: 'For project', type: 'select', options: [{ value: '', label: 'None' }].concat((s.projects || []).map((p) => ({ value: p.id, label: p.name }))), half: true },
+        { name: 'status', label: 'Status', type: 'segmented', options: [{ value: 'open', label: 'To do' }, { value: 'done', label: 'Done' }, { value: 'dropped', label: 'Dropped' }], default: 'open' },
+        { name: 'workFolder', label: 'Folder', type: 'select', options: [{ value: '', label: 'No folder' }].concat(foldersOf(s, 'costs').map((f) => ({ value: f.id, label: f.name }))), half: true },
+        { name: 'files', label: 'Quotes or files', type: 'files', dropLabel: 'Add quotes, links saved as PDFs or photos' },
+        { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, optional: true },
+      ],
+      values: i ? Object.assign({ status: 'open' }, i) : { priority: 'should', status: 'open', workFolder: (opts && opts.folder) || '' },
+      submitLabel: i ? 'Save' : 'Add idea',
+      onSubmit: (v) => {
+        const rec = Object.assign(i ? Object.assign({}, i) : { id: 'ci-' + uid(), created: today() }, v, { updated: today() });
+        if (rec.status === 'done' && !rec.doneDate) rec.doneDate = today();
+        if (rec.status !== 'done') delete rec.doneDate;
+        store.upsert('costIdeas', rec);
+        if (!i) {
+          const r = GU.costs.schedule(store.state).results.find((x) => x.idea.id === rec.id);
+          toast(r && r.date ? rec.name + ': ' + (daysUntil(r.date) <= 0 ? 'you can afford it now' : 'earliest ' + fmtDate(r.date, { short: true })) + (r.account ? ', from ' + r.account : '') : rec.name + ' doesn’t fit in the time ahead yet');
+        }
+      },
+      onDelete: i ? () => store.remove('costIdeas', i.id, i.name) : null,
+      deleteMessage: 'This deletes the idea. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
+    });
+  }
+
+  function ideaStatus(id, status) {
+    const before = Object.assign({}, store.find('costIdeas', id));
+    store.commit((s) => {
+      const i = s.costIdeas.find((x) => x.id === id);
+      if (!i) return;
+      i.status = status;
+      if (status === 'done') i.doneDate = today();
+      else delete i.doneDate;
+    });
+    toast(status === 'done' ? 'Marked done' : status === 'dropped' ? 'Dropped from the plan' : 'Back in the plan', { action: 'Undo', onAction: () => store.upsert('costIdeas', before) });
+  }
+
+  function forecastSettings() {
+    const s = store.state;
+    const cfg = GU.costs.settings(s);
+    const est = GU.costs.everydayEstimate(s);
+    formDialog({
+      title: 'Forecast settings',
+      fields: [
+        { name: 'buffer', label: 'Always keep at least', type: 'money', half: true, help: 'A safety cushion the plan won’t dip into.' },
+        { name: 'months', label: 'Look ahead', type: 'select', options: [{ value: '6', label: '6 months' }, { value: '12', label: '12 months' }, { value: '18', label: '18 months' }, { value: '24', label: '2 years' }], half: true },
+        { name: 'everyday', label: 'Everyday spending a month', type: 'money', optional: true, placeholder: est ? est.monthly.toFixed(2) : '0.00', help: 'Food, fuel, shopping and the like, on top of bills and debts. Leave empty to use your statements' + (est ? ': about ' + money(est.monthly, { whole: true }) + ' a month.' : '.') },
+        { name: 'overdraft', label: 'Overdraft', type: 'checkbox', checkLabel: 'Count my overdraft as money I can use' },
+      ],
+      values: { buffer: cfg.buffer, months: String(cfg.months), everyday: cfg.everyday, overdraft: cfg.overdraft },
+      onSubmit: (v) => store.commit((st) => {
+        st.settings.costForecast = { buffer: v.buffer || 0, months: Number(v.months) || 12, everyday: v.everyday == null ? null : v.everyday, overdraft: !!v.overdraft };
+      }),
     });
   }
 
@@ -696,7 +855,13 @@
       { icon: 'edit', label: 'Rename', onClick: () => rename(c, id) },
       { icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) },
     ];
-    if (c === 'projects') {
+    if (c === 'costIdeas') {
+      if (GU.costs.isOpen(r)) {
+        items.push({ icon: 'check', label: 'Mark done', onClick: () => ideaStatus(id, 'done') });
+        items.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => ideaStatus(id, 'dropped') });
+      } else items.push({ icon: 'repeat', label: 'Back to the plan', onClick: () => ideaStatus(id, 'open') });
+      items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove('costIdeas', id, r.name) });
+    } else if (c === 'projects') {
       for (const st of ['In progress', 'Done'].filter((x) => x !== r.status)) items.push({ icon: st === 'Done' ? 'check' : 'clock', label: 'Mark ' + st.toLowerCase(), onClick: () => store.commit((x) => (x.projects.find((p) => p.id === id).status = st)) });
       items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove('projects', id, r.name) });
     } else {
@@ -746,6 +911,7 @@
   /* Opens a project or note (from anywhere, e.g. Home's timeline). */
   function edit(id, c) {
     if (c === 'workNotes') return editNote(id);
+    if (c === 'costIdeas') return editIdea(id);
     return editProject(id);
   }
   /* Opens Work on one area. */

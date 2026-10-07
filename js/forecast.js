@@ -95,7 +95,7 @@
     }
     const days = [];
     let bal = start;
-    for (let d = from, i = 0; d <= to && i < 400; d = addDays(d, 1), i++) {
+    for (let d = from, i = 0; d <= to && i < 800; d = addDays(d, 1), i++) {
       bal = round2(bal + sum(ev.filter((e) => e.date === d), (e) => e.amount));
       days.push({ date: d, value: bal });
     }

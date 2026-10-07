@@ -44,6 +44,7 @@
       projects: [],
       workFolders: [],
       workNotes: [],
+      costIdeas: [],
       sections: [],
       sectionItems: [],
       inbox: [],
@@ -94,6 +95,7 @@
     /* All changes go through commit so they are saved and the screen redraws. */
     commit(mutator) {
       mutator(this.state);
+      this.rev = (this.rev || 0) + 1; // lets slow sums (like the cost forecast) know when to work things out again
       GU.util.setCurrency(this.state.settings.currency);
       persist(this.state);
       listeners.forEach((fn) => fn());
@@ -135,7 +137,7 @@
   /* ---------- Recently deleted ---------- */
   const KEEP_DAYS = 30;
   const KIND = { bills: 'Bill', debts: 'Debt', paperwork: 'Receipt or invoice', documents: 'Document', visas: 'Visa application', incomeSources: 'Income', tasks: 'Task',
-    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder' };
+    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea' };
   const trash = {
     KIND,
     /* Adds a deleted record (and anything deleted along with it, in `extra`) to the bin. Call inside a commit. */

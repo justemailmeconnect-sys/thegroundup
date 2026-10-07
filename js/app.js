@@ -34,7 +34,7 @@
     /* Opens the right editor for any record, wherever it lives. */
     open(ref) {
       if (ref.c === 'sectionItems') return GU.sections.editItem(ref.id);
-      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts', projects: 'work', workNotes: 'work' };
+      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts', projects: 'work', workNotes: 'work', costIdeas: 'work' };
       const tab = GU.tabs[map[ref.c]];
       if (tab && tab.edit) tab.edit(ref.id, ref.c);
     },
