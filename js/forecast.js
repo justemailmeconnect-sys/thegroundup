@@ -53,6 +53,12 @@
         out.push({ date: dt, amount: -s.payment, label: d.name, sub: d.paymentDay ? 'Monthly payment' : 'Roughly, going by what you’ve been paying', rough: !d.paymentDay && !d.monthlyPayment, kind: 'debt', ref: { c: 'debts', id: d.id }, account });
       }
     }
+    // Invoices you've sent count on their due date. Late ones aren't counted: there's no telling when they'll come.
+    for (const x of F.owedToMe(state)) {
+      const p = x.p;
+      if (!(x.left > 0) || !p.dueDate || p.dueDate < from || p.dueDate > to) continue;
+      out.push({ date: p.dueDate, amount: x.left, label: p.party || p.title, sub: 'Invoice owed to you' + (p.party && p.title ? ': ' + p.title : '') + (x.paid ? ' (the rest of it)' : '') + ', if paid on time', soft: true, kind: 'owed', ref: { c: 'paperwork', id: p.id } });
+    }
     for (const p of state.paperwork || []) {
       if (p.kind !== 'invoice-in' || p.status === 'paid' || !p.dueDate || !(p.amount > 0)) continue;
       if (p.dueDate > to) continue;
@@ -101,6 +107,7 @@
       overdraft: sum(accts, (x) => x.info.overdraftLimit || 0),
       accounts: Object.values(per),
       known: accts.length,
+      owedNotCounted: F.owedToMe(state).filter((x) => x.left > 0 && (!x.p.dueDate || x.p.dueDate < from)),
     };
   }
 

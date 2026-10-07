@@ -60,7 +60,53 @@
       '<em>' + esc([p.party, fmtDate(p.date, { short: true }), p.reference, p.folder ? 'Folder: ' + p.folder : ''].filter(Boolean).join(' · ')) + '</em>' +
       '<span class="doc-row__chips">' + pill(KIND_SHORT[p.kind] || 'Item', 'kind-' + p.kind) + pill(p.context === 'work' ? 'Work' : 'Home', 'muted', p.context === 'work' ? 'briefcase' : 'home') +
       statusPill(p) + (p.claim && !p.claimed ? pill('Claim back', 'info', 'flag') : '') + '</span></button>' +
-      '<span class="doc-row__end">' + (p.amount != null ? '<b class="' + (p.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(p.amount)) + '</b>' : '') + '<span class="doc-row__btns">' + GU.ui.dlButton(p.files, p.title) + act + '</span></span></li>';
+      '<span class="doc-row__end">' + (p.amount != null ? '<b class="' + (p.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(p.amount)) + '</b>' : '') +
+      (p.kind === 'invoice-out' && p.status !== 'paid' && (p.payments || []).length ? '<small class="muted">' + esc(money(F.outstanding(p)) + ' still to come') + '</small>' : '') + '<span class="doc-row__btns">' + GU.ui.dlButton(p.files, p.title) + act + '</span></span></li>';
+  }
+
+  /* Since 6 April: the UK tax year, which is what you'd report invoice income against. */
+  function taxYearStart(t) {
+    const y = +t.slice(0, 4);
+    return (t.slice(5) >= '04-06' ? y : y - 1) + '-04-06';
+  }
+
+  /* Invoices you've sent that haven't been paid: the total, soonest due first, with a running total. */
+  function owedHTML(s, t) {
+    const list = F.owedToMe(s, ui.context);
+    if (!list.length) return '';
+    const total = sum(list, (x) => x.left);
+    const late = list.filter((x) => x.late);
+    const soon = list.filter((x) => !x.late && x.p.dueDate && daysUntil(x.p.dueDate) <= 30);
+    const ty = taxYearStart(t);
+    const got = sum(s.paperwork.filter((p) => p.kind === 'invoice-out' && (ui.context === 'all' || (p.context || 'home') === ui.context)), (p) => sum(F.received(p).filter((r) => r.date >= ty), (r) => r.amount));
+    const taken = new Set();
+    const rows = list.map((x) => {
+      const p = x.p;
+      const match = F.paymentFor(s, p, taken);
+      if (match) taken.add(match.id);
+      const n = p.dueDate ? daysUntil(p.dueDate) : null;
+      const due = !p.dueDate ? '<b>No due date</b>' : '<b>' + esc(fmtDate(p.dueDate, { short: true })) + '</b><em class="' + (x.late ? 'is-crit' : n <= 7 ? 'is-warn' : '') + '">' + esc(x.late ? -n + (n === -1 ? ' day late' : ' days late') : relDays(p.dueDate)) + '</em>';
+      return '<li class="owed-row' + (x.late ? ' is-late' : '') + '">' +
+        '<span class="owed-row__due">' + due + '</span>' +
+        '<button type="button" class="owed-row__main" data-edit="' + esc(p.id) + '"><b>' + esc(p.party || p.title) + '</b><em>' + esc([p.party ? p.title : '', p.reference, p.date ? 'sent ' + fmtDate(p.date, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></button>' +
+        '<span class="owed-row__amt">' + (x.noAmount ? '<b class="muted">No amount</b>' : '<b>' + esc(money(x.left)) + '</b>' + (x.paid ? '<em>' + esc(money(x.paid) + ' of ' + money(p.amount) + ' paid') + '</em>' : '')) + '</span>' +
+        '<span class="owed-row__run"><b>' + esc(money(x.running)) + '</b><em>running total</em></span>' +
+        '<span class="owed-row__act"><button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(p.id) + '">' + icon('check') + 'Got paid</button></span>' +
+        (match ? '<p class="owed-row__match">' + icon('bank') + '<span>Looks paid: <b>' + esc(money(match.amount)) + '</b> came in from ' + esc(match.description || 'someone') + ' on ' + esc(fmtDate(match.date, { short: true })) + '.</span>' +
+          '<button type="button" class="btn btn--sm btn--primary" data-match="' + esc(p.id + ':' + match.id) + '">Yes, that’s it</button><button type="button" class="btn btn--sm btn--ghost" data-nomatch="' + esc(p.id + ':' + match.id) + '">No</button></p>' : '') +
+        '</li>';
+    });
+    return '<section class="panel owed"><header class="panel__head"><h2>' + icon('in') + 'Owed to you</h2>' +
+      '<span class="muted">' + (ui.context === 'all' ? '' : esc(ui.context === 'work' ? 'Work only · ' : 'Home only · ')) + 'soonest due first</span>' +
+      '<button type="button" class="btn btn--sm" data-new-owed>' + icon('plus') + 'Invoice you’ve sent</button></header>' +
+      '<div class="owed__sum">' +
+      '<div><span>Still to come</span><b class="is-in">' + esc(money(total)) + '</b><em>' + esc(plural(list.length, 'invoice')) + (list.some((x) => x.noAmount) ? ', some without an amount' : '') + '</em></div>' +
+      '<div><span>Late</span><b class="' + (late.length ? 'is-crit' : '') + '">' + esc(money(sum(late, (x) => x.left))) + '</b><em>' + esc(late.length ? plural(late.length, 'invoice') + ' past the due date' : 'nothing late') + '</em></div>' +
+      '<div><span>Due in the next 30 days</span><b>' + esc(money(sum(soon, (x) => x.left))) + '</b><em>' + esc(soon.length ? plural(soon.length, 'invoice') : 'nothing due soon') + '</em></div>' +
+      '<div><span>Paid to you since ' + esc(fmtDate(ty, { short: true })) + '</span><b>' + esc(money(got)) + '</b><em>this tax year</em></div>' +
+      '</div>' +
+      '<ol class="owed__list">' + rows.join('') + '</ol>' +
+      '<footer class="owed__foot"><span>Total owed to you</span><b class="is-in">' + esc(money(total)) + '</b></footer></section>';
   }
 
   function render(root) {
@@ -97,13 +143,14 @@
       GU.ui.dropbar('Drop receipts, invoices or warranties here, or a whole folder', 'Photos and PDFs both work. Everything stays in this tab; subfolders like Home, Work or Warranties are used.') +
       '<div class="ledger">' +
       '<div><span>Invoices to pay</span><b>' + esc(money(sum(toPay, (p) => p.amount || 0))) + '</b><em>' + esc(plural(toPay.length, 'invoice')) + (toPay.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + toPay.filter((p) => p.dueDate && p.dueDate < t).length + ' overdue' : '') + '</em></div>' +
-      '<div><span>Owed to you</span><b>' + esc(money(sum(owed, (p) => p.amount || 0))) + '</b><em>' + esc(plural(owed.length, 'invoice')) + ' sent</em></div>' +
+      '<div><span>Owed to you</span><b class="' + (owed.length ? 'is-in' : '') + '">' + esc(money(sum(owed, (p) => F.outstanding(p)))) + '</b><em>' + esc(plural(owed.length, 'invoice')) + (owed.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + owed.filter((p) => p.dueDate && p.dueDate < t).length + ' late' : ' sent') + '</em></div>' +
       '<div><span>Under warranty</span><b>' + warranties.length + '</b><em>' + (warranties.length ? 'next ends ' + esc(fmtDate(warranties.map((p) => p.warrantyUntil).sort()[0], { short: true })) : 'items covered') + '</em></div>' +
       '<div><span>Filed this month</span><b>' + thisMonth.length + '</b><em>' + esc(plural(all.length, 'item')) + ' in total</em></div>' +
       '</div>' +
       '<div class="toolbar">' + chips('filter', filterOpts, ui.filter) + '<span class="toolbar__gap"></span>' +
       chips('context', [{ value: 'all', label: 'Home & work' }, { value: 'home', label: 'Home' }, { value: 'work', label: 'Work' }], ui.context) +
       '<label class="search">' + icon('search') + '<input type="search" id="rc-search" placeholder="Search" value="' + esc(ui.q) + '" aria-label="Search receipts and invoices"></label></div>' +
+      (ui.filter === 'all' || ui.filter === 'owed' ? owedHTML(s, t) : '') +
       '<section class="panel"><ul class="doc-rows" id="rc-list"></ul></section>';
 
     const draw = () => {
@@ -127,6 +174,22 @@
       }
       if (e.target.closest('[data-upload]')) return create({ pick: true });
       if (e.target.closest('[data-import-orders]')) return importOrders();
+      if (e.target.closest('[data-new-owed]')) return create({ values: { kind: 'invoice-out', context: ui.context === 'home' ? 'home' : 'work', date: today(), status: 'unpaid' } });
+      const m = e.target.closest('[data-match]');
+      if (m) {
+        const [pid, tid] = m.dataset.match.split(':');
+        const tx = store.find('transactions', tid);
+        if (tx) addPayment(pid, { date: tx.date, amount: tx.amount, tx: tx.id });
+        return;
+      }
+      const nm = e.target.closest('[data-nomatch]');
+      if (nm) {
+        const [pid, tid] = nm.dataset.nomatch.split(':');
+        return store.commit((st) => {
+          const p = st.paperwork.find((x) => x.id === pid);
+          if (p) p.notPayments = (p.notPayments || []).concat(tid);
+        });
+      }
       const pay = e.target.closest('[data-pay]');
       if (pay) return markPaid(pay.dataset.pay);
       const v = e.target.closest('[data-view]');
@@ -169,6 +232,11 @@
       rec.status = '';
       rec.dueDate = '';
     } else if (rec.status === 'paid' && !rec.paidDate) rec.paidDate = today();
+    // Set back to not paid: start the running total for it again from the full amount.
+    if (existing && existing.status === 'paid' && rec.status !== 'paid') {
+      rec.payments = [];
+      rec.paidDate = '';
+    }
     store.upsert('paperwork', rec);
     return rec;
   }
@@ -222,35 +290,81 @@
     });
   }
 
+  /* Records money received on an invoice you sent. Less than what's left keeps it open with the rest still owed,
+     unless `settle` says that's all that's coming. */
+  function addPayment(id, pay, settle) {
+    let msg = '';
+    store.commit((s) => {
+      const rec = s.paperwork.find((x) => x.id === id);
+      if (!rec) return;
+      if (rec.amount == null || rec.amount === '') rec.amount = pay.amount;
+      rec.payments = (rec.payments || []).concat({ date: pay.date, amount: GU.util.round2(pay.amount), tx: pay.tx || undefined });
+      const left = F.outstanding(rec);
+      if (left <= 0 || settle) {
+        rec.status = 'paid';
+        rec.paidDate = pay.date;
+        msg = 'Marked as paid to you';
+      } else msg = 'Got ' + money(pay.amount) + ' from ' + (rec.party || rec.title) + '. ' + money(left) + ' still to come.';
+    });
+    if (msg) toast(msg);
+  }
+
   function markPaid(id) {
     const p = store.find('paperwork', id);
     if (!p) return;
     const owedToMe = p.kind === 'invoice-out';
+    const left = owedToMe ? F.outstanding(p) : null;
+    const partPaid = owedToMe && (p.payments || []).length > 0;
     formDialog({
       title: owedToMe ? 'Record payment from ' + (p.party || p.title) : 'Mark ' + p.title + ' as paid',
+      intro: partPaid ? esc(money(F.received(p).reduce((a, r) => a + r.amount, 0)) + ' of ' + money(p.amount) + ' paid so far. ' + money(left) + ' still to come.') : undefined,
       fields: [
         { name: 'paidDate', label: owedToMe ? 'Date you were paid' : 'Date paid', type: 'date', required: true, half: true },
-        { name: 'amount', label: 'Amount', type: 'money', half: true },
+        { name: 'amount', label: owedToMe ? 'Amount you got' : 'Amount', type: 'money', half: true, help: owedToMe ? 'If it’s less than what’s owed, the rest stays in your running total.' : undefined },
+      ].concat(owedToMe ? [{ name: 'settle', label: 'Settled', type: 'checkbox', checkLabel: 'That’s all that’s coming, even if it’s less than the invoice' }] : []).concat([
         { name: 'record', label: 'Also add', type: 'checkbox', checkLabel: 'Add this to my bank transactions' },
         { name: 'files', label: 'Proof of payment', type: 'files', dropLabel: 'Add a payment confirmation (optional)' },
-      ],
-      values: { paidDate: today(), amount: p.amount, record: false, files: [] },
-      submitLabel: owedToMe ? 'Mark as paid to me' : 'Mark paid',
+      ]),
+      values: { paidDate: today(), amount: owedToMe ? left || p.amount : p.amount, record: false, settle: false, files: [] },
+      submitLabel: owedToMe ? 'Record payment' : 'Mark paid',
       onSubmit: (v) => {
+        if (owedToMe && !(v.amount > 0) && !v.settle) {
+          toast('Put in how much you got.');
+          return false;
+        }
+        let txId = null;
         store.commit((s) => {
           const rec = s.paperwork.find((x) => x.id === id);
-          rec.status = 'paid';
-          rec.paidDate = v.paidDate;
-          if (v.amount != null) rec.amount = v.amount;
           rec.files = (rec.files || []).concat(v.files || []);
+          if (!owedToMe) {
+            rec.status = 'paid';
+            rec.paidDate = v.paidDate;
+            if (v.amount != null) rec.amount = v.amount;
+          }
           if (v.record && v.amount) {
-            s.transactions.push({ id: 't-' + uid(), date: v.paidDate, description: (rec.party || rec.title), amount: owedToMe ? v.amount : -v.amount,
+            txId = 't-' + uid();
+            s.transactions.push({ id: txId, date: v.paidDate, description: (rec.party || rec.title), amount: owedToMe ? v.amount : -v.amount,
               category: owedToMe ? 'Freelance & side work' : rec.category || '', account: (s.accounts[0] || {}).id, notes: (owedToMe ? 'Invoice paid: ' : 'Invoice: ') + rec.title, source: 'paperwork', created: today() });
           }
         });
-        toast(owedToMe ? 'Marked as paid to you' : 'Marked as paid');
+        if (!owedToMe) return toast('Marked as paid');
+        if (v.amount > 0) addPayment(id, { date: v.paidDate, amount: v.amount, tx: txId }, v.settle);
+        else if (v.settle) {
+          store.commit((s) => {
+            const rec = s.paperwork.find((x) => x.id === id);
+            rec.status = 'paid';
+            rec.paidDate = v.paidDate;
+          });
+          toast('Closed. Nothing more is expected on it.');
+        }
       },
     });
+  }
+
+  /* Opens Receipts & invoices on what's owed to you. */
+  function showOwed() {
+    ui.filter = 'owed';
+    GU.view.go('receipts');
   }
 
   /* ---------- online order lists (Amazon "Request your data", or a list made by Claude in Chrome) ---------- */
@@ -375,5 +489,5 @@
     });
   }
 
-  GU.tabs.receipts = { label: 'Receipts & invoices', short: 'Receipts', icon: 'receipt', render, create, edit, markPaid, importOrders, KINDS };
+  GU.tabs.receipts = { label: 'Receipts & invoices', short: 'Receipts', icon: 'receipt', render, create, edit, markPaid, showOwed, importOrders, KINDS };
 })();

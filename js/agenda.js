@@ -50,7 +50,7 @@
         push({ kind: mine ? 'invoice' : 'owed', date: p.dueDate,
           title: mine ? p.title : (p.party || p.title) + (p.dueDate < t ? ' is late paying you' : ' should pay you'),
           meta: [p.context === 'work' ? 'Work' : 'Home', mine ? p.party : p.title, p.reference].filter(Boolean).join(' · '),
-          amount: mine ? -p.amount : p.amount, ref: { c: 'paperwork', id: p.id }, action: 'paid' });
+          amount: mine ? -p.amount : F.outstanding(p), ref: { c: 'paperwork', id: p.id }, action: 'paid' });
       }
       if (p.warrantyUntil && p.warrantyUntil >= t && p.warrantyUntil <= to) {
         push({ kind: 'warranty', date: p.warrantyUntil, title: 'Warranty ends: ' + p.title, meta: 'Make any claims before this date', ref: { c: 'paperwork', id: p.id } });
@@ -158,8 +158,8 @@
         out.push({ tab: 'visas', title: (v.applicant ? v.applicant + ': ' : '') + v.visaType + ' decision', detail: (v.decisionExpected ? 'Expected ' + fmtDate(v.decisionExpected, { short: true }) : 'No date yet') + (v.submittedDate ? ' · submitted ' + fmtDate(v.submittedDate, { short: true }) : ''), ref: { c: 'visas', id: v.id } });
     }
     for (const p of state.paperwork) {
-      if (p.kind === 'invoice-out' && p.status !== 'paid')
-        out.push({ tab: 'receipts', title: (p.party || p.title) + ' owes you ' + money(p.amount), detail: p.dueDate ? (p.dueDate < t ? daysUntil(p.dueDate) * -1 + ' days late' : 'Due ' + fmtDate(p.dueDate, { short: true })) : 'No due date', ref: { c: 'paperwork', id: p.id }, late: p.dueDate && p.dueDate < t });
+      if (p.kind === 'invoice-out' && p.status !== 'paid' && (F.outstanding(p) > 0 || p.amount == null))
+        out.push({ tab: 'receipts', title: (p.party || p.title) + ' owes you' + (p.amount != null ? ' ' + money(F.outstanding(p)) : ''), detail: p.dueDate ? (p.dueDate < t ? daysUntil(p.dueDate) * -1 + ' days late' : 'Due ' + fmtDate(p.dueDate, { short: true })) : 'No due date', ref: { c: 'paperwork', id: p.id }, late: p.dueDate && p.dueDate < t });
     }
     return out;
   }

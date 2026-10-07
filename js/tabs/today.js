@@ -103,13 +103,25 @@
     }
     return { from: t, to: end, label: 'Rest of ' + shortMonth(t), endLabel: 'By ' + fmtDate(end, { short: true }) };
   }
-  const KIND_LABEL = { income: 'In', bill: 'Bill', debt: 'Debt', invoice: 'Invoice' };
+  const KIND_LABEL = { income: 'In', bill: 'Bill', debt: 'Debt', invoice: 'Invoice', owed: 'Invoice' };
+
+  /* The running total of what people owe you on invoices you've sent. */
+  function owedCard(s) {
+    const list = GU.finance.owedToMe(s);
+    if (!list.length) return '';
+    const total = sum(list, (x) => x.left);
+    const late = list.filter((x) => x.late);
+    const next = list.find((x) => !x.late && x.p.dueDate);
+    return '<button type="button" class="now-card now-card--owed" data-owed><span>Owed to you</span><b>' + esc(money(total)) + '</b><em>' +
+      esc(plural(list.length, 'invoice') + (late.length ? ' · ' + money(sum(late, (x) => x.left)) + ' late' : next ? ' · next due ' + fmtDate(next.p.dueDate, { short: true }) : '')) + '</em></button>';
+  }
 
   function nowHTML(s) {
     const list = GU.money.accounts(s).filter((x) => x.info || x.count);
     if (!list.length) {
       return '<section class="now"><header class="sec-head"><h2>Right now</h2></header><div class="now-empty">' + icon('bank') +
-        '<p>Tell me what’s in your accounts and I’ll plan the rest of the month from there.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
+        '<p>Tell me what’s in your accounts and I’ll plan the rest of the month from there.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div>' +
+        (owedCard(s) ? '<div class="now-cards">' + owedCard(s) + '</div>' : '') + '</section>';
     }
     const known = list.filter((x) => x.info);
     const total = sum(known, (x) => x.info.balance);
@@ -126,6 +138,7 @@
         return '<button type="button" class="now-card' + (neg ? ' is-neg' : '') + '" data-account="' + esc(x.account.id) + '"><span>' + esc(x.account.name) + '</span><b>' + (b ? esc(money(b.balance)) : '–') + '</b><em>' + esc(od || (b ? 'in credit' : 'no balance yet')) + '</em></button>';
       }).join('') +
       (known.length > 1 ? '<div class="now-card now-card--total' + (total < 0 ? ' is-neg' : '') + '"><span>Together</span><b>' + esc(money(total)) + '</b><em>' + esc(spare ? money(total + spare) + ' available with overdrafts' : 'across your accounts') + '</em></div>' : '') +
+      owedCard(s) +
       '</div></section>';
   }
 
@@ -164,9 +177,12 @@
       '<div><span>Lowest point</span><b class="' + (low.value < 0 ? 'is-crit' : '') + '">' + esc(money(low.value)) + '</b><em>' + esc(fmtDate(low.date, { weekday: true })) + '</em></div>' +
       '</div>' +
       (warns.length ? '<ul class="ahead__warn">' + warns.join('') + '</ul>' : '') +
+      (plan.owedNotCounted.length ? '<p class="note-line">' + icon('clock') + '<span>' + esc(money(sum(plan.owedNotCounted, (x) => x.left)) + ' owed to you on ' +
+        plural(plan.owedNotCounted.length, 'invoice') + (plan.owedNotCounted.every((x) => x.late) ? ' that ' + (plan.owedNotCounted.length > 1 ? 'are' : 'is') + ' late' : ' that ' + (plan.owedNotCounted.length > 1 ? 'are' : 'is') + ' late or ' + (plan.owedNotCounted.length > 1 ? 'have' : 'has') + ' no due date') +
+        ' isn’t counted here until it’s paid.') + ' <button type="button" class="link link--btn" data-owed>See them</button></span></p>' : '') +
       (days.length > 2 && ev.length ? '<div class="panel__body ahead__chart">' + GU.charts.line(days.map((d) => ({ value: d.value, tip: fmtDate(d.date, { weekday: true }) + ': ' + money(d.value) })), { height: 150, labels, color: '--series-in' }) + '</div>' : '') +
       (ev.length ? '<ol class="flow">' + Array.from(groups).map(([d, items]) => '<li class="flow-day' + (d === t ? ' is-today' : '') + '"><h3>' + esc(d === t ? 'Today' : fmtDate(d, { weekday: true })) + '</h3><ul>' +
-        items.map((e) => '<li class="flow-row' + (e.amount > 0 ? ' is-in' : '') + (e.review || e.rough ? ' is-soft' : '') + '"><span class="kind kind--' + (e.kind === 'income' ? 'income' : e.kind === 'debt' ? 'debt' : 'bill') + '">' + esc(KIND_LABEL[e.kind] || '') + '</span>' +
+        items.map((e) => '<li class="flow-row' + (e.amount > 0 ? ' is-in' : '') + (e.review || e.rough || e.soft ? ' is-soft' : '') + '"><span class="kind kind--' + (e.kind === 'income' || e.kind === 'owed' ? 'income' : e.kind === 'debt' ? 'debt' : 'bill') + '">' + esc(KIND_LABEL[e.kind] || '') + '</span>' +
           '<button type="button" class="flow-row__main" data-open="' + esc(e.ref.c + ':' + e.ref.id) + '"><b>' + esc(e.label) + '</b><em>' + esc((e.overdue ? 'Overdue · ' : '') + (e.sub || '')) + '</em></button>' +
           '<span class="flow-row__amt">' + esc(money(e.amount, { sign: true })) + '</span><span class="flow-row__after' + (e.after < 0 ? ' is-neg' : '') + '">' + esc(money(e.after)) + '</span></li>').join('') + '</ul></li>').join('') + '</ol>'
         : '<div class="panel__body"><p class="muted">Nothing expected in this period yet. Add your income, bills and payment schedules and I’ll plan around them.</p></div>') +
@@ -179,12 +195,14 @@
   function summaryLine(s, t) {
     const plan = GU.forecast.plan(s, { to: GU.forecast.monthEnd(t) });
     if (!plan.known) return 'Add your balances, income and bills and I’ll show you where you’re heading.';
-    const incomes = plan.events.filter((e) => e.amount > 0).map((e) => e.label);
+    const incomes = plan.events.filter((e) => e.kind === 'income').map((e) => e.label);
+    const owedIn = sum(plan.events.filter((e) => e.kind === 'owed'), (e) => e.amount);
     const names = Array.from(new Set(incomes));
     const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
     const lowAcct = plan.accounts.filter((a) => a.low < -a.limit)[0];
     return (plan.start < 0 ? 'You’re ' + money(-plan.start) + ' overdrawn across your accounts' : 'You have ' + money(plan.start) + ' across your accounts') +
-      (list ? ', with ' + list + ' still to come this month' : '') + '. ' +
+      (list ? ', with ' + list + ' still to come this month' : '') +
+      (owedIn ? (list ? ', plus ' : ', with ') + money(owedIn) + ' due to you on invoices' : '') + '. ' +
       'By ' + fmtDate(plan.to, { short: true }) + ' you should have about ' + money(plan.end) + '.' +
       (lowAcct ? ' Watch ' + lowAcct.name + ': it would go past its overdraft on ' + fmtDate(lowAcct.lowDate, { short: true }) + '.' : '');
   }
@@ -291,6 +309,7 @@
         return;
       }
       if (e.target.closest('[data-balances]')) return GU.tabs.transactions.updateBalances();
+      if (e.target.closest('[data-owed]')) return GU.tabs.receipts.showOwed();
       if (e.target.closest('[data-add-income]')) return GU.tabs.incomings.createSource();
       if (e.target.closest('[data-add-bill]')) return GU.tabs.bills.create();
       if (e.target.closest('[data-add-schedule]')) return GU.tabs.debts.scheduleDialog('');

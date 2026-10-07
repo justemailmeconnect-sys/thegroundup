@@ -205,7 +205,52 @@
     return [exp, inc, other];
   }
 
+  /* ---------- invoices you've sent: what's still owed to you ---------- */
+  const paidSoFar = (p) => round2(sum(p.payments || [], (x) => Number(x.amount) || 0));
+  /* What's left to come on an invoice after any part payments. */
+  function outstanding(p) {
+    if (p.status === 'paid') return 0;
+    return Math.max(0, round2((Number(p.amount) || 0) - paidSoFar(p)));
+  }
+  /* Every payment received on an invoice: part payments, plus the rest on the day it was marked paid. */
+  function received(p) {
+    const out = (p.payments || []).map((x) => ({ date: x.date, amount: Number(x.amount) || 0 }));
+    const rest = round2((Number(p.amount) || 0) - paidSoFar(p));
+    if (p.status === 'paid' && rest > 0) out.push({ date: p.paidDate || p.date || '', amount: rest });
+    return out;
+  }
+  /* Everything still owed to you, soonest due first (no due date last), each with the running total up to it. */
+  function owedToMe(state, context) {
+    const t = today();
+    let run = 0;
+    return (state.paperwork || [])
+      .filter((p) => p.kind === 'invoice-out' && p.status !== 'paid' && (!context || context === 'all' || (p.context || 'home') === context))
+      .map((p) => ({ p, left: outstanding(p), paid: paidSoFar(p), late: !!(p.dueDate && p.dueDate < t), noAmount: p.amount == null || p.amount === '' }))
+      .filter((x) => x.left > 0 || x.noAmount)
+      .sort((a, b) => (a.p.dueDate || '9').localeCompare(b.p.dueDate || '9') || (a.p.date || '').localeCompare(b.p.date || ''))
+      .map((x) => Object.assign(x, { running: (run = round2(run + x.left)) }));
+  }
+  /* A payment in your bank statements that looks like it settles this invoice: the amount left, from the
+     person or company on it (or quoting its reference), on or after the invoice date. */
+  const NOT_NAMES = new Set(['ltd', 'limited', 'the', 'and', 'plc', 'llp', 'company', 'services', 'group', 'from', 'payment', 'invoice']);
+  function paymentFor(state, p, taken) {
+    const left = outstanding(p);
+    if (!(left > 0)) return null;
+    const words = String(p.party || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !NOT_NAMES.has(w));
+    const ref = String(p.reference || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!words.length && ref.length < 4) return null;
+    const used = new Set();
+    for (const x of state.paperwork || []) for (const y of x.payments || []) if (y.tx) used.add(y.tx);
+    const no = new Set(p.notPayments || []);
+    return (state.transactions || []).find((t) => {
+      if (!(t.amount > 0) || Math.abs(t.amount - left) >= 0.005 || (p.date && t.date < p.date) || used.has(t.id) || no.has(t.id) || (taken && taken.has(t.id))) return false;
+      const text = ((t.description || '') + ' ' + (t.notes || '')).toLowerCase();
+      return words.some((w) => text.includes(w)) || (ref.length >= 4 && text.replace(/[^a-z0-9]/g, '').includes(ref));
+    }) || null;
+  }
+
   GU.finance = {
+    outstanding, received, owedToMe, paymentFor,
     EXPENSE, INCOME, TRANSFER, FREQUENCIES, PERIODS,
     categorise, isTransfer, moneyIn, moneyOut, inMonth, monthSeries, byCategory, periodFilter,
     freqLabel, nextDate, monthlyEquivalent, occurrences, rollForward, categoryOptions,
