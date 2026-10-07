@@ -9,7 +9,7 @@
 
   const TYPES = [
     'Passport', 'ID card or driving licence', 'Residence permit or eVisa', 'Birth, marriage or death certificate',
-    'Education and qualifications', 'Employment and payslips', 'Tax', 'Insurance policy', 'Home and tenancy',
+    'Education and qualifications', 'Employment and payslips', 'Contract or agreement', 'Tax', 'Insurance policy', 'Home and tenancy',
     'Vehicle', 'Medical and health', 'Bank, savings and pension', 'Legal (will, power of attorney)', 'Other',
   ];
   const ui = { type: 'all', q: '' };

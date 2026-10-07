@@ -114,6 +114,17 @@
     } else if (scope.kind === 'debts') {
       // A card's own transaction export still goes to the statement importer.
       if (r.destination !== 'bank_statement') out.destination = 'debt';
+    } else if (scope.kind === 'work') {
+      // Added in Work: it's for work, and the area you were in decides what kind of thing it is.
+      out.context = 'work';
+      if (scope.area === 'invoices') out.destination = paper.includes(r.destination) ? r.destination : 'invoice_to_pay';
+      else if (scope.area === 'bills') out.destination = 'bill';
+      else if (scope.area === 'contracts') {
+        out.destination = 'document';
+        out.document_type = GU.work.CONTRACT;
+      } else if (unclear) out.destination = 'document';
+      out.summary = (r.destination === 'unsure' ? out.title : r.summary || out.title) + ' (added in ' + scope.name + ')';
+      return out;
     } else if (scope.kind === 'section') {
       out.destination = 'section';
       const sec = scope.sectionId ? store.state.sections.find((x) => x.id === scope.sectionId) : store.state.sections.find((x) => x.name.toLowerCase() === String(scope.name || '').toLowerCase());
@@ -202,6 +213,7 @@
     if (result.destination === 'order_history') return openOrders(item);
     const res = GU.brain.file(result, item.files || [], item.note);
     if (!res) return;
+    if (res.ref) workTag(item, res.ref.c, res.ref.id);
     const logId = 'log-' + uid();
     store.commit((s) => {
       s.inbox = s.inbox.filter((i) => i.id !== item.id);
@@ -278,11 +290,25 @@
     GU.trash.offerUndo(entry);
   }
 
+  /* Something added in Work is filed as work, in the folder it was added to. */
+  function workTag(item, c, id) {
+    const sc = item.scope;
+    if (!sc || sc.kind !== 'work' || !['paperwork', 'bills', 'documents', 'tasks'].includes(c)) return;
+    store.commit((s) => {
+      const rec = (s[c] || []).find((x) => x.id === id);
+      if (!rec) return;
+      rec.context = 'work';
+      if (sc.folderId) rec.workFolder = sc.folderId;
+      if (c === 'tasks') rec.listId = GU.work.ensureWorkList(s);
+    });
+  }
+
   /* Opens the destination's own form, prefilled, so details can be checked before filing. */
   function editAndFile(item) {
     const r = item.result || {};
     const files = item.files || [];
-    const done = () => {
+    const done = (rec) => {
+      if (rec && rec.id) for (const c of ['paperwork', 'bills', 'documents', 'tasks']) if ((store.state[c] || []).some((x) => x.id === rec.id)) workTag(item, c, rec.id);
       store.commit((s) => {
         s.inbox = s.inbox.filter((i) => i.id !== item.id);
         s.filedLog.unshift({ id: 'log-' + uid(), date: today(), summary: r.summary || r.title, title: r.title, label: GU.brain.where(r), tab: null, ref: null, via: r.via, files: files.length });

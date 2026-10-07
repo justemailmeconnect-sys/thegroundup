@@ -16,6 +16,7 @@
     document: { label: 'Document', tab: 'documents' },
     warranty: { label: 'Warranty', tab: 'receipts' },
     debt: { label: 'Debt', tab: 'debts' },
+    project: { label: 'Work project', tab: 'work' },
     item: { label: 'Reminder', tab: null },
   };
 
@@ -83,6 +84,7 @@
         push({ kind: 'debt', date: p.date, title: 'Payment to ' + p.debt.name, meta: p.debt.paymentDay ? 'Monthly payment' : 'Expected, going by your past payments', amount: p.amount ? -p.amount : null, ref: { c: 'debts', id: p.debt.id } });
       }
     }
+    if (GU.work) for (const p of GU.work.dates(state, to)) push(Object.assign({ kind: 'project' }, p));
     for (const d of state.documents) {
       if (d.expiryDate && d.expiryDate >= t && d.expiryDate <= to)
         push({ kind: 'document', date: d.expiryDate, title: d.title + ' expires', meta: d.holder || d.type, ref: { c: 'documents', id: d.id } });
@@ -175,6 +177,8 @@
       bump(it.tab || KINDS[it.kind].tab);
     }
     counts.inbox = (state.inbox || []).filter((i) => i.status !== 'reading').length;
+    // Work: anything at work that's late or overdue.
+    counts.work = GU.work ? GU.work.checks(state).filter((c) => c.level === 'crit').length : 0;
     for (const a of attention(state)) if (a.level !== 'info') bump(a.tab);
     counts.today = timeline(state, 0).filter((i) => i.date <= t && i.kind !== 'income' && i.kind !== 'debt' && !(i.kind === 'bill' && !i.action)).length;
     return counts;

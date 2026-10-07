@@ -6,8 +6,8 @@
   const { icon } = GU.ui;
   const store = GU.store;
 
-  /* The menu, in groups: home and inbox; money ahead; paperwork; history. */
-  const GROUPS = [['today', 'inbox'], ['bills', 'debts', 'incomings', 'todos'], ['receipts', 'documents', 'visas'], ['transactions', 'outgoings']];
+  /* The menu, in groups: home, inbox and work; money ahead; paperwork; history. */
+  const GROUPS = [['today', 'inbox', 'work'], ['bills', 'debts', 'incomings', 'todos'], ['receipts', 'documents', 'visas'], ['transactions', 'outgoings']];
   const ORDER = GROUPS.flat();
   GU.tabs = GU.tabs || {};
   const intents = {};
@@ -34,7 +34,7 @@
     /* Opens the right editor for any record, wherever it lives. */
     open(ref) {
       if (ref.c === 'sectionItems') return GU.sections.editItem(ref.id);
-      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts' };
+      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts', projects: 'work', workNotes: 'work' };
       const tab = GU.tabs[map[ref.c]];
       if (tab && tab.edit) tab.edit(ref.id, ref.c);
     },
@@ -51,6 +51,7 @@
         } },
         { icon: 'receipt', label: 'Receipt or invoice', hint: 'Upload a photo or PDF', onClick: () => GU.tabs.receipts.create({ pick: true }) },
         { icon: 'todo', label: 'Task', hint: 'Something to do', onClick: () => GU.tabs.todos.create() },
+        { icon: 'briefcase', label: 'Work project', hint: 'Coming up at work', onClick: () => GU.tabs.work.editProject(null, {}) },
         { icon: 'bills', label: 'Bill', hint: 'A regular payment', onClick: () => GU.tabs.bills.create() },
         { icon: 'coin', label: 'Transaction', hint: 'Money in or out', onClick: () => GU.tabs.transactions.create() },
         { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance…', onClick: () => GU.tabs.debts.create() },

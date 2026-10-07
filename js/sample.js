@@ -151,6 +151,16 @@
       DOC({ title: 'Birth certificate', type: 'Birth, marriage or death certificate', location: 'Blue folder' }),
       DOC({ title: 'P60 2025/26', type: 'Employment and payslips', issueDate: d(-120), location: 'Scanned' }),
       DOC({ title: 'Degree certificate', type: 'Education and qualifications', issueDate: d(-3300), location: 'Frame in the study' }),
+      DOC({ title: 'Freelance agreement with Bloom Bakery', type: 'Contract or agreement', holder: 'Bloom Bakery', issueDate: d(-120), expiryDate: d(50), context: 'work', notes: '30 days’ notice either side. Day rate £300.' }),
+    ];
+    const clientsFolder = { id: 'wf-demo-clients', area: 'projects', name: 'Clients', created: d(-20), demo: true };
+    const projects = [
+      { id: 'pj-' + uid(), name: 'Bloom Bakery online shop', client: 'Bloom Bakery', status: 'Booked', start: d(12), deadline: d(55), value: 1800, workFolder: clientsFolder.id, notes: 'Phase 2 after the redesign. Needs product photos by the start date.', files: [], created: d(-14), demo: true },
+      { id: 'pj-' + uid(), name: 'Kite Cycles brand guide', client: 'Kite Cycles', status: 'In progress', start: d(-9), deadline: d(6), value: 450, workFolder: clientsFolder.id, notes: '', files: [], created: d(-20), demo: true },
+      { id: 'pj-' + uid(), name: 'Portfolio website refresh', status: 'Idea', notes: 'Add the bakery and cycles work once they’re live.', files: [], created: d(-5), demo: true },
+    ];
+    const workNotes = [
+      { id: 'wn-' + uid(), area: 'projects', folder: clientsFolder.id, title: 'Call with Bloom Bakery', body: 'They want online ordering for cakes, click and collect only.\nBudget agreed at £1,800. Send the quote by Friday.', created: d(-3), updated: d(-3), demo: true },
     ];
 
     const C = (texts, doneN) => texts.map((text, i) => ({ id: uid(), text, done: i < doneN }));
@@ -215,6 +225,9 @@
       s.documents.push(...documents);
       s.visas.push(...visas);
       s.tasks.push(...tasks);
+      s.projects.push(...projects);
+      s.workFolders.push(clientsFolder);
+      s.workNotes.push(...workNotes);
       s.sections.push(...sections);
       s.sectionItems.push(...sectionItems);
       s.inbox.push(...inbox);
@@ -226,7 +239,7 @@
     });
   }
 
-  const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog'];
+  const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog', 'projects', 'workFolders', 'workNotes'];
   function clear(silent) {
     const s = store.state;
     const files = [];
