@@ -392,6 +392,7 @@
       (r && r.destination !== 'unsure' ? '<button type="button" class="btn btn--sm btn--primary" data-file="' + esc(item.id) + '">' + icon('check') + (['bank_statement', 'order_history'].includes(r.destination) ? 'Open importer' : 'File it') + '</button>' : '') +
       '<button type="button" class="btn btn--sm" data-place="' + esc(item.id) + '">' + icon('folder') + (r && r.destination !== 'unsure' ? 'Somewhere else' : 'Choose where') + '</button>' +
       (r && !['unsure', 'bank_statement', 'order_history'].includes(r.destination) ? '<button type="button" class="btn btn--sm" data-details="' + esc(item.id) + '">' + icon('edit') + 'Check details</button>' : '') +
+      ((item.files || []).length ? '<button type="button" class="btn btn--sm btn--ghost" data-dl="' + esc(item.files.map((f) => f.id).join(',')) + '" data-dl-name="' + esc((r && r.title) || item.note || 'Inbox files') + '">' + icon('download') + (item.files.length > 1 ? 'Download all' : 'Download') + '</button>' : '') +
       '<button type="button" class="btn btn--sm btn--ghost" data-discard="' + esc(item.id) + '">' + icon('trash') + 'Remove</button>' +
       '</div></div></li>';
   }

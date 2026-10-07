@@ -416,6 +416,7 @@
         ? '<img alt="" ' + (src ? 'src="' + esc(src) + '"' : 'data-file="' + esc(fileId) + '"') + '>'
         : '<span class="att__icon">' + icon('file') + '<em>' + esc((name.split('.').pop() || 'file').slice(0, 4).toUpperCase()) + '</em></span>';
       return '<div class="att">' + media + '<span class="att__name">' + esc(name) + '</span>' +
+        (fileId ? '<button type="button" class="att__dl" data-dl="' + esc(fileId) + '" aria-label="Download ' + esc(name) + '" data-tip="Download">' + icon('download') + '</button>' : '') +
         '<button type="button" class="att__remove" data-remove="' + key + '" aria-label="Remove ' + esc(name) + '">' + icon('x') + '</button></div>';
     }
     function render() {
@@ -508,7 +509,9 @@
         '<span class="viewer__name">' + esc(f.name) + ' · ' + fmtBytes(f.size) + (list.length > 1 ? ' · ' + (i + 1) + ' of ' + list.length : '') + '</span>' +
         '<span class="spacer"></span>' +
         (list.length > 1 ? '<button type="button" class="btn btn--sm" data-prev>' + icon('left') + 'Previous</button><button type="button" class="btn btn--sm" data-next>Next' + icon('chevron') + '</button>' : '') +
-        (url ? '<a class="btn btn--sm" href="' + esc(url) + '" target="_blank" rel="noopener">' + icon('eye') + 'Open</a><a class="btn btn--sm btn--primary" href="' + esc(url) + '" download="' + esc(f.name) + '">' + icon('download') + 'Download</a>' : '');
+        (url ? '<a class="btn btn--sm" href="' + esc(url) + '" target="_blank" rel="noopener">' + icon('eye') + 'Open</a>' : '') +
+        (list.length > 1 ? '<button type="button" class="btn btn--sm" data-dl="' + esc(list.map((x) => x.id).join(',')) + '" data-dl-name="' + esc(title || 'Files') + '">' + icon('download') + 'Download all ' + list.length + '</button>' : '') +
+        (url ? '<button type="button" class="btn btn--sm btn--primary" data-dl="' + esc(f.id) + '">' + icon('download') + 'Download</button>' : '');
       const prev = d.el.querySelector('[data-prev]');
       const next = d.el.querySelector('[data-next]');
       if (prev) prev.onclick = () => { i = (i - 1 + list.length) % list.length; show(); };
@@ -656,7 +659,147 @@
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
+  /* ---------- downloading your files ---------- */
+  // Inside claude.ai, files are saved through the page's downloads permission (you confirm each save),
+  // which accepts these types; anything else, and several files at once, comes as one .zip.
+  const SAVEABLE = /\.(gif|png|jpe?g|webp|mp4|webm|txt|json|md|docx|pptx|epub|csv|ttf|html|svg|pdf|xlsx|zip)$/i;
+  const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'application/pdf': 'pdf', 'text/plain': 'txt', 'text/csv': 'csv', 'image/heic': 'heic' };
+  function withExt(name, type) {
+    const n = String(name || 'file').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'file';
+    return /\.[a-z0-9]{1,5}$/i.test(n) ? n : n + '.' + (EXT[type] || 'bin');
+  }
+  let dlPromise = null;
+  async function saveFile(blob, filename) {
+    let dl = null;
+    if (window.claude && typeof window.claude.use === 'function') {
+      if (!dlPromise) dlPromise = window.claude.use('downloads').catch(() => null);
+      dl = await dlPromise;
+    }
+    if (!dl) {
+      download(blob, filename);
+      return true;
+    }
+    try {
+      await dl.save({ filename, data: blob });
+      return true;
+    } catch (e) {
+      const code = e && e.code;
+      if (code === 'declined') return false;
+      if (code === 'rejected_extension' && !/\.zip$/i.test(filename)) return saveFile(await makeZip([{ name: filename, blob }]), baseName(filename) + '.zip');
+      toast(code === 'rate_limited' ? 'Another download is waiting for you to confirm it. Try again in a moment.'
+        : code === 'too_large' ? 'That’s too big to download here.'
+        : code === 'rejected_extension' || code === 'extension_not_enabled' ? 'This type of file can’t be downloaded here.'
+        : 'Downloads aren’t available here right now.');
+      return false;
+    }
+  }
+  const baseName = (name) => String(name || '').replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'files';
+
+  const CRC = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+  /* A plain .zip (files stored as they are) of [{name, blob}]. */
+  async function makeZip(entries) {
+    const enc = new TextEncoder();
+    const now = new Date();
+    const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const parts = [];
+    const central = [];
+    const used = new Set();
+    let offset = 0;
+    for (const e of entries) {
+      let name = e.name;
+      for (let i = 2; used.has(name.toLowerCase()); i++) name = e.name.replace(/(\.[^.]*)?$/, ' (' + i + ')$1');
+      used.add(name.toLowerCase());
+      const data = new Uint8Array(await e.blob.arrayBuffer());
+      const nm = enc.encode(name);
+      const crc = crc32(data);
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true);
+      local.setUint16(4, 20, true);
+      local.setUint16(6, 0x0800, true);
+      local.setUint16(10, time, true);
+      local.setUint16(12, date, true);
+      local.setUint32(14, crc, true);
+      local.setUint32(18, data.length, true);
+      local.setUint32(22, data.length, true);
+      local.setUint16(26, nm.length, true);
+      parts.push(local, nm, data);
+      const cen = new DataView(new ArrayBuffer(46));
+      cen.setUint32(0, 0x02014b50, true);
+      cen.setUint16(4, 20, true);
+      cen.setUint16(6, 20, true);
+      cen.setUint16(8, 0x0800, true);
+      cen.setUint16(12, time, true);
+      cen.setUint16(14, date, true);
+      cen.setUint32(16, crc, true);
+      cen.setUint32(20, data.length, true);
+      cen.setUint32(24, data.length, true);
+      cen.setUint16(28, nm.length, true);
+      cen.setUint32(42, offset, true);
+      central.push(cen, nm);
+      offset += 30 + nm.length + data.length;
+    }
+    const size = central.reduce((a, p) => a + p.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true);
+    end.setUint16(8, entries.length, true);
+    end.setUint16(10, entries.length, true);
+    end.setUint32(12, size, true);
+    end.setUint32(16, offset, true);
+    return new Blob(parts.concat(central, [end]), { type: 'application/zip' });
+  }
+
+  /* Downloads stored files by id: one file as itself, several as one .zip named after `label`. */
+  async function downloadFiles(ids, label) {
+    const recs = [];
+    for (const id of ids) {
+      const r = await GU.files.get(id);
+      if (r && r.blob) recs.push({ name: withExt(r.name, r.type), blob: r.blob });
+    }
+    if (!recs.length) {
+      toast('That file isn’t available on this device yet. Open it once on the device you added it from so it can sync.');
+      return false;
+    }
+    if (recs.length < ids.length) toast((ids.length - recs.length) + ' of these files isn’t on this device, so it’s left out.');
+    if (recs.length === 1) {
+      const one = recs[0];
+      return SAVEABLE.test(one.name) ? saveFile(one.blob, one.name) : saveFile(await makeZip(recs), baseName(one.name) + '.zip');
+    }
+    return saveFile(await makeZip(recs), baseName((label || 'files') + '.x') + '.zip');
+  }
+  /* A download button for a record's files: put it anywhere; it works through the click handler below. */
+  function dlButton(files, label, cls) {
+    const list = (files || []).filter((f) => f && f.id);
+    if (!list.length) return '';
+    const what = list.length > 1 ? 'all ' + list.length + ' files' : list[0].name;
+    return '<button type="button" class="icon-btn dl-btn' + (cls ? ' ' + cls : '') + '" data-dl="' + esc(list.map((f) => f.id).join(',')) + '" data-dl-name="' + esc(label || '') + '" aria-label="Download ' + esc(what) + '" data-tip="Download ' + esc(what) + '">' +
+      icon('download') + (list.length > 1 ? '<em>' + list.length + '</em>' : '') + '</button>';
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-dl]');
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (b.disabled) return;
+    b.disabled = true;
+    downloadFiles(b.dataset.dl.split(',').filter(Boolean), b.dataset.dlName).finally(() => (b.disabled = false));
+  }, true);
+
   GU.ui = {
+    saveFile, makeZip, downloadFiles, dlButton,
     icon, pill, emptyState, chips, selectOptions, toast, menu, closeMenu,
     openDialog, confirmBox, formDialog, attachments, hydrate, thumbHTML, viewFiles, pickFiles, pickFolder, filesFromDrop, pathOf, folderSummary, dropbar, wireDropbar, download, isImage, ACCEPT,
   };

@@ -60,7 +60,7 @@
       '<em>' + esc([p.party, fmtDate(p.date, { short: true }), p.reference, p.folder ? 'Folder: ' + p.folder : ''].filter(Boolean).join(' · ')) + '</em>' +
       '<span class="doc-row__chips">' + pill(KIND_SHORT[p.kind] || 'Item', 'kind-' + p.kind) + pill(p.context === 'work' ? 'Work' : 'Home', 'muted', p.context === 'work' ? 'briefcase' : 'home') +
       statusPill(p) + (p.claim && !p.claimed ? pill('Claim back', 'info', 'flag') : '') + '</span></button>' +
-      '<span class="doc-row__end">' + (p.amount != null ? '<b class="' + (p.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(p.amount)) + '</b>' : '') + act + '</span></li>';
+      '<span class="doc-row__end">' + (p.amount != null ? '<b class="' + (p.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(p.amount)) + '</b>' : '') + '<span class="doc-row__btns">' + GU.ui.dlButton(p.files, p.title) + act + '</span></span></li>';
   }
 
   function render(root) {

@@ -305,6 +305,14 @@ button.doc-row__main:hover b, .doc-row__title:hover b { color: var(--accent); }
 .att__name { position: absolute; left: 0; right: 0; bottom: 0; background: color-mix(in srgb, var(--ink) 75%, transparent); color: var(--bg); font-size: 10.5px; padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .att__remove { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: color-mix(in srgb, var(--ink) 75%, transparent); color: var(--bg); display: grid; place-items: center; cursor: pointer; }
 .att__remove .ico { width: 13px; height: 13px; }
+.att__dl { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: color-mix(in srgb, var(--ink) 75%, transparent); color: var(--bg); display: grid; place-items: center; cursor: pointer; }
+.att__dl .ico { width: 13px; height: 13px; }
+.att__dl:disabled { opacity: 0.6; cursor: progress; }
+.dl-btn { position: relative; }
+.dl-btn em { position: absolute; right: 1px; bottom: 2px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--accent); color: var(--bg); font: 600 9.5px/15px var(--font-mono); font-style: normal; text-align: center; }
+.dl-btn:disabled { opacity: 0.5; cursor: progress; }
+.doc-row__btns { display: flex; gap: 4px; align-items: center; }
+.doc-row__btns:empty { display: none; }
 
 /* ---------- forms and dialogs ---------- */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }

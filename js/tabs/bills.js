@@ -30,7 +30,7 @@
       '<span class="row-item__date">' + (b.active === false ? '' : '<b>' + esc(fmtDate(b.nextDue, { weekday: true })) + '</b><em>' + esc(relDays(b.nextDue)) + '</em>') + '</span>' +
       '<span class="row-item__status">' + status(b) + '</span>' +
       '<span class="row-item__amt">' + esc(money(b.amount)) + '</span>' +
-      '<span class="row-item__act">' + (canPay ? '<button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(b.id) + '">' + icon('check') + 'Paid</button>' : '') + '</span></li>';
+      '<span class="row-item__act">' + GU.ui.dlButton(b.files, b.name) + (canPay ? '<button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(b.id) + '">' + icon('check') + 'Paid</button>' : '') + '</span></li>';
   }
 
   /* Bills found in your statements, waiting for you to say whether they're right. */

@@ -25,7 +25,7 @@
       '<em>' + esc([it.party, it.date && fmtDate(it.date, { short: true }), it.reference].filter(Boolean).join(' · ')) + '</em>' +
       (it.notes ? '<span class="doc-row__note">' + esc(it.notes.length > 140 ? it.notes.slice(0, 140) + '…' : it.notes) + '</span>' : '') +
       (due ? '<span class="doc-row__chips">' + due + '</span>' : '') + '</button>' +
-      '<span class="doc-row__end">' + (it.amount != null ? '<b>' + esc(money(it.amount)) + '</b>' : '') + '</span></li>';
+      '<span class="doc-row__end">' + (it.amount != null ? '<b>' + esc(money(it.amount)) + '</b>' : '') + GU.ui.dlButton(it.files, it.title) + '</span></li>';
   }
 
   /* Items grouped by the subfolder they came from (ungrouped first). */

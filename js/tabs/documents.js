@@ -32,7 +32,7 @@
       '<div class="doc-row__main"><button type="button" class="doc-row__title" data-edit="' + esc(d.id) + '"><b>' + esc(d.title) + '</b></button>' +
       '<em>' + esc([d.holder, d.location ? 'Kept: ' + d.location : '', d.folder ? 'Folder: ' + d.folder : ''].filter(Boolean).join(' · ')) + (ref ? (d.holder || d.location || d.folder ? ' · ' : '') + ref : '') + '</em>' +
       '<span class="doc-row__chips">' + pill(d.type || 'Other', 'muted') + expiryPill(d) + '</span></div>' +
-      '<span class="doc-row__end"><button type="button" class="icon-btn" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.title) + '">' + icon('edit') + '</button></span></li>';
+      '<span class="doc-row__end"><span class="doc-row__btns">' + GU.ui.dlButton(d.files, d.title) + '<button type="button" class="icon-btn" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.title) + '">' + icon('edit') + '</button></span></span></li>';
   }
 
   function render(root) {

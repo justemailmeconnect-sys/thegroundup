@@ -67,7 +67,7 @@
       '<div><h2>' + esc(d.name) + '</h2><p class="muted">' + esc([d.lender && d.lender !== d.name ? d.lender : '', d.type, d.apr ? d.apr + '% APR' : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       '<div class="debt__pills">' + pills.join('') + '</div>' +
       '<div class="debt__actions">' +
-      (files.length ? '<button type="button" class="thumb-btn" data-files="' + esc(d.id) + '" aria-label="View ' + plural(files.length, 'file') + '">' + thumbHTML(files) + '</button>' : '') +
+      (files.length ? '<button type="button" class="thumb-btn" data-files="' + esc(d.id) + '" aria-label="View ' + plural(files.length, 'file') + '">' + thumbHTML(files) + '</button>' + GU.ui.dlButton(files, d.name) : '') +
       (s.finished ? '<button type="button" class="btn btn--sm" data-close="' + esc(d.id) + '">' + icon('check') + 'Mark paid off</button>' : '<button type="button" class="btn btn--sm" data-balance="' + esc(d.id) + '">Update balance</button>') +
       '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.name) + '">' + icon('edit') + '</button></div></header>' +
       '<div class="debt__figs">' +

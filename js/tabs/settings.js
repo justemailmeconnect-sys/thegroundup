@@ -14,19 +14,6 @@
     ['CHF', 'Swiss franc'], ['PLN', 'Polish złoty'], ['JPY', 'Japanese yen'],
   ].map(([value, label]) => ({ value, label }));
 
-  async function saveFile(blob, filename) {
-    try {
-      const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
-      if (dl) {
-        await dl.save({ filename, data: blob });
-        return;
-      }
-    } catch (e) {
-      if (e && e.code === 'cancelled') return;
-    }
-    GU.ui.download(blob, filename);
-  }
-
   function syncHTML() {
     const sy = GU.sync.status();
     const on = GU.sync.active();
@@ -240,7 +227,7 @@
       if (b('[data-export]')) {
         toast('Preparing your backup…');
         const json = await GU.backup.build();
-        return saveFile(new Blob([json], { type: 'application/json' }), 'the-ground-up-backup-' + GU.util.today() + '.json');
+        return GU.ui.saveFile(new Blob([json], { type: 'application/json' }), 'the-ground-up-backup-' + GU.util.today() + '.json');
       }
       if (b('[data-load-demo]')) {
         await GU.sample.load();
