@@ -55,7 +55,7 @@
     else if (s.estBalance === 0) pills.push(pill('Paid off', 'good', 'check'));
     if (s.nextPayment && !s.finished) {
       const n = daysUntil(s.nextPayment);
-      pills.push(pill('Next payment ' + relDays(s.nextPayment) + (d.paymentDay ? '' : ' (estimate)'), n <= 3 ? 'warn' : 'muted', 'clock'));
+      pills.push(pill('Next payment ' + relDays(s.nextPayment) + (d.paymentDay || s.scheduled ? '' : ' (estimate)'), n <= 3 ? 'warn' : 'muted', 'clock'));
     }
     if (s.months === Infinity) pills.push(pill('Payments don’t cover the interest', 'crit', 'alert'));
     const lender = D.lenderFor(d.lender) || D.lenderFor(d.name);

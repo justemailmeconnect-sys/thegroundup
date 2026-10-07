@@ -487,7 +487,13 @@
   function payments(state, debt) {
     const k = keysFor(debt);
     if (!k.keys.length) return [];
-    return state.transactions.filter((t) => t.amount < 0 && matchesKeys(t, k)).sort((a, b) => b.date.localeCompare(a.date));
+    // A payment plan with a shop (Amazon, say) shows on statements the same as everything else bought there,
+    // so only payments of the plan's own instalment amounts, from its first instalment on, count.
+    const plan = !(debt.match || '').trim() && !lenderFor(debt.lender) && !lenderFor(debt.name) && (debt.schedule || []).length ? debt.schedule : null;
+    const amounts = plan ? new Set(plan.map((i) => round2(i.amount).toFixed(2))) : null;
+    const from = plan ? addDays(plan.reduce((m, i) => (i.date < m ? i.date : m), plan[0].date), -5) : '';
+    return state.transactions.filter((t) => t.amount < 0 && matchesKeys(t, k) && (!plan || (t.date >= from && amounts.has(round2(-t.amount).toFixed(2)))))
+      .sort((a, b) => b.date.localeCompare(a.date));
   }
   /* Money from the lender into your accounts that added to the debt (a loan paid out, a purchase moved to Flex). */
   function borrowing(state, debt) {
