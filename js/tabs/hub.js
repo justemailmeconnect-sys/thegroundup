@@ -12,7 +12,6 @@
   const S = () => GU.sorter;
 
   const AUTO_FILE_AT = 0.75;
-  const RECENT = 30;
   const WORK_OUT = (GU.finance && GU.finance.WORK_OUT) || 'Work expenses';
   const PAYSLIPS = 'Employment and payslips';
   const NOT_FILEABLE = ['unsure', 'bank_statement', 'order_history'];
@@ -385,11 +384,18 @@
     return fn() !== false;
   }
 
+  /* One Undo for a batch that was filed together. */
+  const undoBatch = (logIds) => () => logIds.slice().reverse().forEach((id) => undo(id));
+
   /* Answers 'whose money paid?' for work receipts and invoices, then files them. */
   function answerPayer(ids, payer) {
     const items = store.state.inbox.filter((i) => ids.includes(i.id) && i.result);
-    items.forEach((it) => fileItem(it, Object.assign({}, it.result, { payer, context: 'work' }), { quiet: items.length > 1 }));
-    if (items.length > 1) toast('Filed ' + plural(items.length, 'item') + ' in ' + (payer === 'me' ? 'Get paid back' : parts() ? parts().paysLabel(store.state) : 'Work') + '. Each one can be undone from Recently sorted.');
+    const logIds = [];
+    items.forEach((it) => {
+      const out = fileItem(it, Object.assign({}, it.result, { payer, context: 'work' }), { quiet: items.length > 1 });
+      if (out && out.logId) logIds.push(out.logId);
+    });
+    if (items.length > 1) toast('Filed ' + plural(items.length, 'item') + ' in ' + (payer === 'me' ? 'Get paid back' : parts() ? parts().paysLabel(store.state) : 'Work') + '.', { action: 'Undo', onAction: undoBatch(logIds), timeout: 10000 });
   }
 
   /* Files every item at or above the auto-file confidence. The rest stay, each with the reason.
@@ -413,22 +419,23 @@
       if (out) logIds.push(out.logId);
     }
     if (!opts.quiet) {
-      toast(logIds.length ? 'Filed ' + plural(logIds.length, 'item') + '.' + (left.length ? ' ' + plural(left.length, 'item') + ' left: each one says why.' : ' Each one can be undone from Recently sorted.')
-        : left.length ? 'Nothing was sure enough to file. Each item says why.' : 'Nothing to sort.');
+      toast(logIds.length ? 'Filed ' + plural(logIds.length, 'item') + '.' + (left.length ? ' ' + plural(left.length, 'item') + ' left: each one says why.' : '')
+        : left.length ? 'Nothing was sure enough to file. Each item says why.' : 'Nothing to sort.', logIds.length ? { action: 'Undo', onAction: undoBatch(logIds), timeout: 10000 } : undefined);
       GU.render();
     }
     return { filed: logIds.length, left, logIds };
   }
   /* Files a group of items as they are (you chose them), in one go. */
   function fileGroup(ids) {
-    let n = 0;
+    const logIds = [];
     for (const id of ids) {
       const live = store.state.inbox.find((x) => x.id === id);
       if (live && live.result && !NOT_FILEABLE.includes(live.result.destination) && !asksPayer(live.result)) {
-        if (fileItem(live, live.result, { quiet: true })) n++;
+        const out = fileItem(live, live.result, { quiet: true });
+        if (out && out.logId) logIds.push(out.logId);
       }
     }
-    toast('Filed ' + plural(n, 'item') + '. Each one can be undone from Recently sorted.');
+    toast('Filed ' + plural(logIds.length, 'item') + '.', logIds.length ? { action: 'Undo', onAction: undoBatch(logIds), timeout: 10000 } : undefined);
   }
 
   async function importAllStatements() {
@@ -989,7 +996,7 @@
       undos.slice().reverse().forEach((u) => u());
       return true;
     } });
-    toast('Removed ' + plural(undos.length, 'copy', 'copies') + '. Undo it from Recently sorted.');
+    toast('Removed ' + plural(undos.length, 'copy', 'copies') + '. They’re in Settings › Recently deleted.', { action: 'Undo', onAction: () => undos.slice().reverse().forEach((u) => u()), timeout: 10000 });
   }
 
   /* Small, safe Markdown for the reply (bold and line breaks). */
@@ -1037,17 +1044,6 @@
     return '<div class="hub-hints" aria-label="Things you can say"><span class="hub-hints__label">Try</span>' + list.map((h) => '<button type="button" class="chip hub-hint" data-hint="' + esc(h) + '">' + esc(h) + '</button>').join('') + '</div>';
   }
 
-  function recentHTML(log) {
-    if (!log.length) return '';
-    const byLabel = { claude: 'by Claude', rule: 'by your rule', you: '' };
-    return '<section class="panel hub-recent"><header class="panel__head"><h2>' + icon('check') + 'Recently sorted</h2><span class="muted">the last ' + Math.min(RECENT, log.length) + '</span></header><ul class="rows rows--tight">' + log.map((l) => {
-      const ico = l.kind === 'change' ? (l.by === 'claude' ? 'spark' : 'funnel') : l.by === 'rule' ? 'tag' : l.by === 'claude' ? 'spark' : 'check';
-      const meta = [fmtDate(l.date, { short: true }), l.kind === 'change' ? '' : l.label, byLabel[l.by] || (l.via && l.via !== 'offline' ? 'read by ' + GU.brain.modeLabel(l.via).replace(/ \(.*\)/, '') : '')].filter(Boolean).join(' · ');
-      return '<li class="row-item' + (l.kind === 'change' ? ' row-item--change' : '') + '"><span class="row-item__icon">' + icon(ico) + '</span><span class="row-item__text"><b>' + esc(l.summary || l.title) + '</b><em>' + esc(meta) + '</em></span>' +
-        '<span class="row-item__act">' + (l.ref || l.tab ? '<button type="button" class="btn btn--sm btn--ghost" data-open-log="' + esc(l.id) + '">Open</button>' : '') +
-        (undoers.has(l.id) ? '<button type="button" class="btn btn--sm btn--ghost" data-undo="' + esc(l.id) + '">Undo</button>' : '') + '</span></li>';
-    }).join('') + '</ul></section>';
-  }
   function rulesHTML() {
     const list = S().rules();
     return '<details class="panel panel--details hub-rules"' + (ui.rulesOpen ? ' open' : '') + '><summary class="panel__head"><h2>' + icon('tag') + 'Your rules</h2><span class="muted">' +
@@ -1094,7 +1090,6 @@
     const statements = ready.filter((i) => i.result && i.result.destination === 'bank_statement');
     const sortable = ready.filter((i) => !S().holdReason(i, idx));
     const work = inWork();
-    const log = s.filedLog.slice(0, RECENT);
     const agent = !!(conn && conn.tools >= 4);
     GU.brain.mode().then((m) => {
       const changed = m !== modeCache;
@@ -1153,7 +1148,6 @@
       (all.length ? '<ul class="hub-list">' + groups.map((g) => groupHTML(g, idx)).join('') + shownSingles.map((i) => cardHTML(i, idx)).join('') + reading.slice(0, 6).map((i) => cardHTML(i, idx)).join('') + '</ul>' +
         (singles.length > 60 ? '<p class="panel__foot muted">Showing 60 of ' + singles.length + '. Sort some to see the rest.</p>' : '')
         : '<div class="panel__body">' + emptyState({ icon: 'funnel', title: 'All sorted', text: 'Nothing is waiting. Drop files here, paste a screenshot, or type a note or an instruction above.' }) + '</div>') + '</section>' +
-      recentHTML(log) +
       rulesHTML() +
       '<div class="dropcover" hidden><div>' + icon('upload') + '<b>Drop to sort it</b></div></div>';
 

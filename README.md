@@ -133,7 +133,6 @@ One page, shared by Home and Work, that sorts out whatever you put in it. It rep
 - **Duplicates:** anything that looks like a record you already have (the same file, or the same amount and date from the same place) says so, with **Open it**, **Add the file to it**, **File anyway** and **Remove**. An invoice with the same order number as one you have is added to it, as before.
 - **Groups:** similar things are grouped ("3 Amazon receipts → Work › Get paid back") with one action for all of them.
 - **Sort everything** files everything it's sure enough about; the rest stay, each with the reason.
-- **Recently sorted** lists the last 30 things filed and every change the agent made ("Made a section, Home › Pets"), each with **Open** and **Undo** while the page stays open.
 - **Your rules:** "Always put PureGym in Spending › Gym". Rules are used before Claude, and a card filed by one says *By your rule*. After you change a card's place it offers **Always put … here**. Rules sync with everything else and can be removed from the hub.
 - **Your categories:** categories you make (in the hub or in Settings) appear under *Your categories* in every category list and work with budgets.
 

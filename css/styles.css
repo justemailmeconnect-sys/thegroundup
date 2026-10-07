@@ -1547,7 +1547,7 @@ button.hub-card__part:hover { color: var(--ink); }
 .hub-group__list > li + li { border-top: 1px solid var(--line); }
 .hub-card--nested { padding: 12px 14px; grid-template-columns: 40px minmax(0, 1fr); }
 .hub-card--nested .thumb { width: 40px; height: 48px; }
-/* Recently sorted and your rules. */
+/* Your rules. */
 .hub-recent .row-item--change .row-item__icon { background: var(--accent-soft); color: var(--accent); }
 .hub-rules { margin-bottom: 18px; }
 .hub-rules summary .muted { display: inline-flex; align-items: center; gap: 6px; }
