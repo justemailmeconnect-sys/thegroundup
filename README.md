@@ -6,7 +6,7 @@ Everything lives in your own browser. There is no server and no account, and not
 
 ## What's inside
 
-The site has two parts, like the two halves of a shop's website: **Home** is your own life and money, and **Work** is the business you work for (a job, or a family business you help run). A **Home | Work** switch is always on screen: at the top of the menu on a computer, and in a bar along the top on a phone. Each part shows only its own pages. **Inbox**, **Ask Claude** and **Settings** are shared, and send things to the right part.
+The site has two parts, like the two halves of a shop's website: **Home** is your own life and money, and **Work** is the business you work for (a job, or a family business you help run). A **Home | Work** switch is always on screen: at the top of the menu on a computer, and in a bar along the top on a phone. Each part shows only its own pages. The **Sorting hub**, **Ask Claude** and **Settings** are shared, and send things to the right part.
 
 ### Home
 
@@ -44,7 +44,7 @@ Every Work page keeps folders, search and notes.
 
 | Page | What it does |
 | --- | --- |
-| **Inbox** | Throw anything here: files, photos, pasted text or whole folders (subfolders included). The assistant reads each item, files it automatically when it's sure (with undo) and keeps the rest for you to check, with a **File all** button for big batches. Your folder names help: things in a "Car" folder go to a Car section, things in "Work receipts" go to Work. |
+| **Sorting hub** | Put anything here (files, photos, pasted text, whole folders) or tell it what to do. It works out where each thing goes, files it in Home or Work when it's sure and keeps the rest for you to check. See [The Sorting hub](#the-sorting-hub) below. |
 | **Ask Claude** | A chat with Claude from any page. It can look things up across the site or make changes you can undo. |
 | **Settings** | About you, the business you work for, how the assistant reads things, reminders, accounts, category rules, backup and restore. |
 
@@ -57,7 +57,7 @@ Two questions sort almost everything:
 1. **Is it for the business you work for?** If not, it goes in Home.
 2. **If it is, did the money come out of your own account, card, PayPal or Amazon?** Yes: Work › Get paid back. No (the business paid, or will pay): Work › … pays.
 
-The full guide, with a row for each kind of thing, is under **+ Add › Where does it go?**, in the Inbox and in Settings. Anything can be moved between Home and Work from its ⋯ menu or its **For** field.
+The full guide, with a row for each kind of thing, is under **+ Add › Where does it go?**, in the Sorting hub and in Settings. Anything can be moved between Home and Work from its ⋯ menu or its **For** field.
 
 ### Two kinds of work money
 
@@ -115,19 +115,39 @@ It picks the best reader available:
 2. **Claude with your own API key.** Anywhere else, add an Anthropic API key in Settings → *How your assistant reads things*. The key is stored only in your browser and sent only to Anthropic, together with the item being read. It uses `claude-opus-5-5` by default (changeable in Settings) and costs roughly a penny or two per item.
 3. **Offline reader.** With neither, it reads text from PDFs and (optionally) photos on your own device and sorts them with keyword rules. Clear receipts, invoices and letters work well; messy photos less so.
 
-It files an item automatically when it's confident and shows an Undo button; anything it's unsure about waits in the Inbox with buttons to file it, choose somewhere else or check the details first. If a letter asks you to do something by a date, it also adds a follow-up task.
+It files an item automatically when it's confident and shows an Undo button; anything it's unsure about waits in the Sorting hub with buttons to file it, change its place or tell it where it goes. If a letter asks you to do something by a date, it also adds a follow-up task.
+
+## The Sorting hub
+
+One page, shared by Home and Work, that sorts out whatever you put in it. It replaces the old Inbox (old `#inbox` links open it).
+
+- **One box for everything.** Drop, choose or photograph files, pick a whole folder, paste a screenshot, or type. What you type can be something to keep ("Dentist 14 Nov 3pm", "paid £18 for printer paper for KTK") or an instruction:
+  - "make a Pets section and put the vet bill in it"
+  - "all the Amazon receipts from September were for KTK, I paid"
+  - "create a Gym category for PureGym payments"
+  - "file everything you're sure about"
+  - "move the Netlify receipt to Get paid back"
+- **With Claude** (in the Claude app, or with your API key), a sorting agent decides which it is and does it: it can file waiting items, make sections, to-do lists, categories and Work folders when they don't exist yet, move things you've already filed, add rules, and change the category of bank lines when you ask. Its short reply appears under the box as it works, with **Stop**, and ends with what it did. Text inside your files and records is only ever read as information, never followed as an instruction. Long pasted text, like an email, is always treated as something to keep.
+- **Without Claude**, a small reader on your device understands "make a … section/list/category/folder", "put/move … in/to …", "file everything you're sure about" and "always put … in …". Anything else typed is kept as a note and sorted as before; an instruction it can't follow says *Connect Claude in Settings to sort with instructions*.
+- **Waiting to be sorted:** each card shows what was read (title, amount, date, who), where it will go in full ("Work › Get paid back", "Home › Pets" with a **new section** marker when filing makes the place), how sure it is and why. **File it**, **Change place** (including **New section…**, **New list…** and **New category…**), **Tell me where…** (type "this is for the wedding" or "dad paid this" and it's sorted again) and **Remove**. Work paperwork still asks *Whose money paid?* with one-tap buttons.
+- **Duplicates:** anything that looks like a record you already have (the same file, or the same amount and date from the same place) says so, with **Open it**, **Add the file to it**, **File anyway** and **Remove**. An invoice with the same order number as one you have is added to it, as before.
+- **Groups:** similar things are grouped ("3 Amazon receipts → Work › Get paid back") with one action for all of them.
+- **Sort everything** files everything it's sure enough about; the rest stay, each with the reason.
+- **Recently sorted** lists the last 30 things filed and every change the agent made ("Made a section, Home › Pets"), each with **Open** and **Undo** while the page stays open.
+- **Your rules:** "Always put PureGym in Spending › Gym". Rules are used before Claude, and a card filed by one says *By your rule*. After you change a card's place it offers **Always put … here**. Rules sync with everything else and can be removed from the hub.
+- **Your categories:** categories you make (in the hub or in Settings) appear under *Your categories* in every category list and work with budgets.
 
 ## Amazon and other online orders
 
 Online order invoices are filed as **paid invoices**, never as bills to pay, and are matched up by order number so nothing is filed twice.
 
-- **Every order at once:** on Amazon go to *Your Account → Request your data*, choose *Your Orders*, and when the email arrives open the zip and drop the `Retail.OrderHistory` CSV into the Inbox (or use **Receipts → Import Amazon orders**). Each order from the last 3 years (you can change the date) becomes a paid invoice with its items, total and order number. Cancelled orders are skipped.
-- **The invoice PDFs:** Amazon has no "download all" for personal accounts. Claude in Chrome can work through your orders while you're signed in and download each invoice. Drop all the PDFs into the Inbox in one go: each becomes its own record, or is attached to its order if you've already imported it.
-- **A pasted list:** paste a table that starts with `Order Date,Order ID,Items,Total` into the Inbox and it imports the same way.
+- **Every order at once:** on Amazon go to *Your Account → Request your data*, choose *Your Orders*, and when the email arrives open the zip and drop the `Retail.OrderHistory` CSV into the Sorting hub (or use **Receipts → Import Amazon orders**). Each order from the last 3 years (you can change the date) becomes a paid invoice with its items, total and order number. Cancelled orders are skipped.
+- **The invoice PDFs:** Amazon has no "download all" for personal accounts. Claude in Chrome can work through your orders while you're signed in and download each invoice. Drop all the PDFs into the Sorting hub in one go: each becomes its own record, or is attached to its order if you've already imported it.
+- **A pasted list:** paste a table that starts with `Order Date,Order ID,Items,Total` into the Sorting hub and it imports the same way.
 
 ## Importing bank statements
 
-Use **Bank → Import statements**, drop statements on the Bank tab, or drop them in the Inbox. You can import one file, several, or a whole folder at once; each statement is matched to an account by its bank.
+Use **Bank → Import statements**, drop statements on the Bank tab, or drop them in the Sorting hub. You can import one file, several, or a whole folder at once; each statement is matched to an account by its bank.
 
 | Bank | What works |
 | --- | --- |
@@ -144,7 +164,7 @@ Live bank connections (Open Banking) need a small server and an account with a p
 
 ## Planning ahead
 
-Home's menu is grouped by what you need: **Overview** and **Inbox**; money ahead (**Bills**, **Debts**, **Income**, **Plans**); money so far (**Bank**, **Spending**); paperwork (**Receipts**, **Documents**, **Visas**); and life (**To-do** and your sections). Work's menu has **Overview** and **Inbox**; money (**Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Cost forecast**, **Contracts & documents**).
+Home's menu is grouped by what you need: **Overview** and the **Sorting hub**; money ahead (**Bills**, **Debts**, **Income**, **Plans**); money so far (**Bank**, **Spending**); paperwork (**Receipts**, **Documents**, **Visas**); and life (**To-do** and your sections). Work's menu has **Overview** and the **Sorting hub**; money (**Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Cost forecast**, **Contracts & documents**).
 
 Home's overview starts from your balances (from your statements, or what you put in with **Update balances**) and adds everything expected from today: income on its next dates, bills, debt payments, every instalment of a payment schedule and unpaid invoices. Each account is followed separately, so if your income lands in one account and your bills leave another you'll see which one runs short and when.
 
@@ -158,7 +178,7 @@ Home's overview starts from your balances (from your statements, or what you put
 
 **Debts** work from what you tell me plus what your statements show:
 
-- Add a debt by hand, or drop a credit card statement, loan or finance agreement, or a Klarna / Pay in 3 screenshot onto the Debts tab or the Inbox. I read the lender, balance, monthly payment, interest rate and payment date. A later statement from the same lender updates that debt instead of adding a new one.
+- Add a debt by hand, or drop a credit card statement, loan or finance agreement, or a Klarna / Pay in 3 screenshot onto the Debts tab or the Sorting hub. I read the lender, balance, monthly payment, interest rate and payment date. A later statement from the same lender updates that debt instead of adding a new one.
 - Payments to the lender are found in your bank transactions by name (KLARNA, PAYPAL PAYIN3, BARCLAYCARD, "Flex" on Monzo and around 25 other UK lenders; you can add your own names). They're labelled **Debt repayments** in your spending.
 - **Left to pay** is the balance you gave me, less what you've paid since, plus interest if you gave me the rate, worked out only over days your statements cover. For a fixed-term loan or car finance with no current balance, it's the payments still to make.
 - Regular payments to lenders you haven't added show up as **Payments that look like debts**, ready to track in one tap. Plans with no payments for two months are flagged as probably paid off.
@@ -177,12 +197,12 @@ Each one has **Keep**, **Not a bill** (removed and never suggested again), and u
 
 Every page that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts, Documents, Bills, Bank, each visa application, each of your own sections and every Work page. On Get paid back, files dropped are always things you paid for; on the business's own page, they're always its money. Files uploaded there stay in that tab; the assistant only reads them to fill in the details. Subfolders are kept as groups.
 
-In the Inbox, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements*, *Debts* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, the Debts tab, that visa application). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
+In the Sorting hub, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements*, *Debts* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, the Debts tab, that visa application). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
 
 ## Your data, sync and backups
 
 - **Undo and Recently deleted:** every delete (a bill, debt, receipt, document, visa application, income, task, transaction, section item, a whole section or a bank account) shows **Undo** straight away and goes to **Settings → Recently deleted**, where it can be restored for 30 days on any of your devices. Attached files are only removed for good once those 30 days are up.
-- **Downloading what you uploaded:** every row with files (receipts and invoices, documents, bills, debts, visa applications, your own sections and Inbox items) has a download button, as do the file viewer and each attachment in an edit form. One file downloads as itself; a record with several files downloads as one .zip named after it. On claude.ai you confirm each download first, and file types it can't save directly (such as HEIC photos) come inside a .zip. A file that hasn't synced to this device yet can be downloaded from the device that added it.
+- **Downloading what you uploaded:** every row with files (receipts and invoices, documents, bills, debts, visa applications, your own sections and things waiting in the Sorting hub) has a download button, as do the file viewer and each attachment in an edit form. One file downloads as itself; a record with several files downloads as one .zip named after it. On claude.ai you confirm each download first, and file types it can't save directly (such as HEIC photos) come inside a .zip. A file that hasn't synced to this device yet can be downloaded from the device that added it.
 
 - **On claude.ai** (opened from your artifact link while signed in) everything syncs across your devices: open the same link on your phone, tablet or another computer and it's all there, and changes appear on your other devices within seconds. Records are kept in your own private space in the artifact's database (`data/users/<you>/`), which nobody else can read even if you share the link. Uploaded files are stored as artifact assets and downloaded to a device the first time you open them there. Word, Excel and HEIC photos can't be stored this way, so they stay on the device that added them. Your Anthropic API key is never synced. **Settings → Sync across your devices** shows the status.
 - Each device also keeps a full copy in the browser (`localStorage` for records, IndexedDB for files), so it works offline and catches up when it reconnects. If the same thing is changed on two devices while one is offline, the device that reconnects keeps its version and adds anything new from the other.
@@ -223,4 +243,4 @@ No frameworks and no build step: plain HTML, CSS and JavaScript. PDF text is rea
 
 - Encrypt everything stored in the browser with a passcode.
 - Live bank feeds through an Open Banking provider.
-- Forward emails (receipts, letters) straight into the Inbox.
+- Forward emails (receipts, letters) straight into the Sorting hub.

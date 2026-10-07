@@ -319,12 +319,24 @@
   }
 
   /* Saves the form in one commit: defaults and legacy flags through GU.workMoney.normalise, and for something
-     you just started claiming back, your bank payment when it's sure. Returns {rec, linked}. */
-  function save(v, existing) {
+     you just started claiming back, your bank payment when it's sure. A new claim for a monthly work bill's payment
+     that already has its claim adds its files to that one instead (twin). stageShown: the stage the form opened
+     with. Returns {rec, linked, twin}. */
+  function save(v, existing, stageShown) {
     const W = wm();
     const prev = existing ? JSON.parse(JSON.stringify(existing)) : null;
     const rec = Object.assign(existing ? Object.assign({}, existing) : { id: 'p-' + uid(), created: today() }, v);
     delete rec.outNote;
+    // An invoice you've sent the business for your own spending is a claim, sent to them (paid back once they've
+    // paid it), as the Inbox files one: otherwise it would show on no page at all.
+    let outClaim = false;
+    if (rec.context === 'work' && rec.kind === 'invoice-out') {
+      outClaim = true;
+      const paid = rec.status === 'paid';
+      Object.assign(rec, { kind: 'receipt', payer: 'me', claimStatus: paid ? 'paid-back' : 'sent', claimedDate: rec.claimedDate || rec.date || today() });
+      if (paid && !rec.repaidDate) rec.repaidDate = rec.paidDate || today();
+      v = Object.assign({}, v, { kind: 'receipt', payer: 'me', claimStatus: rec.claimStatus });
+    }
     // Questions that weren't asked keep what the record had.
     const keep = (k) => {
       if (existing && existing[k] !== undefined) rec[k] = existing[k];
@@ -345,8 +357,28 @@
       rec.paidDate = '';
     }
     let linked = null;
+    let twin = null;
+    if (prev && W && W.isClaim(prev) && STAGES_SHOWN.includes(stageShown)) rec._stageShown = stageShown;
     store.commit((st) => {
       if (W) W.normalise(rec, prev);
+      if (outClaim && W && !rec.packId) rec.packId = W.newPackId(st, rec.claimedDate || today(), [rec.id]);
+      // New, and already in Get paid back: the claim a monthly work bill made for this payment, or (for an invoice
+      // you sent) the claim for the same money. Its files go on that claim rather than claiming it twice.
+      twin = existing || !W ? null : (outClaim && W.outTwin ? W.outTwin(st, rec) : null) || (W.billTwin ? W.billTwin(st, rec) : null);
+      if (twin) {
+        const before = {};
+        for (const k of ['files', 'reference', 'notes', 'claimStatus', 'claim', 'claimed', 'claimedDate', 'packId']) before[k] = twin[k] === undefined ? undefined : JSON.parse(JSON.stringify(twin[k]));
+        const ids = new Set((twin.files || []).map((f) => f && f.id));
+        twin.files = (twin.files || []).concat((rec.files || []).filter((f) => f && !ids.has(f.id)));
+        if (!twin.reference && rec.reference) twin.reference = rec.reference;
+        if (rec.notes && !String(twin.notes || '').includes(rec.notes)) twin.notes = [twin.notes, rec.notes].filter(Boolean).join('\n');
+        if (outClaim && W.stage(twin) === 'to-send') {
+          Object.assign(twin, { claimStatus: 'sent', claimedDate: rec.claimedDate || today(), packId: W.newPackId(st, rec.claimedDate || today(), [twin.id]) });
+          W.mirror(twin);
+        }
+        twin = { rec: twin, before };
+        return;
+      }
       if (W && W.isClaim(rec) && !rec.purchaseTx && !(prev && W.isClaim(prev))) {
         const r = W.purchaseFor(st, rec);
         if (r.sure && r.tx) {
@@ -360,8 +392,25 @@
       if (i >= 0) st.paperwork[i] = rec;
       else st.paperwork.push(rec);
     });
+    if (twin) {
+      const id = twin.rec.id;
+      const before = twin.before;
+      toast('Added to ‘' + (twin.rec.title || 'the claim') + '’ in Get paid back: ' + (outClaim ? 'it’s the same money.' : 'your monthly bill had already claimed this payment.'), {
+        action: 'Undo',
+        onAction: () => store.commit((st) => {
+          const x = st.paperwork.find((p) => p.id === id);
+          if (!x) return;
+          for (const k of Object.keys(before)) {
+            if (before[k] === undefined) delete x[k];
+            else x[k] = before[k];
+          }
+        }),
+      });
+      return { rec: twin.rec, linked: null, twin: true };
+    }
     return { rec, linked };
   }
+  const STAGES_SHOWN = ['to-send', 'sent', 'paid-back'];
 
   /* Opens the form for a new item. opts.files: files to attach; opts.pick: open the file picker first;
      opts.values: details to prefill; opts.onSaved(rec): called after saving. It's for Home or Work by the
@@ -393,7 +442,8 @@
       noAutofocus: !!(files && files.length),
       onChange: relabel,
       onSubmit: (v) => {
-        const { rec, linked } = save(v, null);
+        const { rec, linked, twin } = save(v, null);
+        if (twin) return;
         if (isWork(rec)) workToast(rec, 'Filed in', linked);
         else toast('Filed ' + rec.title);
         if (opts.onSaved) opts.onSaved(rec);
@@ -414,7 +464,7 @@
       onChange: relabel,
       onSubmit: (v) => {
         const pageWas = isWork(p) ? workPage(p).tab : 'receipts';
-        const { rec, linked } = save(v, p);
+        const { rec, linked } = save(v, p, values.claimStatus);
         const page = isWork(rec) ? workPage(rec).tab : 'receipts';
         if (page !== pageWas) {
           if (isWork(rec)) workToast(rec, 'Moved to', linked);

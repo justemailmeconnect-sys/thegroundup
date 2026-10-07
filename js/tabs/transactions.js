@@ -17,7 +17,7 @@
   const wm = () => GU.workMoney || null;
   const co = (s, cap) => (GU.parts && GU.parts.co ? GU.parts.co(s, cap) : cap ? 'The company' : 'the company');
   const hasEmployer = (s) => !!(wm() && wm().employer(s || store.state).set);
-  const WAGE_WORDS = /\bwages?\b|salary|payroll/i;
+  const WAGE_WORDS = /\bwages?\b|salary|payroll|\bbonus|overtime|holiday pay|sick pay|commission/i;
   /* Your wages from the employer: a 'Salary' line that names them, or one that says wages and is about
      your usual pay from them (some banks leave the name off). */
   function isWages(s, t) {
@@ -517,14 +517,15 @@
   }
 
   /* A payment you made for your employer goes into Get paid back: linked to the one thing already waiting
-     for a payment like it, or added as something new. When a few could be it, you pick. */
-  function addToClaims(id) {
+     for a payment like it, or added as something new. When a few could be it, you pick. was: the line's category
+     before you said it was for work, put back if it's ever taken out of Get paid back. */
+  function addToClaims(id, was) {
     const w = wm();
     const s = store.state;
     const tx = s.transactions.find((t) => t.id === id);
     if (!w || !tx || !(tx.amount < 0)) return;
     const fits = w.claims(s, 'open').filter((x) => !x.p.purchaseTx && w.purchaseFor(s, x.p).options.some((o) => o.id === id));
-    if (fits.length < 2) return w.claimFromTx([id]);
+    if (fits.length < 2) return w.claimFromTx([id], { was });
     formDialog({
       title: 'Which one was this for?',
       intro: esc(money(Math.abs(tx.amount)) + ' on ' + fmtDate(tx.date, { short: true }) + ' could be any of these in Get paid back.'),
@@ -533,8 +534,8 @@
           .concat([{ value: '__new', label: 'Something new' }]) }],
       submitLabel: 'Add to Get paid back',
       onSubmit: (v) => {
-        if (v.claim === '__new') w.claimFromTx([id], { noLink: true });
-        else w.linkPurchase(v.claim, id);
+        if (v.claim === '__new') w.claimFromTx([id], { noLink: true, was });
+        else w.linkPurchase(v.claim, id, { was });
       },
     });
   }
@@ -572,16 +573,19 @@
       }
     }
     let category;
+    let wasCat = '';
     if (shown && CATEGORY_FOR[choice]) category = CATEGORY_FOR[choice];
     else if (shown && choice === 'work') {
-      // Get paid back marks the line 'Work expenses' and keeps the category it had, for Undo.
+      // 'Work expenses' straight away, so it's out of your spending even if you close the picker that follows. The
+      // category it had is kept on the claim, for Undo and 'Mine'.
       const cur = existing && s.transactions.find((t) => t.id === existing.id);
-      category = !w || !w.claimFromTx ? F.WORK_OUT : (cur && cur.category) || '';
+      wasCat = (cur && cur.category) || '';
+      category = F.WORK_OUT;
     }
     const id = save(v, existing, extra, category);
     if (!shown || !w) return { id, choice };
     const now = linksOf(store.state, id);
-    if (choice === 'work' && !now.purchase) setTimeout(() => addToClaims(id), 0);
+    if (choice === 'work' && !now.purchase) setTimeout(() => addToClaims(id, wasCat), 0);
     else if (choice === 'back' && !now.repaid.length) {
       setTimeout(() => (GU.payback && GU.payback.repaymentDialog ? GU.payback.repaymentDialog(id) : w.reconcile && w.reconcile()), 0);
     } else if (choice === 'mine' && existing && existing.category === F.WORK_OUT && v.direction !== 'in' && !dropPurchase && w.notWork) w.notWork([id]);

@@ -50,6 +50,8 @@
       sections: [],
       sectionItems: [],
       inbox: [],
+      // The Sorting hub's 'Always put <match> in <place>' rules: {id, match, destination, context, payer, …, created}.
+      sortRules: [],
       filedLog: [],
       remoteFiles: {},
       trash: [],
@@ -62,6 +64,7 @@
     if (!s.meta || typeof s.meta !== 'object' || Array.isArray(s.meta)) s.meta = b.meta;
     s.settings = Object.assign({}, b.settings, s.settings);
     s.settings.budgets = s.settings.budgets || {};
+    if (!Array.isArray(s.sortRules)) s.sortRules = [];
     return s;
   }
 
@@ -140,7 +143,7 @@
   /* ---------- Recently deleted ---------- */
   const KEEP_DAYS = 30;
   const KIND = { bills: 'Bill', debts: 'Debt', paperwork: 'Receipt or invoice', documents: 'Document', visas: 'Visa application', incomeSources: 'Income', tasks: 'Task',
-    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea' };
+    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea', sortRules: 'Sorting rule' };
   const trash = {
     KIND,
     /* Adds a deleted record (and anything deleted along with it, in `extra`) to the bin. Call inside a commit. */

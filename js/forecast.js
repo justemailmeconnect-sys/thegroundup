@@ -20,13 +20,32 @@
   const stageOf = (p) => (WM() ? WM().stage(p) : p.claimed ? 'sent' : 'to-send');
   const leftOf = (p) => (WM() ? WM().left(p) : Math.abs(Number(p.amount) || 0));
 
+  /* Claims a repayment already in your bank looks like it's for (waiting for your Yes): that money is in your
+     balance already, so it isn't counted as still to come. */
+  const awaitingOf = (state) => (WM() && WM().awaiting ? WM().awaiting(state) : { ids: new Set(), rows: [], total: 0 });
   /* Sent claims grouped as they went, each with the day the money should be back. Not counted when that day
      has passed (late) or there's no sent date to go on. */
   function sentPacks(state) {
     const W = WM();
     if (!W) return [];
     const e = employerOf(state);
-    return W.packs(state).filter((pk) => pk.left > 0).map((pk) => Object.assign({}, pk, { due: pk.date ? addDays(pk.date, e.repayDays) : '' }));
+    const wait = awaitingOf(state).ids;
+    return W.packs(state).map((pk) => {
+      const items = wait.size ? pk.items.filter((x) => !wait.has(x.p.id)) : pk.items;
+      return Object.assign({}, pk, { items, left: items === pk.items ? pk.left : round2(sum(items, (x) => x.left)), due: pk.date ? addDays(pk.date, e.repayDays) : '' });
+    }).filter((pk) => pk.left > 0 && pk.items.length);
+  }
+
+  /* Whether an invoice you're paying for work is a monthly work bill's payment: a bill you pay with the same
+     amount, falling due within 3 days of it, that it belongs to or shares a word with. */
+  function billPaysIt(state, p) {
+    const words = WM() && WM().words ? WM().words : null;
+    const mine = words ? new Set(words((p.party || '') + ' ' + (p.title || ''))) : new Set();
+    const amt = Math.abs(Number(p.amount) || 0);
+    return (state.bills || []).some((b) => b.active !== false && b.nextDue && isWorkBill(b) && billPayer(b) === 'me' &&
+      Math.abs(Math.abs(Number(b.amount) || 0) - amt) < 0.005 &&
+      (p.billId === b.id || (words && words([b.name, b.payee, b.foundKey].filter(Boolean).join(' ')).some((w) => mine.has(w)))) &&
+      F.occurrences(b.nextDue, b.frequency, b.anchorDay, addDays(p.dueDate, -3), addDays(p.dueDate, 3)).length > 0);
   }
 
   /* Everything expected to come in or go out from `from` to `to`, oldest first. */
@@ -103,6 +122,8 @@
       // and comes back later if you send it straight away.
       const lane = laneOf(p);
       if (lane === 'ktk' || lane === 'unsorted') continue;
+      // The invoice for a monthly work bill you pay: the bill's own payment above counts it already.
+      if (lane === 'back' && billPaysIt(state, p)) continue;
       const when = p.dueDate < from ? from : p.dueDate;
       const ref = { c: 'paperwork', id: p.id };
       const back = lane === 'back';
@@ -120,18 +141,20 @@
   }
 
   /* What the business owes you that the plan leaves out: things not sent yet, and sent ones that should have
-     been paid back before `from`. Counting them would flatter the lowest point. */
+     been paid back before `from`. Counting them would flatter the lowest point. Repayments that have come in but
+     wait for your Yes are listed apart (confirm): that money is in your balance already. */
   function reclaimNotCounted(state, from) {
     const W = WM();
-    const none = { toSend: [], late: [], toSendTotal: 0, lateTotal: 0, total: 0, count: 0, oldest: null };
+    const none = { toSend: [], late: [], confirm: [], toSendTotal: 0, lateTotal: 0, confirmTotal: 0, total: 0, count: 0, oldest: null };
     if (!W) return none;
     const d = W.dueBack(state);
+    const wait = awaitingOf(state);
     const late = [];
     for (const pk of sentPacks(state)) if (!pk.due || pk.due < from) for (const x of pk.items) if (x.left > 0) late.push(x);
-    const toSend = d.toSend.filter((x) => x.left > 0 || x.noAmount);
+    const toSend = d.toSend.filter((x) => (x.left > 0 || x.noAmount) && !wait.ids.has(x.p.id));
     const toSendTotal = round2(sum(toSend, (x) => x.left));
     const lateTotal = round2(sum(late, (x) => x.left));
-    return { toSend, late, toSendTotal, lateTotal, total: round2(toSendTotal + lateTotal), count: toSend.length + late.length, oldest: d.oldest };
+    return { toSend, late, confirm: wait.rows, toSendTotal, lateTotal, confirmTotal: round2(wait.total), total: round2(toSendTotal + lateTotal), count: toSend.length + late.length, oldest: d.oldest };
   }
 
   /* Where you'll be: running totals overall and for each account, the lowest point and the end figure. */

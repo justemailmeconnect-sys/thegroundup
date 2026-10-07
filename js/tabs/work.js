@@ -56,6 +56,11 @@
   const ideaPayer = (i) => (GU.costs.ideaPayer ? GU.costs.ideaPayer(i) : i.payer === 'me' || i.payer === 'company' ? i.payer : null);
   /* An invoice the business still has to pay. */
   const isWaiting = (p) => p.kind === 'invoice-in' && p.status !== 'paid' && laneOf(p) === 'ktk';
+  /* An older work invoice you sent the business (for your own spending): not a claim yet, so it waits under
+     Not sorted here, with one tap to put it in Get paid back, rather than showing nowhere. */
+  const looseOut = (p) => !!p && p.context === 'work' && p.kind === 'invoice-out' && laneOf(p) === 'back';
+  /* Work paperwork waiting for you to sort: nobody has said whose money it is, or an invoice like that. */
+  const needsSort = (p) => laneOf(p) === 'unsorted' || looseOut(p);
   /* When the business paid it: a receipt is paid already; an invoice once it's marked paid. */
   const paidOn = (p) => (p.kind === 'invoice-in' || p.kind === 'invoice-out' ? (p.status === 'paid' ? p.paidDate || p.date || '' : '') : p.date || '');
   function dueBack(s) {
@@ -92,7 +97,7 @@
   }
   function itemsOf(s, area) {
     if (area === 'tasks') return s.tasks.filter((t) => isWorkTask(s, t));
-    if (area === 'invoices') return s.paperwork.filter((p) => p.context === 'work' && ['ktk', 'unsorted'].includes(laneOf(p)));
+    if (area === 'invoices') return s.paperwork.filter((p) => p.context === 'work' && (['ktk', 'unsorted'].includes(laneOf(p)) || looseOut(p)));
     if (area === 'back') return wm() ? s.paperwork.filter(wm().isClaim) : [];
     if (area === 'projects') return s.projects || [];
     if (area === 'bills') return s.bills.filter(isWorkBill);
@@ -124,9 +129,11 @@
 
     // What the business pays: its invoices still to pay, and work paperwork nobody has said who paid.
     const unsorted = [];
+    // An invoice you sent that the re-sort's 'Check these' is asking about is asked there, not twice.
+    const asked = new Set(GU.refile && GU.refile.questions ? GU.refile.questions(s).map((q) => q.key) : []);
     for (const p of itemsOf(s, 'invoices')) {
-      if (laneOf(p) === 'unsorted') {
-        unsorted.push(p);
+      if (needsSort(p)) {
+        if (!(looseOut(p) && asked.has('merge:' + p.id))) unsorted.push(p);
         continue;
       }
       if (!isWaiting(p)) continue;
@@ -140,8 +147,8 @@
     }
     if (unsorted.length) {
       const one = unsorted.length === 1 ? unsorted[0] : null;
-      add('warn', 'invoices', one ? 'Who paid for ' + one.title + amt(one) + '?' : 'Who paid? ' + unsorted.length + ' work items aren’t sorted',
-        one ? C + '’s money, or yours to get back?' : 'Tell me for each one: ' + c + '’s money, or yours to get back', null,
+      add('warn', 'invoices', one ? (looseOut(one) ? 'Your invoice ' + one.title + amt(one) + ' isn’t in Get paid back' : 'Who paid for ' + one.title + amt(one) + '?') : 'Who paid? ' + unsorted.length + ' work items aren’t sorted',
+        one ? (looseOut(one) ? 'Add it, so you can see when ' + c + ' pays it' : C + '’s money, or yours to get back?') : 'Tell me for each one: ' + c + '’s money, or yours to get back', null,
         { go: TAB_OF.invoices, acts: one ? payerActs(one.id) : null });
     }
 
@@ -247,6 +254,13 @@
   }
   /* The two answers to 'Who paid?' for a piece of paperwork. */
   function payerActs(id) {
+    // An invoice you sent: it's your money, so the one question is putting it in Get paid back. While the re-sort
+    // is asking whether it's the same money as a claim there, its answers are offered here too.
+    if (looseOut(store.find('paperwork', id))) {
+      const q = GU.refile && GU.refile.questions ? GU.refile.questions(store.state).find((x) => x.key === 'merge:' + id) : null;
+      if (q) return q.options.map((o) => ({ label: o.label, attr: 'data-refile-key="' + esc(q.key) + '" data-refile-opt="' + esc(o.id) + '"', suggested: !!o.suggested }));
+      return [{ label: 'Add to Get paid back', attr: 'data-payer="paperwork:' + esc(id) + ':me"', suggested: true }];
+    }
     return [
       { label: co(true) + '’s money', attr: 'data-payer="paperwork:' + esc(id) + ':company"' },
       { label: 'Mine, get it back', attr: 'data-payer="paperwork:' + esc(id) + ':me"' },
@@ -277,7 +291,7 @@
       waiting, waitTotal: sum(waiting, (p) => Number(p.amount) || 0),
       overdue: waiting.filter((p) => p.dueDate && p.dueDate < t).length,
       paid, paidTotal: sum(paid, (p) => Number(p.amount) || 0),
-      unsorted: items.filter((p) => laneOf(p) === 'unsorted'),
+      unsorted: items.filter(needsSort),
     };
   }
   /* Work bills a month, split by who pays. */
@@ -418,7 +432,10 @@
       const kind = { receipt: 'Receipt', 'invoice-in': 'Invoice', 'invoice-out': 'Invoice sent', warranty: 'Warranty' }[r.kind] || 'Item';
       let status = '';
       let act = '';
-      if (ln === 'unsorted') {
+      if (looseOut(r)) {
+        status = pill('Sent to ' + co() + ', not in Get paid back', 'warn', 'send');
+        act = payerActs(r.id).map((a, i) => actBtn(a.attr, a.label, i ? '' : 'coin', i ? '' : 'btn--soft')).join('');
+      } else if (ln === 'unsorted') {
         status = whoPill();
         act = payerActs(r.id).map((a, i) => actBtn(a.attr, a.label, i ? 'coin' : 'briefcase', i ? '' : 'btn--soft')).join('');
       } else {
@@ -533,6 +550,8 @@
     let ask = '';
     try {
       ask = GU.refile && GU.refile.cardHTML ? GU.refile.cardHTML(s) : '';
+      // What the re-sort changed, while it can still be undone (where 'See what changed' brings you).
+      if (GU.refile && GU.refile.changesHTML) ask += GU.refile.changesHTML(s);
     } catch (e) {
       ask = '';
     }
@@ -581,7 +600,7 @@
   function invoiceFilter(list, t) {
     if (t === 'waiting') return list.filter(isWaiting);
     if (t === 'paid') return list.filter((p) => laneOf(p) === 'ktk' && !isWaiting(p));
-    if (t === 'unsorted') return list.filter((p) => laneOf(p) === 'unsorted');
+    if (t === 'unsorted') return list.filter(needsSort);
     return list;
   }
   /* The chip to show: the one you chose, or waiting (when there's anything waiting) and otherwise all. */
@@ -689,7 +708,7 @@
   /* 'Who paid?': work paperwork with no payer yet, one tap each. A bank payment of the same amount from
      your own account suggests it was yours. */
   function whoHTML(s) {
-    const list = itemsOf(s, 'invoices').filter((p) => laneOf(p) === 'unsorted').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const list = itemsOf(s, 'invoices').filter(needsSort).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     if (!list.length) return '';
     const W = wm();
     const C = co(true);
@@ -700,11 +719,15 @@
       } catch (e) {
         hint = null;
       }
-      const mine = !!(hint && hint.sure && hint.tx);
+      const loose = looseOut(p);
+      const mine = !loose && !!(hint && hint.sure && hint.tx);
       const acts = payerActs(p.id);
+      // An invoice you sent: say what it is, and what the re-sort thinks it's the same money as.
+      const q = loose && GU.refile && GU.refile.questions ? GU.refile.questions(s).find((x) => x.key === 'merge:' + p.id) : null;
+      const what = loose ? (q ? q.title : 'An invoice you sent ' + co() + ' for your own spending. Add it to Get paid back to see when it’s paid.') : '';
       return '<li class="ask-card__item"><div class="ask-card__q"><b>' + esc(p.title + amt(p)) + '</b><em>' +
-        esc([p.party, short(p.date)].filter(Boolean).join(' · ') + (mine ? (p.party || p.date ? ' · ' : '') + 'your bank shows a payment of this amount on ' + short(hint.tx.date) : '')) + '</em></div>' +
-        '<div class="ask-card__opts">' + acts.map((a, k) => '<button type="button" class="btn btn--sm' + (k === 1 && mine ? ' is-suggested' : '') + '" ' + a.attr + '>' + esc(a.label) + '</button>').join('') + '</div></li>';
+        esc(loose ? what : [p.party, short(p.date)].filter(Boolean).join(' · ') + (mine ? (p.party || p.date ? ' · ' : '') + 'your bank shows a payment of this amount on ' + short(hint.tx.date) : '')) + '</em></div>' +
+        '<div class="ask-card__opts">' + acts.map((a, k) => '<button type="button" class="btn btn--sm' + ((a.suggested != null ? a.suggested : k === 1 && mine) ? ' is-suggested' : '') + '" ' + a.attr + '>' + esc(a.label) + '</button>').join('') + '</div></li>';
     }).join('');
     return '<section class="ask-card wk-who" aria-label="Who paid?"><header class="ask-card__head"><h2>' + icon('alert') + 'Who paid?</h2>' +
       '<p>' + esc(plural(list.length, 'thing') + ' for work with no answer yet. ' + C + '’s money stays here; yours moves to Get paid back so you can claim it.') + '</p></header>' +

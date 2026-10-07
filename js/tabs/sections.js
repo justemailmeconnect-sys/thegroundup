@@ -66,8 +66,8 @@
         '<span class="toolbar__gap"></span><button type="button" class="btn btn--sm btn--ghost" data-delete-section>' + icon('trash') + 'Delete section</button></div>' +
         (list.length ? groupsOf(list).map((g) => '<section class="panel">' + (g.name ? '<header class="panel__head"><h2>' + icon('folder') + esc(g.name) + '</h2><span class="muted">' + g.items.length + '</span></header>' : '') +
           '<ul class="doc-rows">' + g.items.map(itemRow).join('') + '</ul></section>').join('')
-          : '<section class="panel"><ul class="doc-rows"><li>' + emptyState({ icon: live.icon || 'star', title: all.length ? 'Nothing matches' : 'Nothing here yet', text: 'Drop files or a folder above, or send things to the Inbox and I’ll put them here.' }) + '</li></ul></section>');
-      GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'section', sectionId: sec.id, name: live.name } }));
+          : '<section class="panel"><ul class="doc-rows"><li>' + emptyState({ icon: live.icon || 'star', title: all.length ? 'Nothing matches' : 'Nothing here yet', text: 'Drop files or a folder above, or tell the Sorting hub to put things here.' }) + '</li></ul></section>');
+      GU.ui.wireDropbar(root, (files) => GU.hub.add({ files, scope: { kind: 'section', sectionId: sec.id, name: live.name } }));
 
       root.querySelector('#sec-search').addEventListener('input', debounce((e) => {
         queries[sec.id] = e.target.value;

@@ -184,6 +184,17 @@
         : '<div class="panel__body"><p class="muted">Anything you delete shows up here for 30 days, so you can put it back.</p></div>') + '</section>';
   }
 
+  /* Your own categories (made in the Sorting hub or here): each can go once nothing is in it. */
+  function categoriesHTML(s) {
+    const used = (name) => ['transactions', 'paperwork', 'bills'].reduce((n, c) => n + (s[c] || []).filter((x) => String(x.category || '').toLowerCase() === name.toLowerCase()).length, 0);
+    const list = ['out', 'in'].flatMap((k) => F.custom(s, k).map((name) => ({ k, name, n: used(name) })));
+    return '<section class="panel" id="categories"><header class="panel__head"><h2>' + icon('tag') + 'Your categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-category>' + icon('plus') + 'New category</button></header>' +
+      (list.length ? '<ul class="rows rows--tight">' + list.map((x) => '<li class="row-item"><span class="row-item__icon">' + icon('tag') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' +
+        esc((x.k === 'in' ? 'Money in' : 'Spending') + ' · ' + (x.n ? plural(x.n, 'thing') + ' in it' : 'nothing in it yet')) + '</em></span><span class="row-item__act">' +
+        (x.n ? '' : '<button type="button" class="btn btn--sm btn--ghost" data-delete-category="' + esc(x.k + '|' + x.name) + '">Remove</button>') + '</span></li>').join('') + '</ul>'
+        : '<div class="panel__body"><p class="muted">Make categories of your own, like Gym or Pets, here or in the Sorting hub (“create a Gym category for PureGym payments”). They work with budgets too.</p></div>') + '</section>';
+  }
+
   function render(root) {
     const s = store.state;
     const st = s.settings;
@@ -226,6 +237,8 @@
       '<section class="panel"><header class="panel__head"><h2>Category rules</h2><span class="muted">' + s.rules.length + '</span></header>' +
       (s.rules.length ? '<ul class="rows rows--tight">' + s.rules.map((r) => '<li class="row-item"><span class="row-item__text"><b>“' + esc(r.match) + '”</b><em>always goes to ' + esc(r.category) + '</em></span><span class="row-item__act"><button type="button" class="btn btn--sm btn--ghost" data-delete-rule="' + esc(r.id) + '">Remove</button></span></li>').join('') + '</ul>'
         : '<div class="panel__body"><p class="muted">When you change a transaction’s category you can tick “always use this category”. Those rules appear here.</p></div>') + '</section>' +
+
+      categoriesHTML(s) +
 
       '<section class="panel"><header class="panel__head"><h2>Your sections</h2><button type="button" class="btn btn--sm btn--ghost" data-new-section>' + icon('plus') + 'New section</button></header>' +
       ((s.sections || []).length ? '<ul class="rows rows--tight">' + s.sections.map((x) => '<li class="row-item"><span class="row-item__icon">' + icon(x.icon || 'star') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' + esc((x.part === 'work' ? 'Work · ' : 'Home · ') + plural(s.sectionItems.filter((i) => i.sectionId === x.id).length, 'item')) + (x.byAssistant ? ' · started by your assistant' : '') + '</em></span><span class="row-item__act"><button type="button" class="btn btn--sm btn--ghost" data-move-section="' + esc(x.id) + '">Rename or move</button><a class="btn btn--sm btn--ghost" href="#s-' + esc(x.id) + '">Open</a></span></li>').join('') + '</ul>'
@@ -326,6 +339,31 @@
           entry = GU.trash.put(s2, 'accounts', acct, acct.name + (txs.length ? ' and its ' + plural(txs.length, 'transaction') : ''), { transactions: txs });
         });
         return GU.trash.offerUndo(entry);
+      }
+      if (b('[data-new-category]')) {
+        return formDialog({ title: 'New category', fields: [{ name: 'name', label: 'Category name', required: true, placeholder: 'e.g. Gym, Pets, Gifts' },
+          { name: 'kind', label: 'It’s for', type: 'segmented', options: [{ value: 'out', label: 'Money out' }, { value: 'in', label: 'Money in' }] }], submitLabel: 'Add',
+          onSubmit: (v) => {
+            try {
+              const res = GU.sorter.createCategory(v.name, v.kind);
+              toast(res.made ? 'Added ' + res.place.name : res.label);
+            } catch (err) {
+              toast(err.message);
+              return false;
+            }
+          } });
+      }
+      const dc = b('[data-delete-category]');
+      if (dc) {
+        const [k, name] = dc.dataset.deleteCategory.split('|');
+        store.commit((s2) => {
+          const cats = s2.settings.categories || {};
+          if (Array.isArray(cats[k])) cats[k] = cats[k].filter((x) => String(x).toLowerCase() !== name.toLowerCase());
+        });
+        return toast('Removed ' + name, { action: 'Undo', onAction: () => store.commit((s2) => {
+          const cats = (s2.settings.categories = Object.assign({ out: [], in: [] }, s2.settings.categories || {}));
+          cats[k] = (cats[k] || []).concat([name]);
+        }) });
       }
       const dr = b('[data-delete-rule]');
       if (dr) return store.commit((s2) => (s2.rules = s2.rules.filter((r) => r.id !== dr.dataset.deleteRule)));

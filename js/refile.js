@@ -26,7 +26,7 @@
   const T = 'transactions';
   const UNDO_DAYS = 30;
   const WINDOW = 90; // the longest gap between a purchase and the repayment for it
-  const WAGE = /\bwages?\b|salary|payroll/i;
+  const WAGE = /\bwages?\b|salary|payroll|\bbonus|overtime|holiday pay|sick pay|commission/i;
   /* Words for things a business buys for its office. Used only to ask, never to move anything by itself. */
   const SUPPLIES = new Set(('toner cartridge printer label stationery envelope stapler staple laminator shredder ream copier ' +
     'postage franking barcode whiteboard clipboard highlighter').split(' '));
@@ -138,10 +138,11 @@
   }
 
   /* ---------- the change log ---------- */
-  /* Records the old value of every field it changes, so undo() can put it back exactly. Entries:
-     {c, id, k, was} (no `was`: the field wasn't there before), {c, id, add} for a record made here, and
-     {c, id, del, rec, at, bin} for one taken out (bin: its Recently deleted entry). c 'settings' and 'meta'
-     are the settings and meta, with no id. `b` marks the answer it came from. */
+  /* Records the old and new value of every field it changes, so undo() can put it back exactly, leaving alone
+     anything you've changed since. Entries: {c, id, k, was, now} (no `was`: the field wasn't there before;
+     gone instead of `now`: this took it away), {c, id, add} for a record made here, and {c, id, del, rec, at, bin}
+     for one taken out (bin: its Recently deleted entry). c 'settings' and 'meta' are the settings and meta, with
+     no id. `b` marks the answer it came from. Entries from before `now` was kept have neither now nor gone. */
   function logger(st, log, batch) {
     const push = (e) => {
       if (batch) e.b = batch;
@@ -152,16 +153,31 @@
       if (had ? sameValue(holder[k], v) : v === undefined) return false;
       const e = { c, id, k };
       if (had) e.was = copy(holder[k]);
+      if (v === undefined) e.gone = true;
+      else e.now = copy(v);
       push(e);
       if (v === undefined) delete holder[k];
       else holder[k] = v;
       return true;
+    }
+    /* A field changed again by hand inside the same run: its entry's `now` follows. */
+    function refresh(c, id, holder, k) {
+      for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (e.c !== c || e.id !== id || e.k !== k || e.add || e.del) continue;
+        delete e.now;
+        delete e.gone;
+        if (has(holder, k)) e.now = copy(holder[k]);
+        else e.gone = true;
+        return;
+      }
     }
     return {
       log,
       set: (c, rec, k, v) => change(c, rec.id, rec, k, v),
       setting: (k, v) => change('settings', null, st.settings, k, v),
       meta: (k, v) => change('meta', null, st.meta, k, v),
+      refreshSetting: (k) => refresh('settings', null, st.settings, k),
       add(c, rec) {
         (st[c] = st[c] || []).push(rec);
         push({ c, id: rec.id, add: true });
@@ -179,8 +195,21 @@
       },
     };
   }
-  /* Puts back everything in a log, newest first. */
+  /* Whether a field still holds what an entry set it to. Entries from before `now` was kept always do. */
+  function holdsNow(holder, e) {
+    if (e.gone) return !has(holder, e.k);
+    if (!has(e, 'now')) return true;
+    return has(holder, e.k) && sameValue(holder[e.k], e.now);
+  }
+  /* Puts back everything in a log, newest first. A field you've changed since is left as you set it, and so is
+     a bank line you've linked to something else since: those entries are returned (kept). */
   function revert(st, log) {
+    const kept = [];
+    // Bank lines something points at by a link this log didn't make (one you made since).
+    const links = log.filter((x) => x && x.c === P && x.k === 'purchaseTx');
+    const madeHere = new Set(links.map((x) => (has(x, 'now') ? x.id + '>' + x.now : x.gone ? '' : x.id + '>*')));
+    const linkedNow = new Set();
+    for (const p of st.paperwork || []) if (p && p.purchaseTx && !madeHere.has(p.id + '>' + p.purchaseTx) && !madeHere.has(p.id + '>*')) linkedNow.add(p.purchaseTx);
     for (let i = log.length - 1; i >= 0; i--) {
       const e = log[i];
       if (!e) continue;
@@ -196,9 +225,16 @@
       }
       const holder = e.c === 'settings' ? st.settings : e.c === 'meta' ? (st.meta = st.meta || {}) : findIn(st, e.c, e.id);
       if (!holder) continue;
+      // A bank line that's 'Work expenses' because something you linked since points at it stays that way.
+      const stillLinked = e.c === T && e.k === 'category' && holder[e.k] === WORK_OUT && linkedNow.has(e.id);
+      if (!holdsNow(holder, e) || stillLinked) {
+        kept.push(e);
+        continue;
+      }
       if (has(e, 'was')) holder[e.k] = copy(e.was);
       else delete holder[e.k];
     }
+    return kept;
   }
 
   /* ---------- shared moves ---------- */
@@ -271,6 +307,11 @@
     }
     return best;
   }
+  /* Signs you've been paying for things for a business: a claim, something filed for work, or a rule for work money. */
+  const workSigns = (s) => (s.paperwork || []).some((p) => p && (p.claim === true || p.context === 'work')) || (s.rules || []).some((r) => r && WORK.includes(r.category));
+  /* Employer lines the re-sort may recategorise: blank, wages, transfers or work money, and for money in, the
+     income categories a repayment is often filed under. Never a debit filed as your own spending. */
+  const RESORTABLE = (t) => ['', 'Salary', TRANSFER].concat(WORK).includes(t.category || '') || (t.amount > 0 && ['Refunds', 'Other income'].includes(t.category));
   /* The employer's names, from the evidence: 'Acme Care' becomes {name: 'Acme Care Limited', short: 'Acme'}
      when your records write it with 'Ltd' or 'Limited'. */
   function namesFrom(s, ev) {
@@ -325,7 +366,9 @@
       if (!next.since) next.since = today();
       mine = tr.setting('employer', next);
     } else {
-      if (!ev) return null;
+      // Found in your data only: and only when there's a sign you've been paying for things for them (a claim,
+      // something filed for work, or a rule for work money). Otherwise a shop you're also paid by isn't touched.
+      if (!ev || !workSigns(st)) return null;
       const n = namesFrom(st, ev);
       mine = tr.setting('employer', { name: n.name, short: n.short, match: n.match, wageSource: ev.src.id, payInto: '', repayDays: '', nudgeDays: 3, chaseDays: 21, since: today() });
     }
@@ -348,7 +391,8 @@
       const desc = t.description || '';
       if (W.isEmployerText(st, desc)) {
         const cat = W.employerCategory(desc, t.amount);
-        if (!cat) continue;
+        // Never a line you filed as your own spending (or money in you've called something else).
+        if (!cat || !RESORTABLE(t)) continue;
         if (t.category !== cat) tr.set(T, t, 'category', cat);
         if (t.amount < 0) add(out.sentBack, -t.amount);
         else add(cat === 'Salary' ? out.wages : out.repayments, t.amount);
@@ -468,8 +512,10 @@
     const days = learnRepayDays(st);
     if ((emp.repayDays === '' || emp.repayDays == null) && days != null) emp.repayDays = days;
     if (emp.repayDays === '') delete emp.repayDays;
-    if (mine) st.settings.employer = emp; // its old value is logged already
-    else tr.setting('employer', emp);
+    if (mine) {
+      st.settings.employer = emp; // its old value is logged already
+      tr.refreshSetting('employer');
+    } else tr.setting('employer', emp);
     out.repayDays = W.employer(st).repayDays;
     return out;
   }
@@ -507,6 +553,9 @@
     const prev = metaOf(s);
     if (prev && !opts.force) return null;
     if (hasExamples(s)) return { waiting: 'examples' };
+    // Synced: only once this device has caught up with your others, never on an old copy that would then win.
+    const sync = GU.sync;
+    if (sync && sync.possible && sync.possible() && !(sync.active && sync.active()) && !(sync.status && sync.status().mode === 'off')) return { waiting: 'sync' };
     let out = null;
     store.commit((st) => {
       if (!st.meta || typeof st.meta !== 'object' || Array.isArray(st.meta)) st.meta = {};
@@ -536,6 +585,7 @@
       toast('I’ve split your site into Home and Work, and sorted your ' + e.label + ' money.', {
         action: 'See what changed', timeout: 15000,
         onAction: () => {
+          showChanges = true;
           if (GU.parts) GU.parts.set('work');
           if (GU.view) GU.view.go('work');
         },
@@ -556,19 +606,91 @@
     const m = metaOf(s || store.state);
     return !!(m && m.at && !m.skipped && !m.undone && (m.changes || []).length && today() <= addDays(m.at, UNDO_DAYS));
   }
-  /* Puts back everything the re-sort changed, answers included. The re-sort doesn't run again by itself. */
+  /* Puts back everything the re-sort changed, answers included, except what you've changed yourself since. The
+     re-sort doesn't run again by itself, and the claims it put back aren't matched again (hold). */
   function undo(opts) {
     opts = opts || {};
     const m = metaOf(store.state);
     if (!m || m.skipped || m.undone) return 0;
     const n = (m.changes || []).length;
+    let left = 0;
     store.commit((st) => {
       const mm = metaOf(st);
-      revert(st, mm.changes || []);
-      st.meta[KEY] = { at: mm.at, undone: today() };
+      // What you changed since and is left as you set it: each field once, and only where it isn't as it was anyway.
+      const first = new Map(); // each field's oldest kept entry: its `was` is how it was before the re-sort
+      for (const e of revert(st, mm.changes || [])) first.set(e.c + '|' + e.id + '|' + e.k, e);
+      for (const e of first.values()) {
+        const holder = e.c === 'settings' ? st.settings : e.c === 'meta' ? st.meta : findIn(st, e.c, e.id);
+        if (holder && (has(e, 'was') ? !(has(holder, e.k) && sameValue(holder[e.k], e.was)) : has(holder, e.k))) left++;
+      }
+      const W = wm();
+      const hold = W ? (st.paperwork || []).filter((p) => p && W.isClaim(p)).map((p) => p.id) : [];
+      st.meta[KEY] = { at: mm.at, undone: today(), hold };
     });
     qCache = null;
-    if (!opts.quiet) toast('Put back as it was before the Home and Work re-sort.');
+    if (!opts.quiet) toast('Put back as it was before the Home and Work re-sort.' + (left ? ' ' + (left === 1 ? '1 thing you changed since was' : left + ' things you changed since were') + ' left as you set ' + (left === 1 ? 'it' : 'them') + '.' : ''));
+    return n;
+  }
+
+  /* After a sync merge that couldn't tell which records this device had changed (its first merge with this
+     version, with changes here it hadn't synced), this device's copies win, and on a device that hadn't seen the
+     re-sort those are the copies from before it. This takes the other device's copy instead wherever every field
+     the re-sort changed still holds its old value here while the other device's has moved on, and drops records
+     the re-sort took out. merged and theirs are {key: value} for the keys merged that way (merged is changed in
+     place); meta is the meta holding the re-sort's log. Returns how many records or settings it put right. */
+  function heal(merged, theirs, keys, meta) {
+    const m = meta && meta[KEY];
+    if (!m || m.skipped || m.undone || !Array.isArray(m.changes) || !m.changes.length || !merged || !theirs) return 0;
+    const want = new Set(keys || []);
+    const first = new Map(); // each field's oldest entry: its `was` is how it was before the re-sort
+    const dels = [];
+    for (const e of m.changes) {
+      if (!e || !want.has(e.c) || e.add) continue;
+      if (e.del) dels.push(e);
+      else if (!first.has(e.c + '|' + e.id + '|' + e.k)) first.set(e.c + '|' + e.id + '|' + e.k, e);
+    }
+    const isWas = (holder, e) => (has(e, 'was') ? has(holder, e.k) && sameValue(holder[e.k], e.was) : !has(holder, e.k) || holder[e.k] == null);
+    const byRec = new Map();
+    for (const e of first.values()) {
+      const rk = e.c + '|' + e.id;
+      if (!byRec.has(rk)) byRec.set(rk, []);
+      byRec.get(rk).push(e);
+    }
+    let n = 0;
+    for (const list of byRec.values()) {
+      const c = list[0].c;
+      const mine = merged[c];
+      const other = theirs[c];
+      if (!mine || !other || typeof mine !== 'object' || typeof other !== 'object') continue;
+      if (!Array.isArray(mine)) {
+        // Settings or meta: field by field.
+        for (const e of list) {
+          if (!isWas(mine, e) || isWas(other, e)) continue;
+          if (has(other, e.k)) mine[e.k] = copy(other[e.k]);
+          else delete mine[e.k];
+          n++;
+        }
+        continue;
+      }
+      if (!Array.isArray(other)) continue;
+      const i = mine.findIndex((x) => x && x.id === list[0].id);
+      const th = other.find((x) => x && x.id === list[0].id);
+      if (i < 0 || !th || mine[i] === th) continue;
+      if (list.every((e) => isWas(mine[i], e)) && list.some((e) => !isWas(th, e))) {
+        mine[i] = th;
+        n++;
+      }
+    }
+    for (const e of dels) {
+      const mine = merged[e.c];
+      const other = theirs[e.c];
+      if (!Array.isArray(mine) || !Array.isArray(other) || other.some((x) => x && x.id === e.id)) continue;
+      const i = mine.findIndex((x) => x && x.id === e.id);
+      if (i >= 0 && sameValue(mine[i], e.rec)) {
+        mine.splice(i, 1);
+        n++;
+      }
+    }
     return n;
   }
 
@@ -1097,9 +1219,50 @@
       (canUndo(s) ? '<footer class="ask-card__foot"><span>Every change I made can be undone for 30 days.</span><button type="button" class="link link--btn" data-refile-undo>Undo the re-sort</button></footer>' : '') +
       '</section>';
   }
+  /* ---------- 'What the re-sort changed' ---------- */
+  let showChanges = false; // opened from the toast's 'See what changed': shown open
+  /* A closed disclosure listing what the re-sort did while it can still be undone: the money it split, the rule it
+     took out, and each home order it moved into Work, with 'Move back to Home'. '' when there's nothing to show. */
+  function changesHTML(s) {
+    s = s || store.state;
+    const m = metaOf(s);
+    if (!m || !canUndo(s) || !wm()) return '';
+    const W = wm();
+    const sm = m.summary || {};
+    const co = W.employer(s).label;
+    const n = (o) => (o && o.n) || 0;
+    const lines = [];
+    if (n(sm.wages) || n(sm.repayments)) {
+      lines.push('Split money from ' + co + ': ' + [n(sm.wages) ? plural(n(sm.wages), 'payment') + ' (' + money(sm.wages.total) + ') stay your income as wages' : '',
+        n(sm.repayments) ? plural(n(sm.repayments), 'payment') + ' (' + money(sm.repayments.total) + ') are work money, paid back to you' : ''].filter(Boolean).join('; ') + '.');
+    }
+    if (n(sm.sentBack)) lines.push(plural(n(sm.sentBack), 'payment') + ' you sent ' + co + ' (' + money(sm.sentBack.total) + ') are work money too.');
+    if (n(sm.claims)) lines.push('Put ' + plural(n(sm.claims), 'thing') + ' you were claiming back in Get paid back.');
+    if (sm.linked || sm.workDebits) lines.push('Marked ' + plural((sm.linked || 0) + (sm.workDebits || 0), 'bank payment') + ' as work expenses, so ' + ((sm.linked || 0) + (sm.workDebits || 0) === 1 ? 'it’s' : 'they’re') + ' out of your spending.');
+    if (sm.bills) lines.push('Sorted ' + plural(sm.bills, 'work bill') + '.');
+    if (sm.budgets) lines.push('Took out ' + plural(sm.budgets, 'budget') + ' on work money.');
+    for (const r of m.removedRules || []) if (r && r.match) lines.push('Removed your rule ‘' + clean(r.match) + '’ → ' + clean(r.category) + ': wages and repayments are told apart by themselves now.');
+    const moved = (s.paperwork || []).filter((p) => p && p.movedFrom === 'home' && p.context === 'work').sort(byDate);
+    const icon = GU.ui.icon;
+    const movedHTML = moved.length ? '<p class="rf-changes__sub">' + esc('Moved from Home › Receipts into Work (' + plural(moved.length, 'thing') + ', ' + money(sum(moved, amountOf)) + '):') + '</p>' +
+      '<ul class="rf-changes__moved">' + moved.map((p) => '<li><span>' + esc(nameOf(p) + ' · ' + money(amountOf(p)) + (p.date ? ' · ' + short(p.date) : '')) + '</span>' +
+        '<button type="button" class="link link--btn" data-refile-home="' + esc(p.id) + '">Move back to Home</button></li>').join('') + '</ul>' : '';
+    if (!lines.length && !movedHTML) return '';
+    return '<details class="panel rf-changes"' + (showChanges ? ' open' : '') + '><summary>' + icon('repeat') + '<span>What the Home/Work re-sort changed</span><span class="muted">' + esc(fmtDate(m.at)) + '</span></summary>' +
+      '<div class="panel__body">' + (lines.length ? '<ul class="rf-changes__list">' + lines.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>' : '') + movedHTML +
+      '<p class="rf-changes__foot"><span>' + esc('You can undo all of it until ' + fmtDate(addDays(m.at, UNDO_DAYS)) + '. Anything you’ve changed since stays as you set it.') + '</span>' +
+      '<button type="button" class="link link--btn" data-refile-undo>Undo the re-sort</button></p></div></details>';
+  }
+
   document.addEventListener('click', (ev) => {
     const t = ev.target;
     if (!t || !t.closest) return;
+    const home = t.closest('[data-refile-home]');
+    if (home) {
+      ev.preventDefault();
+      if (wm() && wm().moveToHome) wm().moveToHome(P, home.getAttribute('data-refile-home'));
+      return;
+    }
     const b = t.closest('[data-refile-key]');
     if (b) {
       ev.preventDefault();
@@ -1115,10 +1278,10 @@
       ev.preventDefault();
       if (!canUndo()) return;
       const go = () => undo();
-      if (GU.ui && GU.ui.confirmBox) GU.ui.confirmBox({ title: 'Undo the Home/Work re-sort?', message: 'Everything it changed goes back as it was, including your answers.', confirmLabel: 'Undo it', danger: true }).then((yes) => yes && go());
+      if (GU.ui && GU.ui.confirmBox) GU.ui.confirmBox({ title: 'Undo the Home/Work re-sort?', message: 'Everything it changed goes back as it was, including your answers. Anything you’ve changed since stays as you set it.', confirmLabel: 'Undo it', danger: true }).then((yes) => yes && go());
       else go();
     }
   });
 
-  GU.refile = { run, undo, canUndo, info, questions, count, answer, useSuggestions, learnRepayDays, cardHTML };
+  GU.refile = { run, undo, canUndo, info, questions, count, answer, useSuggestions, learnRepayDays, cardHTML, changesHTML, heal };
 })();

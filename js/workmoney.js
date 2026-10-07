@@ -96,7 +96,18 @@
     const list = (s && s.incomeSources) || [];
     return list.find((i) => i.id === e.wageSource) || (e.set ? list.find((i) => isEmployerText(s, (i.from || '') + ' ' + (i.name || ''))) : null) || null;
   }
-  const WAGE = /\bwages?\b|salary|payroll/i;
+  // Pay words: wages, and the extras that come with them (a bonus, overtime, holiday or sick pay).
+  const WAGE = /\bwages?\b|salary|payroll|\bbonus|overtime|holiday pay|sick pay|commission/i;
+  /* Whether an amount is exactly what the employer owes you: one claim, one sent pack, everything not sent yet,
+     everything sent, or the lot. A payment like that is them paying you back, however close it is to your pay. */
+  function owedExactly(s, a) {
+    const hit = (x) => x > 0 && Math.abs(x - a) < 0.005;
+    const open = claims(s, 'open');
+    if (!open.length) return false;
+    if (open.some((x) => hit(x.left))) return true;
+    const d = dueBack(s);
+    return hit(d.toSendTotal) || hit(d.sentTotal) || hit(d.total) || d.packs.some((pk) => hit(pk.left));
+  }
   /* Money to or from the employer, before your own rules: 'Salary' for wages, 'Work reimbursements' for
      anything else (repayments in, money you sent back out). '' when the line isn't the employer's. */
   function employerCategory(desc, amount) {
@@ -105,6 +116,7 @@
     if (!s || !a || !Number.isFinite(a) || !isEmployerText(s, desc)) return '';
     if (a < 0) return WORK_IN;
     if (WAGE.test(String(desc))) return 'Salary';
+    if (owedExactly(s, round2(a))) return WORK_IN;
     const src = wageSource(s);
     const w = src ? Math.abs(Number(src.amount) || 0) : 0;
     if (w > 0 && Math.abs(a - w) <= 0.2 * w) return 'Salary';
@@ -234,18 +246,20 @@
     };
   }
   /* Paid back to you since a date (the start of this tax year if none): the employer's repayments in your
-     statements, plus anything you marked paid back with no bank line. */
+     statements, less any money you sent back to them, plus anything you marked paid back with no bank line. */
   function paidBackSince(s, iso) {
     s = s || store.state;
     iso = iso || taxYearStart(today());
-    const credits = sum((s.transactions || []).filter((t) => t.amount > 0 && t.category === WORK_IN && (t.date || '') >= iso), (t) => t.amount);
+    const work = (s.transactions || []).filter((t) => t.category === WORK_IN && (t.date || '') >= iso);
+    const credits = sum(work.filter((t) => t.amount > 0), (t) => t.amount);
+    const sentBack = sum(work.filter((t) => t.amount < 0), (t) => -t.amount);
     let manual = 0;
     for (const p of s.paperwork || []) {
       if (!isClaim(p)) continue;
       for (const r of p.repayments || []) if (!r.tx && (r.date || '') >= iso) manual += Number(r.amount) || 0;
       if (stage(p) === 'paid-back' && !p.repaidTx && (p.repaidDate || '') >= iso) manual += Math.max(0, amountOf(p) - repaidSoFar(p));
     }
-    return round2(credits + manual);
+    return round2(Math.max(0, credits - sentBack + manual));
   }
 
   /* ---------- words, for matching shops and references ---------- */
@@ -268,6 +282,23 @@
     return out;
   }
   const shopWords = (p) => words((p.party || '') + ' ' + (p.title || ''));
+  /* Words too general to name a shop by their start alone. */
+  const GENERAL = new Set('shop store online mobile direct market trade trading house home food travel express global digital world best super'.split(' '));
+  /* Whether a bank word names the shop on a record: a word of its shop or title; one starting with the shop's name,
+     as bank lines run names together ('EUROFFICELT', 'ADOBESYSTEM', 'JUSTEATCOUK'); or Amazon's own shorthand
+     ('AMZNMKTPLACE'). */
+  function namesShop(p) {
+    const set = new Set(shopWords(p));
+    const shop = words(p.party || '').length ? words(p.party || '') : words(p.title || '');
+    const joined = shop.slice(0, 2).join('');
+    const stems = shop.filter((k) => k.length >= 4 && !GENERAL.has(k));
+    return (w) => {
+      if (set.has(w)) return true;
+      if (/^amzn/.test(w) && (set.has('amazon') || shop.includes('amazon'))) return true;
+      if (w.length < 5) return false;
+      return stems.some((k) => w.startsWith(k)) || (joined.length >= 5 && shop.length > 1 && w.startsWith(joined));
+    };
+  }
   const txWords = (t) => words((t.description || '') + ' ' + (t.notes || ''));
   const employerWords = (s) => {
     const e = employer(s);
@@ -317,7 +348,8 @@
     const pool = (s.transactions || []).filter((t) => t.amount < 0 && t.date >= lo && t.date <= hi && t.category !== TRANSFER && t.category !== WORK_IN &&
       !used.has(t.id) && !no.has(t.id) && !notWork.has(t.id) && !(taken && taken.has(t.id)));
     const mine = new Set(shopWords(p));
-    const shares = (t) => mine.size > 0 && txWords(t).some((w) => mine.has(w));
+    const names = namesShop(p);
+    const shares = (t) => mine.size > 0 && txWords(t).some(names);
     const gap = (t) => Math.abs(toDays(t.date) - toDays(d));
     const exact = (t) => Math.abs(-t.amount - amt) < 0.005;
     const home = String((s.settings && s.settings.currency) || 'GBP').toUpperCase();
@@ -340,10 +372,28 @@
       near = other.length ? other[0].t : null;
     }
     const sharedN = ranked.filter((x) => x.shared).length;
-    const sure = !!best && ((ranked.length === 1 && (best.shared || !near)) || (best.shared && sharedN === 1));
+    // Linked by itself only with the exact amount AND a word in common with the shop; anything less is asked.
+    let sure = !!best && best.shared && sharedN === 1;
+    // Paid through PayPal, eBay or the like, the bank line names only the go-between, not any shop: the only debit
+    // of the exact amount, within 3 days, with nothing else naming the shop, is it.
+    if (!sure && best && ranked.length === 1 && !near && best.gap <= 3 && onlyGoBetween(best.t)) sure = true;
+    // A monthly work bill's payment: the only debit of its amount, named the way your statements name the bill
+    // (or, for a bill not found in your statements, from its own account within 3 days).
+    if (!sure && best && ranked.length === 1 && p.billId) {
+      const b = findIn(s, 'bills', p.billId);
+      const key = b && b.foundKey ? flat(b.foundKey).trim() : '';
+      if (b && (key ? flat(best.t.description).includes(' ' + key + ' ') : !!b.account && best.t.account === b.account && best.gap <= 3)) sure = true;
+    }
     return { tx: best ? best.t : null, sure, shared: !!(best && best.shared), options: ranked.map((x) => x.t), near, currency: cur };
   }
 
+  /* Payment services whose bank lines name themselves rather than the shop. */
+  const GO_BETWEEN = new Set(['paypal', 'ebay', 'klarna', 'clearpay', 'stripe', 'sumup', 'zettle', 'izettle']);
+  /* A bank line naming nothing but a payment service (its references aside): 'PAYPAL PAYMENT', not 'PAYPAL *TRAINLINE'. */
+  function onlyGoBetween(t) {
+    const w = words(t.description).filter((x) => !/\d/.test(x));
+    return w.length > 0 && w.every((x) => GO_BETWEEN.has(x));
+  }
   const SYMBOL = { USD: '\\$', EUR: '€', GBP: '£', JPY: '¥', CAD: '\\$', AUD: '\\$' };
   /* Finds a foreign amount quoted in a bank line: 'USD 9.00', 'USD -9.00', '$9.00' or '9.00 USD'. */
   function fxPattern(cur, amt) {
@@ -404,27 +454,49 @@
     return { claims: best ? best.claims : [], sure, shared: !!(best && best.shared), pack: best ? best.pack : '', options };
   }
 
-  /* Sure matches not applied yet: bank payments to link and repayments to tick off. */
+  /* Claims the Home/Work re-sort put back when you undid it: matching leaves them as they are, so the undo stays
+     undone. Anything added since is matched as usual. */
+  function held(s) {
+    const m = s && s.meta && s.meta.refileV1;
+    return new Set((m && m.undone && Array.isArray(m.hold) && m.hold) || []);
+  }
+  /* Sure matches not applied yet: bank payments to link, repayments to tick off, and repayments that are the
+     bank line for something you marked paid back by hand. */
   function planMatches(s) {
     const links = [];
     const repaid = [];
+    const attach = [];
+    const hold = held(s);
     const takenTx = usedPurchases(s);
-    for (const p of (s.paperwork || []).filter((x) => isClaim(x) && !x.purchaseTx).sort(byDate)) {
+    for (const p of (s.paperwork || []).filter((x) => isClaim(x) && !x.purchaseTx && !hold.has(x.id)).sort(byDate)) {
       const r = purchaseFor(s, p, takenTx);
       if (!r.sure) continue;
       links.push({ id: p.id, tx: r.tx.id });
       takenTx.add(r.tx.id);
     }
     const usedC = usedCredits(s);
-    const takenClaims = new Set();
+    const takenClaims = new Set(hold);
     const credits = (s.transactions || []).filter((t) => t.amount > 0 && t.category === WORK_IN && !usedC.has(t.id)).sort(byTxDate);
+    // Marked paid back with just a date: a repayment of exactly what was left, within 30 days of that date, is it.
+    const manual = (s.paperwork || []).filter((p) => isClaim(p) && !hold.has(p.id) && stage(p) === 'paid-back' && !p.repaidTx && p.repaidDate && !(p.repayments || []).some((r) => r && r.tx));
+    const usedM = new Set();
     for (const c of credits) {
+      const fits = manual.filter((p) => !usedM.has(p.id) && Math.abs(amountOf(p) - repaidSoFar(p) - c.amount) < 0.005 &&
+        Math.abs(toDays(c.date) - toDays(p.repaidDate)) <= 30 && !(p.notRepayments || []).includes(c.id));
+      // Not when it could as well be for something still waiting: then it's matched or asked about as usual.
+      if (fits.length !== 1 || repaymentFor(s, c, takenClaims).options.length) continue;
+      attach.push({ id: fits[0].id, tx: c.id });
+      usedM.add(fits[0].id);
+      usedC.add(c.id);
+    }
+    for (const c of credits) {
+      if (usedC.has(c.id)) continue;
       const r = repaymentFor(s, c, takenClaims);
       if (!r.sure) continue;
       repaid.push({ tx: c.id, ids: r.claims.map((p) => p.id) });
       r.claims.forEach((p) => takenClaims.add(p.id));
     }
-    return { links, repaid };
+    return { links, repaid, attach };
   }
 
   /* The 'From your bank' lists and the matches waiting for a Yes or No. Worked out again only when
@@ -527,6 +599,15 @@
 
     return { repayments, purchases, unclaimedSpend, noClaimCredits, fromBills, sure: { repayments: sureRepayments, purchases: surePurchases }, count: repayments.length };
   }
+  /* Claims a repayment already in your bank looks like it's for, waiting for your Yes: the money has come in,
+     so it isn't still to come. {ids, rows (as claims()), total}. */
+  function awaiting(s) {
+    s = s || store.state;
+    const ids = new Set();
+    for (const r of prompts(s).repayments) for (const p of r.claims || []) ids.add(p.id);
+    const rows = ids.size ? claims(s, 'open').filter((x) => ids.has(x.p.id)) : [];
+    return { ids, rows, total: sum(rows, (x) => x.left) };
+  }
   /* Shops you've claimed from where most of what you spend there in the last year is for work. */
   function workShops(s) {
     const seen = new Map();
@@ -567,6 +648,16 @@
         (st[c] = st[c] || []).push(rec);
         log.push({ c, id: rec.id, add: true });
       },
+      /* Takes a record out into Recently deleted. */
+      remove(st, c, rec, label) {
+        const list = st[c] || [];
+        const at = list.findIndex((x) => x.id === rec.id);
+        if (at < 0) return false;
+        list.splice(at, 1);
+        const bin = GU.trash ? GU.trash.put(st, c, rec, label).id : null;
+        log.push({ c, id: rec.id, del: true, rec: copy(rec), at, bin });
+        return true;
+      },
       log,
     };
   }
@@ -578,6 +669,12 @@
           st[e.c] = (st[e.c] || []).filter((x) => x.id !== e.id);
           continue;
         }
+        if (e.del) {
+          if (e.bin) st.trash = (st.trash || []).filter((x) => x.id !== e.bin);
+          const list = (st[e.c] = st[e.c] || []);
+          if (!list.some((x) => x.id === e.id)) list.splice(Math.min(e.at, list.length), 0, copy(e.rec));
+          continue;
+        }
         const rec = findIn(st, e.c, e.id);
         if (!rec) continue;
         if (e.had) rec[e.k] = copy(e.was);
@@ -585,14 +682,18 @@
       }
     };
   }
-  /* Runs one commit and offers Undo. msg is text, or a function of what fn returned ('' for no toast). */
+  /* Runs one commit and offers Undo. msg is text, or a function of what fn returned ('' for no toast).
+     opts.afterUndo(st): anything more Undo puts back, in the same commit. */
   function change(fn, msg, opts) {
     const log = [];
     let out;
     store.commit((st) => {
       out = fn(st, tracker(log));
     });
-    const undo = () => store.commit(undoer(log));
+    const undo = () => store.commit((st) => {
+      undoer(log)(st);
+      if (opts && opts.afterUndo) opts.afterUndo(st);
+    });
     const res = { changed: log.length, out, undo };
     if (!log.length) return res;
     const text = typeof msg === 'function' ? msg(out) : msg;
@@ -615,10 +716,12 @@
     const a = (s.accounts || []).find((x) => x.id === id);
     return clean((a && (a.name || a.bank)) || '') || 'your account';
   }
-  /* Links a claim to your bank payment: the line becomes 'Work expenses', its old category kept for Undo. */
-  function linkT(st, tr, p, tx) {
+  /* Links a claim to your bank payment: the line becomes 'Work expenses', its old category kept for Undo.
+     was: the category to keep instead, for a line you've only just marked 'Work expenses' yourself. */
+  const wasOf = (tx, was) => (was != null && tx.category === WORK_OUT && !(F.WORK || [WORK_OUT, WORK_IN]).includes(was) ? was : tx.category || '');
+  function linkT(st, tr, p, tx, was) {
     tr.set(P, p, 'purchaseTx', tx.id);
-    tr.set(P, p, 'purchaseWas', tx.category || '');
+    tr.set(P, p, 'purchaseWas', wasOf(tx, was));
     tr.set(T, tx, 'category', WORK_OUT);
     if ((p.notPurchases || []).includes(tx.id)) tr.set(P, p, 'notPurchases', p.notPurchases.filter((x) => x !== tx.id));
   }
@@ -764,7 +867,7 @@
     return '';
   }
   /* Links a claim to the bank payment you picked. useBankAmount: the claim takes the amount your bank took,
-     and keeps the receipt's own amount as originalAmount (e.g. '9.00 USD'). */
+     and keeps the receipt's own amount as originalAmount (e.g. '9.00 USD'). was: as for claimFromTx. */
   function linkPurchase(id, txId, opts) {
     opts = opts || {};
     const s = store.state;
@@ -778,14 +881,14 @@
       const tx = findIn(st, T, txId);
       if (!p || !tx) return null;
       if (p.purchaseTx && p.purchaseTx !== tx.id) unlinkT(st, tr, p);
-      if (p.purchaseTx !== tx.id) linkT(st, tr, p, tx);
+      if (p.purchaseTx !== tx.id) linkT(st, tr, p, tx, opts.was);
       const bank = round2(Math.abs(tx.amount));
       if (opts.useBankAmount && Math.abs(amountOf(p) - bank) >= 0.005) {
         if (!p.originalAmount && amountOf(p) > 0) tr.set(P, p, 'originalAmount', (amountOf(p).toFixed(2) + ' ' + currencyOf(p)).trim());
         tr.set(P, p, 'amount', bank);
       }
       return { tx, s: st };
-    }, (o) => (o ? 'Linked to your ' + accountName(o.s, o.tx.account) + ' payment on ' + short(o.tx.date) : ''));
+    }, (o) => (o ? 'Linked to your ' + accountName(o.s, o.tx.account) + ' payment on ' + short(o.tx.date) : ''), { afterUndo: wasBack([txId], opts.was) });
   }
   /* Unlinks a claim's bank payment: the line goes back to its old category and isn't suggested again. */
   function unlinkPurchase(id) {
@@ -815,7 +918,8 @@
       title: '', party: '', amount: 0, date: today(), dueDate: '', warrantyUntil: '', reference: '', category: WORK_OUT, notes: '', files: [] }, over);
   }
   /* Bank payments you made for work become claims, each linked to its line (now 'Work expenses').
-     A line that fits an open claim with no bank payment yet is linked to it instead (opts.noLink to skip). */
+     A line that fits an open claim with no bank payment yet is linked to it instead (opts.noLink to skip).
+     opts.was: the line's category before you marked it 'Work expenses', put back if it's ever unlinked. */
   function claimFromTx(txIds, opts) {
     opts = opts || {};
     return change((st, tr) => {
@@ -827,14 +931,14 @@
         if (!opts.noLink) {
           const fits = (st.paperwork || []).filter((p) => isClaim(p) && !p.purchaseTx && stage(p) !== 'paid-back' && purchaseFor(st, p).options.some((o) => o.id === tx.id));
           if (fits.length === 1) {
-            linkT(st, tr, fits[0], tx);
+            linkT(st, tr, fits[0], tx, opts.was);
             used.add(tx.id);
             linked.push(fits[0].id);
             continue;
           }
         }
         const name = shopFromTx(tx);
-        const rec = blankClaim({ title: name, party: name, amount: round2(-tx.amount), date: tx.date, purchaseTx: tx.id, purchaseWas: tx.category || '' });
+        const rec = blankClaim({ title: name, party: name, amount: round2(-tx.amount), date: tx.date, purchaseTx: tx.id, purchaseWas: wasOf(tx, opts.was) });
         mirror(rec);
         tr.add(st, P, rec);
         tr.set(T, tx, 'category', WORK_OUT);
@@ -845,7 +949,19 @@
     }, (o) => {
       const n = o.created.length + o.linked.length;
       return n ? (n === 1 ? 'Added to Get paid back' : plural(n, 'payment') + ' added to Get paid back') + (o.created.length ? '. Add the receipt when you have it.' : '.') : '';
-    });
+    }, { afterUndo: wasBack(idList(txIds), opts.was) });
+  }
+  /* For Undo after a line you'd just marked 'Work expenses' was added to Get paid back: the line goes back to the
+     category it had before, unless something still links to it. */
+  function wasBack(txIds, was) {
+    if (was == null || (F.WORK || [WORK_OUT, WORK_IN]).includes(was)) return null;
+    return (st) => {
+      const used = usedPurchases(st);
+      for (const id of txIds) {
+        const tx = findIn(st, T, id);
+        if (tx && tx.category === WORK_OUT && !used.has(id)) tx.category = was;
+      }
+    };
   }
   /* Who pays: 'company' (the business), 'me' (you, get it back) or null (not sorted). */
   function setPayer(c, id, payer) {
@@ -859,6 +975,16 @@
       if (c === P) {
         tr.set(P, rec, 'context', 'work');
         tr.set(P, rec, 'payer', payer || undefined);
+        // An invoice you sent the business for your own spending is a claim you've sent: paid back once they paid it.
+        // When it's the same money as something already in Get paid back, its files go on that instead.
+        if (payer === 'me' && rec.kind === 'invoice-out') {
+          const twin = outTwin(st, rec);
+          if (twin) {
+            mergeOutT(st, tr, rec, twin);
+            return { merged: twin, s: st };
+          }
+          outToClaimT(st, tr, rec);
+        }
         if (payer === 'me' && rec.kind !== 'invoice-out') {
           if (!rec.claimStatus) setStage(tr, rec, stage(rec));
           if (!rec.purchaseTx) {
@@ -881,19 +1007,65 @@
       return { linkedTx, s: st };
     }, (o) => {
       if (!o) return '';
+      if (o.merged) return 'Same money as ' + (o.merged.title || o.merged.party || 'a claim') + ' in Get paid back: its files are on that now';
       if (c !== P) return payer === 'company' ? e.Label + ' pays it' : payer === 'me' ? 'You pay, ' + e.label + ' pays you back' : 'Set to not sorted yet';
       const where = payer === 'me' ? 'Moved to Get paid back' : payer === 'company' ? 'Moved to ' + e.Label + ' pays' : 'Moved to Who paid?';
       return where + (o.linkedTx ? '. Linked to your ' + accountName(o.s, o.linkedTx.account) + ' payment on ' + short(o.linkedTx.date) : '');
     });
   }
-  /* 'Not for work': moves a record to Home. Any linked bank payment goes back to its old category. */
+  /* For a work invoice you sent the business: the claim already in Get paid back for the same money (the same
+     amount, within a month, a word in common), as the re-sort's 'same money' question finds it. */
+  function outTwin(st, rec) {
+    st = st || store.state;
+    const amt = amountOf(rec);
+    const mine = new Set(shopWords(rec || {}));
+    if (!rec || !amt || !rec.date || !mine.size) return null;
+    const gap = (p) => Math.abs(toDays(p.date) - toDays(rec.date));
+    return claims(st).map((x) => x.p).filter((p) => p.id !== rec.id && p.date && Math.abs(amountOf(p) - amt) < 0.005 && gap(p) <= 31 && shopWords(p).some((w) => mine.has(w)))
+      .sort((a, b) => gap(a) - gap(b))[0] || null;
+  }
+  /* The invoice's files go on the claim (marked sent, if it wasn't), and the invoice into Recently deleted. */
+  function mergeOutT(st, tr, rec, twin) {
+    const ids = new Set((twin.files || []).map((f) => f && f.id));
+    const extra = (rec.files || []).filter((f) => f && !ids.has(f.id));
+    if (extra.length) tr.set(P, twin, 'files', (twin.files || []).concat(copy(extra)));
+    if (stage(twin) === 'to-send') {
+      setStage(tr, twin, 'sent');
+      tr.set(P, twin, 'claimedDate', rec.date || today());
+      tr.set(P, twin, 'packId', newPackId(st, rec.date || today(), [twin.id]));
+    }
+    tr.remove(st, P, rec, (rec.title || 'Invoice') + ' (merged into Get paid back)');
+  }
+  /* A work invoice you sent the business becomes a claim you've sent (paid back when it's marked paid), the way
+     the Inbox and the re-sort file one. Call inside a change. */
+  function outToClaimT(st, tr, rec) {
+    const paid = rec.status === 'paid';
+    const d = rec.date || today();
+    tr.set(P, rec, 'kind', 'receipt');
+    tr.set(P, rec, 'status', '');
+    tr.set(P, rec, 'dueDate', '');
+    tr.set(P, rec, 'payer', 'me');
+    tr.set(P, rec, 'category', WORK_OUT);
+    setStage(tr, rec, paid ? 'paid-back' : 'sent');
+    if (!rec.claimedDate) tr.set(P, rec, 'claimedDate', d);
+    if (!rec.packId) tr.set(P, rec, 'packId', newPackId(st, rec.claimedDate || d, [rec.id]));
+    if (paid && !rec.repaidDate) tr.set(P, rec, 'repaidDate', rec.paidDate || d);
+    mirrorT(tr, rec);
+  }
+  /* 'Not for work': moves a record to Home. Any linked bank payment goes back to its old category, and so does
+     the record's own 'Work expenses' category. */
   function moveToHome(c, id) {
     c = c || P;
     return change((st, tr) => {
       const rec = findIn(st, c, id);
       if (!rec) return 0;
+      const was = rec.purchaseWas;
       tr.set(c, rec, 'context', 'home');
       tr.set(c, rec, 'payer', undefined);
+      if (rec.category === WORK_OUT) {
+        if (c === 'bills') tr.set(c, rec, 'category', 'Bills & utilities');
+        else if (c === P) tr.set(c, rec, 'category', was && !(F.WORK || [WORK_OUT, WORK_IN]).includes(was) ? was : '');
+      }
       if (c === P) {
         if (rec.purchaseTx) unlinkT(st, tr, rec);
         for (const k of ['claimStatus', 'claimedDate', 'packId', 'repaidDate', 'repaidTx', 'repayments', 'handedDate', 'billId']) tr.set(P, rec, k, undefined);
@@ -1025,7 +1197,7 @@
     const s = store.state;
     if (!s || !s.paperwork) return { linked: 0, repaid: 0, changed: 0 };
     const plan = planMatches(s);
-    if (!plan.links.length && !plan.repaid.length) return { linked: 0, repaid: 0, changed: 0 };
+    if (!plan.links.length && !plan.repaid.length && !plan.attach.length) return { linked: 0, repaid: 0, changed: 0 };
     const e = employer(s);
     const res = change((st, tr) => {
       let linked = 0;
@@ -1036,6 +1208,11 @@
         if (!p || !tx || p.purchaseTx) continue;
         linkT(st, tr, p, tx);
         linked++;
+      }
+      // The bank line for something you'd already marked paid back: linked, so it's counted once.
+      for (const a of plan.attach) {
+        const p = findIn(st, P, a.id);
+        if (p && !p.repaidTx && findIn(st, T, a.tx)) tr.set(P, p, 'repaidTx', a.tx);
       }
       for (const r of plan.repaid) {
         const tx = findIn(st, T, r.tx);
@@ -1056,9 +1233,12 @@
   }
 
   /* ---------- monthly work bills you pay ---------- */
+  const billWords = (b) => (b ? words([b.name, b.payee, b.foundKey].filter(Boolean).join(' ')) : []);
   /* Inside a commit: every payment of a work bill you pay yourself, on or after employer.since (today when
-     none is set), gets its claim 'p-bill-<billId>-<date>' unless one is there already (that id, one you
-     deleted, or one for the same bill and amount within 3 days). Returns the new claims. */
+     none is set), gets its claim 'p-bill-<billId>-<date>' unless there's one already: that id, one for the same
+     bill and amount within 3 days, or something you filed yourself for it (the same amount within 3 days, with a
+     word in common with the bill), which is then marked as the bill's. Each payment remembers its claim
+     (claimId), so one you delete stays deleted. Returns the new claims. */
   function billClaims(st) {
     const e = employer(st);
     const since = e.since || today();
@@ -1067,20 +1247,51 @@
     st.paperwork = st.paperwork || [];
     for (const b of st.bills || []) {
       if (!isWorkRecord(b, 'bills') || payerOf(b, 'bills') !== 'me') continue;
+      const bw = new Set(billWords(b));
       for (const h of b.history || []) {
-        if (!h || !h.date || h.date < since) continue;
+        if (!h || !h.date || h.date < since || h.claimId) continue;
         const amt = round2(Math.abs(Number(h.amount != null && h.amount !== '' ? h.amount : b.amount) || 0));
         if (!amt) continue;
         const id = 'p-bill-' + b.id + '-' + h.date;
-        if (binned.has(id) || st.paperwork.some((p) => p.id === id ||
-          (p.billId === b.id && Math.abs(amountOf(p) - amt) < 0.005 && p.date && Math.abs(toDays(p.date) - toDays(h.date)) <= 3))) continue;
+        const near = (p) => !!p.date && Math.abs(amountOf(p) - amt) < 0.005 && Math.abs(toDays(p.date) - toDays(h.date)) <= 3;
+        const have = st.paperwork.find((p) => p.id === id) || st.paperwork.find((p) => p.billId === b.id && near(p)) ||
+          st.paperwork.find((p) => !p.billId && isClaim(p) && near(p) && shopWords(p).some((w) => bw.has(w)));
+        if (have) {
+          if (!have.billId) {
+            have.billId = b.id;
+            // Its invoice, filed before the payment left: paid now, so it's owed to you.
+            if (have.kind === 'invoice-in' && have.status !== 'paid') {
+              have.status = 'paid';
+              have.paidDate = h.date;
+            }
+          }
+          h.claimId = have.id;
+          continue;
+        }
+        if (binned.has(id)) {
+          h.claimId = id;
+          continue;
+        }
         const rec = blankClaim({ id, title: (b.name || 'Bill') + ' (' + monthLabel(h.date.slice(0, 7)) + ')', party: b.payee || b.name || '', amount: amt, date: h.date, billId: b.id });
         mirror(rec);
         st.paperwork.push(rec);
+        h.claimId = id;
         created.push(rec);
       }
     }
     return created;
+  }
+  /* The claim a monthly work bill already made for the payment a record you're filing is for: the same
+     amount, within a week, and a word in common. File the record's files onto it rather than claiming twice. */
+  function billTwin(st, rec) {
+    st = st || store.state;
+    if (!st || !rec || rec.billId || !isClaim(rec)) return null;
+    const amt = amountOf(rec);
+    const d = rec.paidDate || rec.date;
+    const mine = new Set(shopWords(rec));
+    if (!amt || !d || !mine.size) return null;
+    return (st.paperwork || []).find((p) => p && p.id !== rec.id && p.billId && isClaim(p) && p.date && Math.abs(amountOf(p) - amt) < 0.005 &&
+      Math.abs(toDays(p.date) - toDays(d)) <= 7 && shopWords(p).concat(billWords(findIn(st, 'bills', p.billId))).some((w) => mine.has(w))) || null;
   }
 
   /* ---------- every paperwork save goes through this ---------- */
@@ -1098,10 +1309,19 @@
       if (who && rec.kind !== 'invoice-out') rec.payer = who;
       else delete rec.payer;
     }
+    const shown = rec._stageShown;
+    delete rec._stageShown;
     if (isClaim(rec)) {
       let st = stage(rec);
-      // Changed in a form: different from both what was stored and what it read as. Otherwise an old tick wins.
-      if (prev && STAGES.includes(rec.claimStatus) && rec.claimStatus !== prev.claimStatus && rec.claimStatus !== stage(prev)) st = rec.claimStatus;
+      // Changed in a form: different from the stage the form showed (or, with no form, from both what was stored
+      // and what it read as). Otherwise an old tick wins.
+      if (prev && STAGES.includes(rec.claimStatus) && (STAGES.includes(shown) ? rec.claimStatus !== shown : rec.claimStatus !== prev.claimStatus && rec.claimStatus !== stage(prev))) st = rec.claimStatus;
+      // No longer paid back: the repayment it was ticked off with isn't matched to it again (as 'Not paid back yet').
+      if (prev && st !== 'paid-back' && isClaim(prev) && stage(prev) === 'paid-back') {
+        const txs = [prev.repaidTx].concat((prev.repayments || []).map((r) => r && r.tx)).filter(Boolean);
+        if (txs.length) rec.notRepayments = Array.from(new Set((rec.notRepayments || []).concat(txs)));
+        for (const k of ['repaidDate', 'repaidTx', 'repayments']) delete rec[k];
+      }
       rec.claimStatus = st;
       if (st === 'to-send') for (const k of ['claimedDate', 'packId', 'repaidDate', 'repaidTx', 'repayments']) delete rec[k];
       if (st === 'sent') {
@@ -1136,9 +1356,13 @@
     if (!d.length) return '';
     return d[0] === d[d.length - 1] ? short(d[0]) : short(d[0]) + ' to ' + short(d[d.length - 1]);
   }
-  const lineAmount = (p) => (noAmount(p) ? 'no amount' : money(amountOf(p)));
+  /* A reminder (everything in it sent already) asks for what's still owed on each, after any part repayments. */
+  const isReminder = (recs, flow) => flow !== 'ktk' && recs.length > 0 && recs.every((p) => stage(p) === 'sent');
+  const owedOf = (p, reminder) => (reminder ? left(p) : amountOf(p));
+  const lineAmount = (p, reminder) => (noAmount(p) ? 'no amount' : money(owedOf(p, reminder)) + (reminder && repaidSoFar(p) > 0 ? ' (' + money(repaidSoFar(p)) + ' paid so far)' : ''));
   function numberedLines(recs, flow) {
-    return recs.map((p, i) => (i + 1) + '. ' + [p.date ? short(p.date) : '', shopName(p), clean(p.title), lineAmount(p) + (flow === 'ktk' && p.dueDate ? ' by ' + short(p.dueDate) : '')]
+    const reminder = isReminder(recs, flow);
+    return recs.map((p, i) => (i + 1) + '. ' + [p.date ? short(p.date) : '', shopName(p), clean(p.title), lineAmount(p, reminder) + (flow === 'ktk' && p.dueDate ? ' by ' + short(p.dueDate) : '')]
       .filter(Boolean).join(' · '));
   }
   /* The message to send with the pack (opts.lines adds the numbered list and total, for Copy message). */
@@ -1172,7 +1396,7 @@
       const range = rangeText(recs);
       text = hi + ' here ' + (recs.length === 1 ? 'is 1 thing' : 'are ' + recs.length + ' things') + ' I paid for ' + who + (range ? ' (' + range + ')' : '') + ', ' + money(total) + (recs.length === 1 ? '' : ' in total') + '. ' + receipts + ' Thanks!';
     }
-    if (opts.lines) text += '\n\n' + numberedLines(recs, 'back').join('\n') + '\nTotal: ' + money(total);
+    if (opts.lines) text += '\n\n' + numberedLines(recs, 'back').join('\n') + '\nTotal: ' + money(sum(recs, (p) => owedOf(p, sentAlready)));
     return text;
   }
   const fileSafe = (t) => clean(t).replace(/…/g, ' ').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 40).trim();
@@ -1248,6 +1472,7 @@
       return null;
     }
     const d = opts.date || today();
+    const reminder = isReminder(recs, flow);
     const packs0 = Array.from(new Set(recs.map((p) => p.packId).filter(Boolean)));
     const packId = flow === 'back' ? (packs0.length === 1 && recs.every((p) => p.packId === packs0[0]) ? packs0[0] : newPackId(s, d, ids)) : '';
     const entries = [];
@@ -1277,18 +1502,19 @@
       const tx = p.purchaseTx ? findIn(s, T, p.purchaseTx) : null;
       const from = tx ? accountName(s, tx.account) : '';
       const proof = names.length ? names.join(', ') : tx ? 'bank payment on ' + short(tx.date) + ', receipt to follow' : flow === 'ktk' ? 'no file' : 'receipt to follow';
-      const amt = noAmount(p) ? '' : amountOf(p).toFixed(2);
+      const amt = noAmount(p) ? '' : owedOf(p, reminder).toFixed(2);
       const orig = p.originalAmount ? clean(p.originalAmount) : '';
+      const part = reminder && repaidSoFar(p) > 0 ? money(repaidSoFar(p)) + ' of ' + money(amountOf(p)) + ' paid so far' : '';
       rows.push({
         n: String(i + 1), date: esc(p.date ? fmtDate(p.date) : ''), party: esc(clean(p.party)), what: esc(clean(p.title)),
-        amount: esc(noAmount(p) ? '–' : money(amountOf(p))) + (orig ? '<small>receipt says ' + esc(orig) + '</small>' : ''),
+        amount: esc(noAmount(p) ? '–' : money(owedOf(p, reminder))) + (part ? '<small>' + esc(part) + '</small>' : '') + (orig ? '<small>receipt says ' + esc(orig) + '</small>' : ''),
         from: esc(from), proof: '<span class="file">' + esc(proof) + '</span>', due: esc(p.dueDate ? fmtDate(p.dueDate) : ''),
       });
       csv.push(flow === 'ktk'
         ? [i + 1, p.date || '', clean(p.party), clean(p.title), amt, p.dueDate || '', names.join('; ') || 'no file']
         : [i + 1, p.date || '', clean(p.party), clean(p.title), amt, from, proof]);
     }
-    const total = sum(recs, amountOf);
+    const total = sum(recs, (p) => owedOf(p, reminder));
     const who = e.name || 'Work';
     const me = firstName(s);
     const cols = flow === 'ktk'
@@ -1378,7 +1604,7 @@
     const recs = packRecords(ids, flow);
     if (!recs.length) return false;
     let text = opts.text || message(ids, flow);
-    if (flow === 'back' && !/\n1\. /.test(text)) text += '\n\n' + numberedLines(recs, 'back').join('\n') + '\nTotal: ' + money(sum(recs, amountOf));
+    if (flow === 'back' && !/\n1\. /.test(text)) text += '\n\n' + numberedLines(recs, 'back').join('\n') + '\nTotal: ' + money(sum(recs, (p) => owedOf(p, isReminder(recs, flow))));
     const ok = await copyText(text);
     if (!ok) {
       toast('I couldn’t copy it here. Select the message and copy it yourself.');
@@ -1401,11 +1627,11 @@
   }
 
   GU.workMoney = {
-    WORK_IN, WORK_OUT, STAGES,
+    WORK_IN, WORK_OUT, STAGES, WAGE,
     employer, isEmployerText, employerCategory, wageSource,
     payerOf, lane, stage, isClaim, left,
-    claims, packs, dueBack, paidBackSince, taxYearStart, words,
-    purchaseFor, repaymentFor, prompts, reconcile, billClaims, badge,
+    claims, packs, dueBack, paidBackSince, taxYearStart, words, awaiting,
+    purchaseFor, repaymentFor, prompts, reconcile, billClaims, billTwin, outTwin, badge,
     markSent, unsend, markPaidBack, unrepay, linkPurchase, unlinkPurchase, claimFromTx,
     setPayer, moveToHome, markKtkPaid, handOver, notRepayment, notPurchase, notWork, creditOk, markWages,
     mirror, normalise, newPackId,

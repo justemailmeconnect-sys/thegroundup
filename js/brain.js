@@ -34,7 +34,7 @@
     bank_statement: 'Bank',
     order_history: 'Receipts',
     section: 'Your sections',
-    unsure: 'Inbox',
+    unsure: 'Sorting hub',
   };
   const PAPER = ['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty'];
   const PAYSLIPS = 'Employment and payslips';
@@ -162,11 +162,12 @@
   const SCHEMA = {
     type: 'object',
     additionalProperties: false,
-    required: ['destination', 'confidence', 'summary', 'title', 'party', 'amount', 'date', 'due_date', 'expiry_date', 'reference', 'context', 'payer', 'category',
+    required: ['destination', 'confidence', 'why', 'summary', 'title', 'party', 'amount', 'date', 'due_date', 'expiry_date', 'reference', 'context', 'payer', 'category',
       'document_type', 'frequency', 'paid', 'visa_id', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes', 'monthly_payment', 'interest_rate', 'debt_type', 'term_months', 'borrowed_amount'],
     properties: {
       destination: { type: 'string', enum: Object.keys(DESTINATIONS) },
       confidence: { type: 'number' },
+      why: { type: 'string' },
       summary: { type: 'string' },
       title: { type: 'string' },
       party: NULLABLE('string'),
@@ -245,13 +246,14 @@
       '- task_title and task_due: if the item asks the user to do something by a date (reply, pay, book, renew, send documents) and the destination is not already task, describe that follow-up. Otherwise null.',
       '- summary: one short, friendly sentence to the user saying what it is, for example "Receipt from Currys for a Samsung TV, £549.00, with a 2-year guarantee."',
       '- confidence: 0 to 1, how sure you are about the destination.',
+      '- why: one short reason for the destination and who paid, under 12 words, for example "Invoice addressed to the business, paid on your card".',
       '- notes: anything else worth keeping (policy numbers, what is covered, account numbers). null if nothing.',
       '- monthly_payment, interest_rate, debt_type, term_months and borrowed_amount: only for debts. null otherwise.',
     ].join('\n');
   }
 
   function blankResult() {
-    return { destination: 'unsure', confidence: 0.3, summary: '', title: '', party: null, amount: null, date: null, due_date: null, expiry_date: null, reference: null,
+    return { destination: 'unsure', confidence: 0.3, why: '', summary: '', title: '', party: null, amount: null, date: null, due_date: null, expiry_date: null, reference: null,
       context: 'home', payer: null, category: null, document_type: null, frequency: null, paid: false, visa_id: null, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null,
       monthly_payment: null, interest_rate: null, debt_type: null, term_months: null, borrowed_amount: null };
   }
@@ -263,6 +265,7 @@
     if (out.amount != null) out.amount = Math.abs(round2(out.amount));
     if (!DESTINATIONS[out.destination]) out.destination = 'unsure';
     out.confidence = Math.max(0, Math.min(1, Number(out.confidence) || 0));
+    out.why = typeof out.why === 'string' ? out.why.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
     if (out.visa_id && !store.find('visas', out.visa_id)) out.visa_id = null;
     if (out.section_id && !(store.state.sections || []).some((x) => x.id === out.section_id)) out.section_id = null;
     if (out.document_type && !GU.tabs.documents.TYPES.includes(out.document_type)) out.document_type = 'Other';
@@ -292,7 +295,7 @@
       } else if (out.destination === 'transaction_out' && !isEmployerText(out.party)) {
         // 'Paid £18 for printer paper' for work: something to get back, not your own spending.
         const title = String(out.title || '').trim();
-        Object.assign(out, { destination: 'receipt', payer: 'me', date: out.date || today(), title: title.charAt(0).toUpperCase() + title.slice(1),
+        Object.assign(out, { destination: 'receipt', payer: 'me', date: out.date || today(), title: title.charAt(0).toUpperCase() + title.slice(1), why: out.why || 'You paid for work, so it’s one to get back',
           summary: 'You paid ' + (out.amount != null ? money(out.amount) + ' ' : '') + (out.party ? 'for ' + out.party + ' ' : '') + 'for ' + e.label + '. It goes in Get paid back.' });
       }
     }
@@ -330,6 +333,7 @@
       'THE ITEM:\n' +
       (input.files.length ? 'Files: ' + input.files.map((f, i) => ((input.paths && input.paths[i]) || f.name) + ' (' + (f.type || 'unknown type') + ')').join(', ') + ' (the folder names are how the user organised them, so use them as a hint)' + (images.length ? '. The image' + (images.length > 1 ? 's are' : ' is') + ' attached.' : '') + '\n' : '') +
       (input.note ? 'The user wrote: ' + input.note + '\n' : '') +
+      (input.hint ? 'The user says where it goes (follow this): ' + input.hint + '\n' : '') +
       (input.text ? 'Text read from it:\n"""\n' + input.text.slice(0, 12000) + '\n"""\n' : '');
     const opts = { modelTier: 'default' };
     if (images.length) opts.images = images;
@@ -364,6 +368,7 @@
     content.push({ type: 'text', text:
       (input.files.length ? 'Files: ' + input.files.map((f, i) => (input.paths && input.paths[i]) || f.name).join(', ') + (input.paths && input.paths.some((p) => p.includes('/')) ? ' (folder names show how the user organised them; use them as a hint)' : '') + '\n' : '') +
       (input.note ? 'The user wrote: ' + input.note + '\n' : '') +
+      (input.hint ? 'The user says where it goes (follow this): ' + input.hint + '\n' : '') +
       (input.text && !content.length ? 'Text:\n"""\n' + input.text.slice(0, 20000) + '\n"""\n' : '') +
       'Where does this belong? Fill in every field.' });
     const res = await client.beta.messages.create({
@@ -578,10 +583,10 @@
     const headerLine = (raw.split(/\n/).find((l) => l.trim()) || '').toLowerCase();
     const looksLikeOrders = sheetLike && headerLine.split(/,|\t/).length >= 3 && /order\s*(id|number|no|#)/.test(headerLine) && /date/.test(headerLine);
     if (looksLikeOrders && raw.split(/\n/).filter((l) => l.trim()).length > 1) {
-      return Object.assign(r, { destination: 'order_history', confidence: 0.95, title: 'Order list', summary: 'A list of online orders. I’ll open the importer so every order becomes a paid invoice.' });
+      return Object.assign(r, { destination: 'order_history', confidence: 0.95, why: 'A spreadsheet of online orders', title: 'Order list', summary: 'A list of online orders. I’ll open the importer so every order becomes a paid invoice.' });
     }
     if (input.files.some((f) => /\.csv$/i.test(f.name) || f.type === 'text/csv')) {
-      return Object.assign(r, { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check the columns.' });
+      return Object.assign(r, { destination: 'bank_statement', confidence: 0.9, why: 'A spreadsheet of bank lines', title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check the columns.' });
     }
     // Typed notes (or a short note saved as a .txt file): tasks or quick money notes.
     const noteLike = (!input.files.length || (input.files.every((f) => /\.txt$/i.test(f.name)) && raw.length < 240 && !/receipt|invoice|statement|total|policy|certificate|booking/i.test(raw))) && debtScore(raw) < 2;
@@ -591,17 +596,17 @@
       const whoOf = (m) => (m ? m[1].trim().split(/\s+(?:for|from|on|at)\s+/i)[0].trim() : null);
       if (amt && /\b(paid|spent|bought|gave|cost)\b/i.test(raw)) {
         const who = whoOf(raw.match(/\b(?:to|at|on|for)\s+(?:the\s+)?([a-z][\w' &-]{2,40})/i));
-        return clean(Object.assign(r, { destination: 'transaction_out', confidence: 0.8, amount: parseFloat(amt[1] || amt[2]), party: who, title: who || raw,
+        return clean(Object.assign(r, { destination: 'transaction_out', confidence: 0.8, why: 'You wrote that you paid for something', amount: parseFloat(amt[1] || amt[2]), party: who, title: who || raw,
           date: r.date || today(), category: F.categorise(raw, -1, store.state.rules) || null, summary: 'Money out: ' + money(parseFloat(amt[1] || amt[2])) + (who ? ' to ' + who : '') + '.' }));
       }
       if (amt && /\b(received|got paid|earned|was paid|refund)\b/i.test(raw)) {
         const who = whoOf(raw.match(/\bfrom\s+([a-z][\w' &-]{2,40})/i));
-        return clean(Object.assign(r, { destination: 'transaction_in', confidence: 0.8, amount: parseFloat(amt[1] || amt[2]), party: who, title: who || raw,
+        return clean(Object.assign(r, { destination: 'transaction_in', confidence: 0.8, why: 'You wrote that money came in', amount: parseFloat(amt[1] || amt[2]), party: who, title: who || raw,
           date: r.date || today(), category: /refund/i.test(raw) ? 'Refunds' : null, summary: 'Money in: ' + money(parseFloat(amt[1] || amt[2])) + (who ? ' from ' + who : '') + '.' }));
       }
       const q = GU.tabs.today.parseQuickTask(raw);
       const verb = /^(call|ring|email|text|book|buy|pay|renew|cancel|send|post|check|ask|remember|remind|don'?t forget|need to|sort|fix|clean|pick up|collect|order|apply|reply|chase|find|get|make|take|return|update|finish|write|print|sign|submit|arrange|organise|organize)\b/i.test(raw.trim());
-      return Object.assign(r, { destination: 'task', confidence: verb || q.due ? 0.88 : 0.66, title: q.title, due_date: q.due || null, amount: null,
+      return Object.assign(r, { destination: 'task', confidence: verb || q.due ? 0.88 : 0.66, why: verb || q.due ? 'It reads like something to do' + (q.due ? ' by a date' : '') : 'A short note, so it’s kept as a task', title: q.title, due_date: q.due || null, amount: null,
         summary: 'A task' + (q.due ? ' for ' + fmtDate(q.due, { weekday: true }) : '') + ': ' + q.title + '.' });
     }
 
@@ -613,8 +618,10 @@
       bill: has(t, ['direct debit', 'monthly payment', 'your new monthly', 'subscription', 'per month', 'standing order', 'payment schedule', 'monthly plan']) * 2,
     };
     let docType = null;
+    let docWord = '';
     for (const [words, type] of DOC_RULES) if (has(t, words)) {
       docType = type;
+      docWord = words.find((w) => t.includes(w)).trim();
       break;
     }
     const topic = TOPICS.map((x) => ({ x, n: has(t, x.words) })).sort((a, b) => b.n - a.n)[0];
@@ -631,48 +638,49 @@
       // The next instalment date is when to pay, not the date of the balance.
       const due = dates.find((d) => /due|next (?:instalment|payment)|instalment.{0,20}on\s*$|collected on|pay by/.test(d.before));
       const issued = dates.find((d) => d !== due && /statement date|date of (?:agreement|statement)|agreement date|as (?:of|at)|balance on|dated?:?\s*$/.test(d.before)) || dates.find((d) => d !== due);
-      Object.assign(r, { destination: 'debt', confidence: Math.min(0.92, 0.66 + debtSc * 0.06), party: f.lender ? f.lender.name : r.party, title: name, amount: f.balance != null ? Math.abs(f.balance) : null,
+      Object.assign(r, { destination: 'debt', confidence: Math.min(0.92, 0.66 + debtSc * 0.06), why: 'It shows money owed and payments', party: f.lender ? f.lender.name : r.party, title: name, amount: f.balance != null ? Math.abs(f.balance) : null,
         date: issued ? issued.iso : null, due_date: due ? due.iso : null, monthly_payment: f.payment, interest_rate: f.apr, debt_type: f.type, term_months: f.term, borrowed_amount: f.borrowed,
         summary: (f.type === 'Credit card' ? 'A credit card statement' : 'Details of a debt') + (f.lender || r.party ? ' from ' + name : '') + (f.balance != null ? ': ' + money(Math.abs(f.balance)) + ' owed' : '') + (f.payment ? ', ' + money(f.payment) + ' a month' : '') + '.' });
       return clean(r);
     }
     if (sc.visa >= 3 && sc.visa >= sc.invoice && docType !== 'Passport') {
       const v = matchVisa(t);
-      Object.assign(r, { destination: 'visa', confidence: v ? 0.82 : 0.7, visa_id: v ? v.id : null, title: v ? v.visaType : 'Visa letter',
+      Object.assign(r, { destination: 'visa', confidence: v ? 0.82 : 0.7, why: v ? 'It mentions your ' + v.visaType + ' application' : 'It mentions visa or Home Office words', visa_id: v ? v.id : null, title: v ? v.visaType : 'Visa letter',
         summary: v ? 'About your ' + v.visaType + (v.country ? ' (' + v.country + ')' : '') + '. I’ll add it to that application.' : 'A visa or immigration letter.' });
     } else if (sc.warranty >= 3 && sc.warranty >= sc.invoice && !(sc.receipt >= 2.6 && sc.warranty < 6)) {
       const until = r.expiry_date || (warrantyYears && (r.date || today()) ? addMonths(r.date || today(), 12 * +warrantyYears[1]) : null);
-      Object.assign(r, { destination: 'warranty', confidence: 0.78, expiry_date: until, title: r.party ? r.party + ' warranty' : 'Warranty',
+      Object.assign(r, { destination: 'warranty', confidence: 0.78, why: 'It mentions a warranty or guarantee', expiry_date: until, title: r.party ? r.party + ' warranty' : 'Warranty',
         summary: 'A warranty' + (r.party ? ' from ' + r.party : '') + (until ? ', covered until ' + fmtDate(until) : '') + '.' });
     } else if (sc.invoice >= 4 || (sc.invoice >= 2 && (sc.invoice > sc.receipt || onlineOrder))) {
       const dest = fromMe ? 'invoice_owed_to_me' : 'invoice_to_pay';
-      Object.assign(r, { destination: dest, confidence: 0.72 + Math.min(0.15, sc.invoice / 40), paid: !fromMe && paidWords > 0, title: r.party ? 'Invoice from ' + r.party : 'Invoice',
+      Object.assign(r, { destination: dest, confidence: 0.72 + Math.min(0.15, sc.invoice / 40), paid: !fromMe && paidWords > 0,
+        why: fromMe ? 'Your business name is on it as the sender' : paidWords ? 'An invoice that says it’s paid' : 'It asks for payment', title: r.party ? 'Invoice from ' + r.party : 'Invoice',
         category: F.categorise(r.party + ' ' + t, -1, store.state.rules, { spend: true }) || null,
         summary: (fromMe ? 'An invoice you sent' : paidWords ? 'A paid invoice' : 'An invoice to pay') + (r.party && !fromMe ? ' from ' + r.party : '') + (r.amount ? ' for ' + money(r.amount) : '') + (r.due_date && !paidWords ? ', due ' + fmtDate(r.due_date) : '') + '.' });
     } else if (sc.bill >= 2 && sc.bill >= sc.receipt) {
-      Object.assign(r, { destination: 'bill', confidence: 0.7, frequency: /year|annual/.test(t) ? 'yearly' : /quarter/.test(t) ? 'quarterly' : /week/.test(t) ? 'weekly' : 'monthly',
+      Object.assign(r, { destination: 'bill', confidence: 0.7, why: 'It mentions a direct debit or subscription', frequency: /year|annual/.test(t) ? 'yearly' : /quarter/.test(t) ? 'quarterly' : /week/.test(t) ? 'weekly' : 'monthly',
         title: r.party || 'New bill', due_date: r.due_date || r.date, category: F.categorise(r.party + ' ' + t, -1, store.state.rules, { spend: true }) || 'Bills & utilities',
         summary: 'A regular payment' + (r.party ? ' to ' + r.party : '') + (r.amount ? ' of ' + money(r.amount) : '') + '.' });
     } else if (docType) {
       const firstLine = raw.split('\n').map((x) => x.trim()).find((l) => /[a-z]{3}/i.test(l) && l.length <= 60);
       const tidy = (l) => (l === l.toUpperCase() ? l.split(' ').map((w) => (w.length <= 3 ? w : w[0] + w.slice(1).toLowerCase())).join(' ') : l);
-      Object.assign(r, { destination: 'document', confidence: 0.75, document_type: docType, title: firstLine ? tidy(firstLine) : docType === 'Other' ? (r.party || 'Document') : docType.split(/[,(]/)[0].replace(/ or .*/, '').trim(),
+      Object.assign(r, { destination: 'document', confidence: 0.75, document_type: docType, why: 'It mentions “' + docWord + '”', title: firstLine ? tidy(firstLine) : docType === 'Other' ? (r.party || 'Document') : docType.split(/[,(]/)[0].replace(/ or .*/, '').trim(),
         summary: 'An important document (' + docType.toLowerCase() + ')' + (r.expiry_date ? ', expires ' + fmtDate(r.expiry_date) : '') + '.' });
     } else if (sc.receipt >= 1.3) {
-      Object.assign(r, { destination: 'receipt', confidence: 0.6 + Math.min(0.3, sc.receipt / 12), title: r.party ? r.party + ' receipt' : 'Receipt',
+      Object.assign(r, { destination: 'receipt', confidence: 0.6 + Math.min(0.3, sc.receipt / 12), why: 'It has receipt words like total, VAT or card', title: r.party ? r.party + ' receipt' : 'Receipt',
         category: F.categorise(r.party + ' ' + t, -1, store.state.rules, { spend: true }) || null,
         expiry_date: warrantyYears ? addMonths(r.date || today(), 12 * +warrantyYears[1]) : null,
         summary: 'A receipt' + (r.party ? ' from ' + r.party : '') + (r.amount ? ' for ' + money(r.amount) : '') + (r.date ? ' on ' + fmtDate(r.date) : '') + '.' });
     } else if (topic && topic.n >= 1) {
       const existing = (store.state.sections || []).find((x) => x.name.toLowerCase() === topic.x.name.toLowerCase());
-      Object.assign(r, { destination: 'section', confidence: 0.55 + Math.min(0.25, topic.n / 10), section_id: existing ? existing.id : null, new_section_name: existing ? null : topic.x.name,
+      Object.assign(r, { destination: 'section', confidence: 0.55 + Math.min(0.25, topic.n / 10), why: 'It mentions things to do with ' + topic.x.name, section_id: existing ? existing.id : null, new_section_name: existing ? null : topic.x.name,
         title: input.files[0] ? input.files[0].name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') : raw.split('\n')[0].slice(0, 60),
         summary: 'This looks like it belongs with ' + topic.x.name + (existing ? '.' : '. I can start a new ' + topic.x.name + ' section for it.') });
     } else if (input.files.some(isImg) && !raw.trim()) {
-      Object.assign(r, { destination: 'receipt', confidence: 0.4, title: 'Photo ' + fmtDate(today(), { short: true }),
+      Object.assign(r, { destination: 'receipt', confidence: 0.4, why: 'I couldn’t read the photo', title: 'Photo ' + fmtDate(today(), { short: true }),
         summary: 'A photo I couldn’t read. Is it a receipt? Check the details before filing.' });
     } else {
-      Object.assign(r, { destination: 'unsure', confidence: 0.25, title: input.files[0] ? input.files[0].name : raw.slice(0, 60), summary: 'I’m not sure where this goes. Pick a place for it.' });
+      Object.assign(r, { destination: 'unsure', confidence: 0.25, why: 'Nothing in it says where it goes', title: input.files[0] ? input.files[0].name : raw.slice(0, 60), summary: 'I’m not sure where this goes. Pick a place for it.' });
     }
     // Your own folder names are a strong hint: "Car/…" belongs in Car, "Work receipts/…" is for work.
     if (folder) {
@@ -680,10 +688,10 @@
       const sec = (store.state.sections || []).find((x) => x.name.toLowerCase() === folder.toLowerCase());
       const topic = TOPICS.find((x) => x.name.toLowerCase() === folder.toLowerCase() || x.name.toLowerCase().split(' & ')[0] === folder.toLowerCase());
       const weak = ['unsure', 'section'].includes(r.destination) || r.confidence < 0.6;
-      if (weak && sec) Object.assign(r, { destination: 'section', section_id: sec.id, new_section_name: null, confidence: 0.85, summary: (r.summary && r.destination !== 'unsure' ? r.summary + ' ' : '') + 'It was in your “' + folder + '” folder, so it goes with ' + sec.name + '.' });
+      if (weak && sec) Object.assign(r, { destination: 'section', section_id: sec.id, new_section_name: null, confidence: 0.85, why: 'It was in your “' + folder + '” folder', summary: (r.summary && r.destination !== 'unsure' ? r.summary + ' ' : '') + 'It was in your “' + folder + '” folder, so it goes with ' + sec.name + '.' });
       else if (weak && topic && !/receipt|invoice|bill|warrant|guarantee|document|paperwork|statement|bank|visa|immigration|task|to.?do|admin|important|tax|insurance|passport/i.test(folder)) {
         const name = topic ? topic.name : folder.replace(/\b[a-z]/g, (c) => c.toUpperCase());
-        Object.assign(r, { destination: 'section', section_id: null, new_section_name: name, confidence: topic ? 0.8 : 0.65,
+        Object.assign(r, { destination: 'section', section_id: null, new_section_name: name, confidence: topic ? 0.8 : 0.65, why: 'It was in your “' + folder + '” folder',
           title: r.title && r.destination !== 'unsure' ? r.title : (input.files[0] ? input.files[0].name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') : r.title),
           summary: 'It was in your “' + folder + '” folder, so I’ll keep it in a ' + name + ' section.' });
       }
@@ -733,7 +741,8 @@
   /* input: {files: File[]|Blob[], note: string} -> result with .via */
   async function analyse(input) {
     const files = input.files || [];
-    input = { files, note: (input.note || '').trim(), text: '', paths: input.paths || files.map((f) => GU.ui.pathOf(f)) };
+    const hint = String(input.hint || '').trim().slice(0, 500);
+    input = { files, note: (input.note || '').trim(), hint, text: '', paths: input.paths || files.map((f) => GU.ui.pathOf(f)) };
     const m = await mode();
     // Spreadsheets (bank statements, order lists) are sorted on this device: no need to send them anywhere.
     if (input.files.some((f) => /\.(csv|tsv)$/i.test(f.name) || f.type === 'text/csv')) {
@@ -741,7 +750,7 @@
       return Object.assign(await viaRules(input), { via: 'offline' });
     }
     if (input.files.some((f) => /\.(qif|ofx|qfx|xls|xlsx)$/i.test(f.name))) {
-      return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check it.', via: 'offline' });
+      return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, why: 'A bank export file', title: 'Bank statement', summary: 'A bank statement. I’ll open the importer so you can check it.', via: 'offline' });
     }
     const textNeeded = input.files.some((f) => isText(f) || isPdf(f));
     const ocr = m === 'offline' && store.state.settings.ocr !== false;
@@ -755,7 +764,7 @@
     }
     // Bank statements are spotted on this device and read by the statement importer (credit card statements are debts).
     if (looksLikeStatement(input.text) && !looksLikeDebt(input.text)) {
-      return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, title: 'Bank statement', via: 'offline',
+      return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, why: 'It lists bank transactions', title: 'Bank statement', via: 'offline',
         summary: 'A ' + ((GU.statements && GU.statements.detectBank(input.text, input.files[0] && input.files[0].name)) || 'bank') + ' statement. I’ll open the importer so you can check it.' });
     }
     if (m === 'claude-app') {
@@ -795,34 +804,75 @@
     return 'Work › ' + (name || fallback);
   }
   const paysLabel = () => (GU.parts && GU.parts.paysLabel ? GU.parts.paysLabel(store.state) : 'Company pays');
+  const partName = (p) => (p === 'work' ? 'Work' : 'Home');
+  /* A new section goes in the part you say, or Work when the thing is for work. */
+  const newSectionPart = (r) => (r.section_part === 'work' || r.section_part === 'home' ? r.section_part : r.context === 'work' ? 'work' : 'home');
+  const findList = (st, id) => (id ? (st.todoLists || []).find((l) => l.id === id) || null : null);
+  const findFolder = (st, id) => (id ? (st.workFolders || []).find((f) => f.id === id) || null : null);
+  /* A category the result names that isn't one yet, and will be made when it's filed. */
+  const newCategory = (r) => {
+    const n = F.tidyCategory ? F.tidyCategory(r.new_category) : '';
+    return n && !(F.findCategory && F.findCategory(n)) ? n : '';
+  };
+  const categoryOf = (r) => (F.findCategory && F.findCategory(r.category)) || newCategory(r) || '';
+  /* Your own category on a thing for Home, shown in its place ('Home › Bank › Gym'). */
+  const withCategory = (label, r, always) => {
+    const c = categoryOf(r);
+    if (!c || r.context === 'work' || (F.WORK || []).includes(c)) return label;
+    if (!always && !newCategory(r) && !(F.isCustom && F.isCustom(store.state, c))) return label;
+    return label + ' › ' + c + (newCategory(r) ? ' (new category)' : '');
+  };
+  const MONEY = ['transaction_out', 'transaction_in', 'bill'].concat(PAPER);
+  /* Where a result is filed: {tab, label, fresh}. fresh: filing it makes a new place (a section, list, category or visa application). */
   function placeOf(result) {
+    const out = placeAt(result);
+    const r = workSense(Object.assign({}, result));
+    if (!out.fresh && r.context !== 'work' && MONEY.includes(r.destination) && newCategory(r)) out.fresh = true;
+    return out;
+  }
+  function placeAt(result) {
     const r = workSense(Object.assign({}, result));
     const work = r.context === 'work';
     const d = r.destination;
+    const s = store.state;
+    const folder = work ? findFolder(s, r.folder_id) : null;
+    const inFolder = (o) => (folder ? Object.assign(o, { label: o.label + ' › ' + folder.name }) : o);
     if (d === 'section') {
-      const sec = r.section_id && (store.state.sections || []).find((x) => x.id === r.section_id);
-      return { tab: sec ? 's-' + sec.id : null, label: sec ? sec.name : (r.new_section_name ? r.new_section_name + ' (new section)' : 'A new section') };
+      const sec = r.section_id && (s.sections || []).find((x) => x.id === r.section_id);
+      if (sec) return { tab: 's-' + sec.id, label: partName(sec.part) + ' › ' + sec.name };
+      const name = String(r.new_section_name || '').trim();
+      const same = name && (s.sections || []).find((x) => x.name.toLowerCase() === name.toLowerCase());
+      if (same) return { tab: 's-' + same.id, label: partName(same.part) + ' › ' + same.name };
+      return { tab: null, label: partName(newSectionPart(r)) + ' › ' + (name ? name + ' (new section)' : 'A new section'), fresh: true };
     }
     if (d === 'visa') {
       const v = r.visa_id && store.find('visas', r.visa_id);
-      return { tab: 'visas', label: homePage('visas', 'Visas') + ' › ' + (v ? v.visaType : 'new application') };
+      return { tab: 'visas', label: homePage('visas', 'Visas') + ' › ' + (v ? v.visaType : 'new application'), fresh: !v };
     }
     if (PAPER.includes(d)) {
-      if (!work) return { tab: 'receipts', label: homePage('receipts', 'Receipts') + (d === 'invoice_owed_to_me' ? ' › Owed to you' : '') };
+      if (!work) return { tab: 'receipts', label: withCategory(homePage('receipts', 'Receipts') + (d === 'invoice_owed_to_me' ? ' › Owed to you' : ''), r) };
       if (d !== 'warranty' && r.payer === 'me') return { tab: tabOr('work-back', 'work'), label: workPage('back', 'Get paid back') };
-      if (d === 'warranty' || r.payer === 'company') return { tab: tabOr('work-ktk', 'work'), label: workPage('invoices', paysLabel()) };
+      if (d === 'warranty' || r.payer === 'company') return inFolder({ tab: tabOr('work-ktk', 'work'), label: workPage('invoices', paysLabel()) });
       return { tab: tabOr('work-ktk', 'work'), label: 'Work › Who paid?' };
     }
-    if (d === 'bill') return work ? { tab: tabOr('work-bills', 'work'), label: workPage('bills', 'Bills') } : { tab: 'bills', label: homePage('bills', 'Bills') };
+    if (d === 'bill') return work ? inFolder({ tab: tabOr('work-bills', 'work'), label: workPage('bills', 'Bills') }) : { tab: 'bills', label: withCategory(homePage('bills', 'Bills'), r) };
     if (d === 'document') {
-      return work ? { tab: tabOr('work-docs', 'work'), label: workPage('contracts', 'Contracts & documents') }
+      return work ? inFolder({ tab: tabOr('work-docs', 'work'), label: workPage('contracts', 'Contracts & documents') })
         : { tab: 'documents', label: homePage('documents', 'Documents') + ' › ' + (r.document_type || 'Other') };
     }
-    if (d === 'task') return work ? { tab: tabOr('work-tasks', 'work'), label: workPage('tasks', 'Tasks') } : { tab: 'todos', label: homePage('todos', 'To-do') };
+    if (d === 'task') {
+      if (work) return inFolder({ tab: tabOr('work-tasks', 'work'), label: workPage('tasks', 'Tasks') });
+      const wl = GU.parts && GU.parts.workListId ? GU.parts.workListId(s) : null;
+      const named = String(r.new_list_name || '').trim();
+      const list = findList(s, r.list_id) || (named && (s.todoLists || []).find((l) => l.id !== wl && String(l.name || '').toLowerCase() === named.toLowerCase())) || null;
+      const fresh = !list && named;
+      return { tab: 'todos', label: homePage('todos', 'To-do') + (list && list.id !== wl ? ' › ' + list.name : fresh ? ' › ' + fresh + ' (new list)' : ''), fresh: !!fresh };
+    }
     if (d === 'debt') return { tab: 'debts', label: homePage('debts', 'Debts') + ' › ' + (r.party || r.title || 'new debt') };
-    if (d === 'transaction_out' || d === 'transaction_in' || d === 'bank_statement') return { tab: 'transactions', label: homePage('transactions', 'Bank') };
+    if (d === 'transaction_out' || d === 'transaction_in') return { tab: 'transactions', label: withCategory(homePage('transactions', 'Bank'), r, true) };
+    if (d === 'bank_statement') return { tab: 'transactions', label: homePage('transactions', 'Bank') };
     if (d === 'order_history') return { tab: 'receipts', label: homePage('receipts', 'Receipts') };
-    return { tab: null, label: DESTINATIONS[d] || 'Inbox' };
+    return { tab: null, label: DESTINATIONS[d] || 'Sorting hub' };
   }
   function where(result) {
     return placeOf(result).label;
@@ -830,12 +880,16 @@
 
   /* Files the item. metas: already-stored file metadata. Returns {tab, ref, label, undo} or null if it needs the user. */
   function file(result, metas, note) {
-    // Home or work, and whose money, settled first so it lands on the page the Inbox showed.
+    // Home or work, and whose money, settled first so it lands on the page the Sorting hub showed.
     const r = workSense(Object.assign({}, result));
     if (r.destination === 'debt') {
       const res = GU.tabs.debts.fromInbox(Object.assign({}, r, { notes: [r.notes, note && note !== r.title ? note : ''].filter(Boolean).join('\n') || null }), metas);
-      return { tab: 'debts', ref: { c: 'debts', id: res.rec.id }, label: homePage('debts', 'Debts') + ' › ' + res.rec.name + (res.added ? '' : ' (updated)'), undo: res.undo };
+      return { tab: 'debts', ref: { c: 'debts', id: res.rec.id }, label: homePage('debts', 'Debts') + ' › ' + res.rec.name + (res.added ? '' : ' (updated)'), undo: res.undo, attached: !res.added };
     }
+    // A category you named that isn't there yet is made now, and taken away again by Undo.
+    const madeCat = r.context !== 'work' && MONEY.includes(r.destination) && newCategory(r) ? { kind: r.destination === 'transaction_in' ? 'in' : 'out', name: newCategory(r) } : null;
+    if (madeCat) r.category = madeCat.name;
+    else if (categoryOf(r)) r.category = categoryOf(r);
     const created = [];
     const t = today();
     const notes = [r.notes, note && note !== r.title ? note : ''].filter(Boolean).join('\n') || '';
@@ -847,10 +901,23 @@
     let txUndo = null;
     let sameTitle = '';
     let sameLabel = '';
+    let catAdded = false;
     store.commit((st) => {
       const add = (c, rec) => {
         st[c].push(rec);
         created.push({ c, id: rec.id });
+        return rec;
+      };
+      if (madeCat) {
+        const cats = (st.settings.categories = Object.assign({ out: [], in: [] }, st.settings.categories || {}));
+        cats[madeCat.kind] = (Array.isArray(cats[madeCat.kind]) ? cats[madeCat.kind] : []).concat([madeCat.name]);
+        catAdded = true;
+      }
+      // In a Work folder, when it's for work and the folder is on the page it's filed on.
+      const AREA = { paperwork: 'invoices', bills: 'bills', documents: 'contracts', tasks: 'tasks' };
+      const inFolder = (c, rec) => {
+        const f = work && findFolder(st, r.folder_id);
+        if (f && f.area === AREA[c]) rec.workFolder = f.id;
         return rec;
       };
       // Work tasks go in the Work list (made if it isn't there); your own never do.
@@ -897,7 +964,7 @@
               }
             }
           }
-          add('paperwork', rec);
+          add('paperwork', inFolder('paperwork', rec));
           tab = placeOf(Object.assign({}, r, { payer: rec.payer || null })).tab;
           ref = { c: 'paperwork', id: rec.id };
           break;
@@ -920,6 +987,7 @@
             anchorDay: +due.slice(8), method: 'Direct debit', autopay: true, category: work ? WORK_OUT : r.category || 'Bills & utilities', context: work ? 'work' : 'home', account: (st.accounts[0] || {}).id, notes, files: metas, history: [], active: true });
           // Who pays a work bill: left out until it's known, and read as the business's (the form always asks).
           if (work && payerOk(r.payer)) rec.payer = r.payer;
+          inFolder('bills', rec);
           tab = placeOf(r).tab;
           ref = { c: 'bills', id: rec.id };
           break;
@@ -927,6 +995,7 @@
         case 'document': {
           const rec = add('documents', { id: 'd-' + uid(), created: t, title: r.title, type: r.document_type || 'Other', context: work ? 'work' : 'home', holder: '', reference: r.reference || '', location: '',
             issueDate: r.date || '', expiryDate: r.expiry_date || '', notes: [r.summary, notes].filter(Boolean).join('\n'), files: metas, folder: r.folder || '' });
+          inFolder('documents', rec);
           tab = placeOf(r).tab;
           ref = { c: 'documents', id: rec.id };
           break;
@@ -949,8 +1018,20 @@
           break;
         }
         case 'task': {
-          const rec = add('tasks', Object.assign({ id: 'k-' + uid(), created: t, listId: work ? workList() : (homeLists[0] || st.todoLists[0] || {}).id, title: r.title, due: r.due_date || '', priority: 'normal',
-            notes: [notes, metas.length ? plural(metas.length, 'file') + ' attached in Inbox history' : ''].filter(Boolean).join('\n'), done: false }, work ? { context: 'work' } : {}));
+          // Your own: the list you chose, a new one you named, or your first list.
+          let listId = work ? workList() : null;
+          if (!work) {
+            const want = findList(st, r.list_id);
+            const name = String(r.new_list_name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+            if (want && want.id !== wl) listId = want.id;
+            else if (name) {
+              const same = homeLists.find((l) => String(l.name || '').toLowerCase() === name.toLowerCase());
+              listId = same ? same.id : add('todoLists', { id: 'list-' + uid(), name }).id;
+            } else listId = (homeLists[0] || st.todoLists[0] || {}).id;
+          }
+          const rec = add('tasks', Object.assign({ id: 'k-' + uid(), created: t, listId, title: r.title, due: r.due_date || '', priority: 'normal',
+            notes: [notes, metas.length ? plural(metas.length, 'file') + ' kept in the Sorting hub history' : ''].filter(Boolean).join('\n'), done: false }, work ? { context: 'work' } : {}));
+          inFolder('tasks', rec);
           tab = placeOf(r).tab;
           ref = { c: 'tasks', id: rec.id };
           break;
@@ -969,7 +1050,7 @@
             const name = (r.new_section_name || 'Other things').trim();
             sec = (st.sections || []).find((x) => x.name.toLowerCase() === name.toLowerCase());
             if (!sec) {
-              sec = { id: 's' + uid(), name, icon: GU.sections.iconFor(name), created: t, byAssistant: true };
+              sec = { id: 's' + uid(), name, icon: GU.sections.iconFor(name), created: t, byAssistant: true, part: newSectionPart(r) };
               st.sections = st.sections || [];
               st.sections.push(sec);
               created.push({ c: 'sections', id: sec.id });
@@ -1014,8 +1095,17 @@
             const tx = st.transactions.find((x) => x.id === txUndo.id);
             if (tx && tx.category === WORK_OUT) tx.category = txUndo.was || '';
           }
+          // The category it made goes too, unless something else has been put in it since.
+          if (catAdded) {
+            const n = madeCat.name.toLowerCase();
+            const used = ['transactions', 'paperwork', 'bills'].some((c) => (st[c] || []).some((x) => String(x.category || '').toLowerCase() === n));
+            const cats = st.settings.categories;
+            if (!used && cats && Array.isArray(cats[madeCat.kind])) cats[madeCat.kind] = cats[madeCat.kind].filter((x) => String(x).toLowerCase() !== n);
+          }
         });
       },
+      // Only added to a record you already had: nothing new was made.
+      attached: !!sameTitle,
     };
   }
 
@@ -1066,7 +1156,7 @@
         form.dispatchEvent(new Event('change'));
         note.innerHTML = GU.ui.icon('check') + '<span>' + esc(r.summary || 'Filled in from your file.') + ' Check the details, then file it.' + (r.via === 'offline' ? ' <small>(Offline reader. Add Claude in Settings for better results.)</small>' : '') + '</span>';
       } else if (r.destination !== 'unsure' && kindMap[r.destination] === undefined) {
-        note.innerHTML = GU.ui.icon('info') + '<span>' + esc(r.summary || '') + ' This looks like it belongs in <b>' + esc(where(r)) + '</b>. You can still file it here, or close this and drop it in the Inbox instead.</span>';
+        note.innerHTML = GU.ui.icon('info') + '<span>' + esc(r.summary || '') + ' This looks like it belongs in <b>' + esc(where(r)) + '</b>. You can still file it here, or close this and drop it in the Sorting hub instead.</span>';
       } else {
         note.innerHTML = GU.ui.icon('info') + '<span>I couldn’t read much from this file. Fill in the details below.</span>';
       }
@@ -1163,5 +1253,6 @@
     return { lender: null, payments: GU.debts.parseSchedule(all), via: 'offline' };
   }
 
-  GU.brain = { readSchedule, readStatement, quick, analyse, file, where, placeOf, asksPayer, payerFor, workSense, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS };
+  GU.brain = { readSchedule, readStatement, quick, analyse, file, where, placeOf, asksPayer, payerFor, workSense, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS,
+    blank: blankResult, clean, PAPER, MONEY };
 })();

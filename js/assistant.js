@@ -26,12 +26,12 @@
   const squash = (v, n) => str(v, n).replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim();
   /* Record text for Claude: on one line and capped. Invisible characters go (format characters such as the Unicode
      "tag" letters, which can spell out hidden words, private-use ones and variation selectors), and so do angle
-     brackets and their look-alikes (＜ ﹤ fold into < under NFKC; the rest go by name). The fence's own name is
-     broken up too, so record text can never open or close the data fence, even with brackets this misses. */
+     brackets and their look-alikes (＜ ﹤ fold into < under NFKC; the rest go by name). The fences' own names are
+     broken up too, so record text can never open or close a data fence, even with brackets this misses. */
   const clip = (v, n) => squash(typeof v === 'string' ? v.normalize('NFKC') : v, n || 80)
     .replace(/[\p{Cf}\p{Co}\ufe00-\ufe0f\u{e0100}-\u{e01ef}]/gu, '')
     .replace(/[<>‹›〈〉《》⟨⟩⟪⟫❮❯❬❭˂˃ᐸᐳ≺≻⧼⧽]/g, '')
-    .replace(/dashboard[\W_]*data/gi, (m) => m.slice(0, 9) + ' ' + m.slice(-4)).trim();
+    .replace(/(dashboard|hub)[\W_]*(data|items)/gi, (m, a, b) => a + ' ' + b).trim();
   const day = (v) => clip(v, 10); // a date from a record
   const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   /* A yes/no from Claude, which may come as text ("False", "no", "0"). Anything else gives the default. */
@@ -171,10 +171,22 @@
     }
     const income = (s.incomeSources || []).filter((x) => x.active !== false);
     if (income.length) line('\nINCOME SOURCES: ' + income.map((x) => clip(x.name) + ' ' + money(x.amount) + ' ' + freq(x.frequency) + ', next ' + (day(x.nextDate) || '?') + (x.from ? ' from ' + clip(x.from) : '')).join('; '));
-    const bills = s.bills.filter((b) => b.active !== false).sort((a, b) => day(a.nextDue).localeCompare(day(b.nextDue)));
+    // The user's own bills, as Home › Bills shows them. Work bills are the business's costs: listed apart, by who pays.
+    const W = GU.workMoney;
+    const co = clip(GU.parts ? GU.parts.co(s) : 'the company', 40);
+    const CO = co.toUpperCase();
+    const workBill = (b) => (GU.parts ? GU.parts.isWorkBill(b) : b.context === 'work');
+    const live = s.bills.filter((b) => b.active !== false).sort((a, b) => day(a.nextDue).localeCompare(day(b.nextDue)));
+    const bills = live.filter((b) => !workBill(b));
     if (bills.length) {
-      line('\nBILLS (' + bills.length + ', about ' + money(sum(bills, (b) => F.monthlyEquivalent(b.amount, b.frequency))) + ' a month):');
-      for (const b of bills.slice(0, 40)) line('- ' + clip(b.name) + ' ' + money(b.amount) + ' ' + freq(b.frequency) + ', next ' + (day(b.nextDue) || '?') + (b.autopay ? ', automatic' : ', pay by hand') + (b.category ? ', ' + clip(b.category, 40) : '') + (b.context === 'work' ? ', WORK' : ''));
+      line('\nBILLS (the user\'s own, ' + bills.length + ', about ' + money(sum(bills, (b) => F.monthlyEquivalent(b.amount, b.frequency))) + ' a month):');
+      for (const b of bills.slice(0, 40)) line('- ' + clip(b.name) + ' ' + money(b.amount) + ' ' + freq(b.frequency) + ', next ' + (day(b.nextDue) || '?') + (b.autopay ? ', automatic' : ', pay by hand') + (b.category ? ', ' + clip(b.category, 40) : ''));
+    }
+    const wbills = live.filter(workBill);
+    if (wbills.length) {
+      const mine = (b) => (W ? W.payerOf(b, 'bills') === 'me' : b.payer === 'me');
+      line('\nWORK BILLS (' + co + '\'s costs, not the user\'s own spending): ' + wbills.slice(0, 20).map((b) => clip(b.name) + ' ' + money(b.amount) + ' ' + freq(b.frequency) + ', next ' + (day(b.nextDue) || '?') +
+        (mine(b) ? ', comes out of the user\'s account and ' + co + ' pays them back' : ', ' + co + ' pays it directly')).join('; '));
     }
     const plans = GU.debts.instalments(s);
     if (plans.length) {
@@ -191,10 +203,27 @@
     }
     const owed = F.owedToMe(s);
     if (owed.length) line('\nOWED TO THE USER on invoices they sent: ' + money(sum(owed, (x) => x.left)) + ' — ' + owed.slice(0, 15).map((x) => clip(x.p.party || x.p.title) + ' ' + money(x.left) + (x.p.dueDate ? ' due ' + day(x.p.dueDate) : '') + (x.late ? ' LATE' : '')).join('; '));
-    const claims = F.toClaim(s);
-    if (claims.length) line('\nTO CLAIM BACK (work expenses the user paid): ' + money(sum(claims, (x) => x.amount)) + ' — ' + claims.slice(0, 20).map((x) => clip(x.p.party || x.p.title) + ' ' + money(x.amount) + ' ' + day(x.p.date)).join('; '));
+    // What the business owes the user back, the same figures as Work › Get paid back.
+    if (W && W.dueBack) {
+      const d = W.dueBack(s);
+      if (d.count || d.unpaid.length) {
+        line('\nDUE BACK FROM ' + CO + ' (things the user paid for with their own money): ' + money(d.toSendTotal) + ' not sent yet, ' + money(d.sentTotal) + ' sent and waiting to be paid back, ' + money(d.total) + ' in all.' +
+          (d.toSend.length ? ' Not sent: ' + d.toSend.slice(0, 20).map((x) => clip(x.p.party || x.p.title) + ' ' + money(x.left) + ' ' + day(x.p.date)).join('; ') + '.' : '') +
+          (d.sent.length ? ' Waiting: ' + d.sent.slice(0, 15).map((x) => clip(x.p.party || x.p.title) + ' ' + money(x.left) + (x.p.claimedDate ? ' sent ' + day(x.p.claimedDate) : '')).join('; ') + '.' : '') +
+          (d.unpaid.length ? ' Not counted until the user pays them: ' + d.unpaid.slice(0, 10).map((x) => clip(x.p.party || x.p.title) + ' ' + money(x.amount)).join('; ') + '.' : ''));
+      }
+    } else {
+      const claims = F.toClaim(s);
+      if (claims.length) line('\nTO CLAIM BACK (work expenses the user paid): ' + money(sum(claims, (x) => x.amount)) + ' — ' + claims.slice(0, 20).map((x) => clip(x.p.party || x.p.title) + ' ' + money(x.amount) + ' ' + day(x.p.date)).join('; '));
+    }
+    // Invoices the user pays (their own, or one for work they pay and get back), apart from the business's own.
+    const laneOf = (p) => (W ? W.lane(p, 'paperwork') : p.context === 'work' ? 'unsorted' : 'home');
     const toPay = s.paperwork.filter((p) => p.kind === 'invoice-in' && p.status !== 'paid');
-    if (toPay.length) line('\nINVOICES TO PAY: ' + toPay.slice(0, 15).map((p) => clip(p.title) + (p.amount != null ? ' ' + money(p.amount) : '') + (p.dueDate ? ' due ' + day(p.dueDate) : '') + (p.context === 'work' ? ' (work)' : '')).join('; '));
+    const inv = (p) => clip(p.title) + (p.amount != null ? ' ' + money(p.amount) : '') + (p.dueDate ? ' due ' + day(p.dueDate) : '');
+    const yours = toPay.filter((p) => ['home', 'back'].includes(laneOf(p)));
+    if (yours.length) line('\nINVOICES THE USER HAS TO PAY: ' + yours.slice(0, 15).map((p) => inv(p) + (laneOf(p) === 'back' ? ' (for ' + co + ': the user pays, then gets it back)' : '')).join('; '));
+    const theirs = toPay.filter((p) => ['ktk', 'unsorted'].includes(laneOf(p)));
+    if (theirs.length) line('\n' + CO + ' TO PAY (' + co + '\'s own invoices, never the user\'s money): ' + theirs.slice(0, 15).map((p) => inv(p) + (laneOf(p) === 'unsorted' ? ' (who pays isn\'t set yet)' : '')).join('; '));
     if (GU.work) {
       const checks = GU.work.checks(s);
       if (checks.length) line('\nWORK, what needs doing: ' + checks.slice(0, 12).map((c) => clip(c.title) + ' (' + clip(c.detail) + ')').join('; '));
@@ -215,7 +244,7 @@
     const spent = F.byCategory(s.transactions.filter((x) => String(x.date || '').slice(0, 7) === last), 'out').slice(0, 10);
     if (spent.length) line('\nSPENDING in ' + last + ' by category: ' + spent.map((c) => clip(c.category, 40) + ' ' + money(c.total, { whole: true })).join(', '));
     const waiting = (s.inbox || []).filter((i) => i.status !== 'reading').length;
-    if (waiting) line('INBOX: ' + plural(waiting, 'item') + ' waiting to be filed.');
+    if (waiting) line('SORTING HUB: ' + plural(waiting, 'item') + ' waiting to be sorted.');
     if ((s.sections || []).length) line('USER SECTIONS: ' + s.sections.map((x) => clip(x.name, 40)).join(', '));
     return cut(L.join('\n'), 40000);
   }
@@ -518,11 +547,11 @@
     },
     {
       name: 'open_page',
-      description: 'Show the user a page of the dashboard: today (Home), inbox, work, bills, debts, incomings (Income), todos, receipts, documents, visas, transactions (Bank), outgoings (Spending) or settings.',
+      description: 'Show the user a page of the dashboard: today (Home), hub (the Sorting hub), work, work-back (Get paid back), bills, debts, incomings (Income), todos, receipts, documents, visas, transactions (Bank), outgoings (Spending) or settings.',
       inputSchema: { type: 'object', properties: { page: { type: 'string' } }, required: ['page'] },
       execute(i) {
         const want = squash(i.page, 40).toLowerCase();
-        const ALIAS = { home: 'today', income: 'incomings', bank: 'transactions', spending: 'outgoings', tasks: 'todos', 'to-dos': 'todos' };
+        const ALIAS = { home: 'today', income: 'incomings', bank: 'transactions', spending: 'outgoings', tasks: 'todos', 'to-dos': 'todos', inbox: 'hub', 'sorting hub': 'hub' };
         const ok = (id) => own(GU.tabs, id) && !!GU.tabs[id] && typeof GU.tabs[id].render === 'function';
         let page = own(ALIAS, want) ? ALIAS[want] : want;
         if (!ok(page)) page = Object.keys(GU.tabs).find((id) => ok(id) && [GU.tabs[id].label, GU.tabs[id].short].some((x) => String(x || '').toLowerCase() === want)) || page;
@@ -548,28 +577,43 @@
     }
     return sdk;
   }
-  async function backend() {
+  /* How Claude is reached here: {kind: 'claude', sample, max} inside the Claude app, {kind: 'api', key, max} with your
+     own API key, or null. max: how many tools this view can take (Infinity when there's no limit). */
+  async function reach() {
     if (off) return null;
     const sample = GU.brain && GU.brain.getSample ? await GU.brain.getSample() : null;
     if (sample) {
-      // How many tools this view can take. The look-ups come first in TOOLS, so a smaller list keeps them.
-      let tools = 0;
+      let max = 0;
       if (!noTools) {
         try {
           const lim = await sample.limits();
           if (lim && lim.tools) {
-            const max = Math.floor(Number(lim.tools.maxCount));
-            tools = Number.isFinite(max) ? Math.max(0, Math.min(max, TOOLS.length)) : TOOLS.length;
+            const n = Math.floor(Number(lim.tools.maxCount));
+            max = Number.isFinite(n) ? Math.max(0, n) : Infinity;
           }
         } catch (e) {
-          tools = 0;
+          max = 0;
         }
       }
-      return { kind: 'claude', sample, tools };
+      return { kind: 'claude', sample, max };
     }
     const key = (store.state.settings.apiKey || '').trim();
-    if (key) return { kind: 'api', key, tools: TOOLS.length };
+    if (key) return { kind: 'api', key, max: Infinity };
     return null;
+  }
+  /* The chat's view of it: how many of its own tools it can use. The look-ups come first in TOOLS, so a smaller list keeps them. */
+  async function backend() {
+    const b = await reach();
+    return b && Object.assign({}, b, { tools: Math.min(b.max, TOOLS.length) });
+  }
+  /* For other pages (the Sorting hub): {kind, tools} where tools is how many this view can take, or null. */
+  async function connection() {
+    try {
+      const b = await reach();
+      return b ? { kind: b.kind, tools: b.max } : null;
+    } catch (e) {
+      return null;
+    }
   }
   const failure = (code, msg) => Object.assign(new Error(msg || code), { code });
   /* The model the user chose in Settings, if any. */
@@ -594,27 +638,52 @@
     return failure(code, (e && e.message) || code);
   }
 
-  /* One answer: streams into onText, may call tools, resolves with {text, truncated}. */
-  async function ask(hist, onText, signal, actions) {
-    const b = await backend();
-    if (!b) throw failure(off || 'unavailable');
-    const list = TOOLS.slice(0, b.tools);
-    const lead = rules(list);
-    if (b.kind === 'claude') {
-      // No system prompt here: the instructions and the fenced data lead the conversation as one user turn.
-      const input = [{ role: 'user', content: lead + '\n\n' + fenced() }].concat(hist);
-      const opts = { onText: ({ text }) => onText(text), signal, cache: false, modelTier: 'default' };
-      if (list.length) {
-        opts.tools = list.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, execute: (args, ctx) => {
-          // Nothing may change once the user has stopped this answer, or after it has been cleared away.
-          if (pending !== actions || signal.aborted || (ctx && ctx.signal && ctx.signal.aborted)) throw new Error('Stopped by the user');
-          return t.execute(args && typeof args === 'object' && !Array.isArray(args) ? args : {});
-        } }));
-      }
-      const r = await b.sample(input, opts);
-      return { text: r.text, truncated: !!r.truncated };
+  /* Runs one answer from Claude with any instructions, fenced data and tools. Ask Claude and the Sorting hub both
+     use it, so the way Claude is reached, the tool loop and the checks are the same for both.
+     o: {rules: text, or (tools it can use) => text; data: the fenced data, sent first; tools: [{name, description,
+     inputSchema, execute(input)}]; history: [{role, content}], ending with the user's message; onText(text so far);
+     signal: an AbortSignal; live(): false once the answer's changes are no longer wanted; rounds: most look-up
+     rounds on an API key}. Resolves with {text, truncated, kind}. Fails with an error whose .code the copy explains. */
+  async function run(o) {
+    const signal = o.signal || new AbortController().signal;
+    const live = () => !signal.aborted && (!o.live || o.live());
+    let b;
+    try {
+      b = await reach();
+    } catch (e) {
+      b = null;
     }
-    // Your own API key: the same tools, in a loop of our own.
+    if (!b) throw failure(off || 'unavailable');
+    const list = (o.tools || []).slice(0, b.max);
+    const lead = typeof o.rules === 'function' ? o.rules(list) : String(o.rules || '');
+    const data = String(o.data || '');
+    const hist = o.history || [];
+    const onText = typeof o.onText === 'function' ? o.onText : () => {};
+    try {
+      if (b.kind === 'claude') {
+        // No system prompt here: the instructions and the fenced data lead the conversation as one user turn.
+        const input = [{ role: 'user', content: lead + (data ? '\n\n' + data : '') }].concat(hist);
+        const opts = { onText: ({ text }) => onText(text), signal, cache: false, modelTier: 'default' };
+        if (list.length) {
+          opts.tools = list.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, execute: (args, ctx) => {
+            // Nothing may change once the user has stopped this answer, or after it has been cleared away.
+            if (!live() || (ctx && ctx.signal && ctx.signal.aborted)) throw new Error('Stopped by the user');
+            return t.execute(args && typeof args === 'object' && !Array.isArray(args) ? args : {});
+          } }));
+        }
+        const r = await b.sample(input, opts);
+        return { text: r.text, truncated: !!r.truncated, kind: b.kind };
+      }
+      return Object.assign(await viaKey(b, list, lead, data, hist, onText, signal, live, o.rounds || ROUNDS), { kind: b.kind });
+    } catch (e) {
+      const code = e && e.code;
+      if (HIDE.includes(code)) off = code; // this view can never use Claude
+      if (code === 'tools_unavailable') noTools = true;
+      throw e;
+    }
+  }
+  /* Your own API key: the same tools, in a loop of our own. */
+  async function viaKey(b, list, lead, data, hist, onText, signal, live, rounds) {
     let m = null;
     let shown = '';
     try {
@@ -625,16 +694,17 @@
       const tools = list.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
       // The data first, then the chat. The API wants the roles to alternate, so same-side turns are joined.
       const messages = [];
-      for (const h of [{ role: 'user', content: fenced() }].concat(hist)) {
+      for (const h of (data ? [{ role: 'user', content: data }] : []).concat(hist)) {
         const last = messages[messages.length - 1];
         if (last && last.role === h.role && typeof last.content === 'string') last.content += '\n\n' + h.content;
         else messages.push({ role: h.role, content: h.content });
       }
-      for (let round = 0; round < ROUNDS; round++) {
+      for (let round = 0; round < rounds; round++) {
         if (signal.aborted) throw failure('cancelled');
         const stream = client.beta.messages.stream({
           model: chosenModel() || MODEL, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
-          thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, system: lead, tools, messages,
+          thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, system: lead, messages,
+          ...(tools.length ? { tools } : {}),
         }, { signal });
         const before = shown;
         stream.on('text', (delta) => {
@@ -650,7 +720,7 @@
         messages.push({ role: 'assistant', content: msg.content });
         const results = [];
         for (const u of uses) {
-          if (signal.aborted || pending !== actions) throw failure('cancelled');
+          if (!live()) throw failure('cancelled');
           const tool = list.find((t) => t.name === u.name);
           try {
             if (!tool) throw new Error('No tool called ' + u.name);
@@ -667,6 +737,11 @@
     } catch (e) {
       throw apiFailure(e, m);
     }
+  }
+
+  /* One chat answer: streams into onText, may call tools, resolves with {text, truncated}. */
+  function ask(hist, onText, signal, actions) {
+    return run({ rules, data: fenced(), tools: TOOLS, history: hist, onText, signal, live: () => pending === actions });
   }
 
   /* What the panel says when something goes wrong. Branches on the code, never on an error's own message. */
@@ -1191,5 +1266,7 @@
   // The app rebuilds the rail when sections change; keep the Claude button's state on the new one.
   new MutationObserver(syncRail).observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
 
-  GU.assistant = { toggle, send, digest, clear, TOOLS };
+  /* The pieces other pages share: reading what Claude and records send, saving with Undo, and the copy for errors. */
+  const kit = { cut, str, squash, clip, day, flag, toNum, num, amountIn, dateIn, realDate, oneOf, freqIn, save, undoAdd, md, plain, why, failure, HIDE, COPY, BILL_FREQ };
+  GU.assistant = { toggle, send, digest, fenced, clear, run, connection, kit, TOOLS };
 })();

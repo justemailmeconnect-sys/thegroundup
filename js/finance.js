@@ -19,6 +19,52 @@
   const WORK = [WORK_OUT, WORK_IN];
   INCOME.push(WORK_IN); // so it validates as a money-in category; WORK_OUT stays in EXPENSE for old records
 
+  /* ---------- your own categories ----------
+     Made in the Sorting hub (or anywhere else) and kept in settings.categories = {out: [names], in: [names]},
+     which syncs with the rest of Settings. EXPENSE and INCOME are filled in place, so every page that reads them
+     (forms, budgets, the readers' checks) sees yours too. Shown under 'Your categories'. */
+  const BASE_EXPENSE = EXPENSE.slice();
+  const BASE_INCOME = INCOME.slice();
+  const CUSTOM_GROUP = 'Your categories';
+  const tidyName = (n) => String(n == null ? '' : n).replace(/[\s\u0000-\u001f]+/g, ' ').replace(/[<>]/g, '').trim().slice(0, 40);
+  const builtIn = (name) => BASE_EXPENSE.concat(BASE_INCOME, [TRANSFER]).some((c) => c.toLowerCase() === String(name).toLowerCase());
+  /* Your own categories of one kind ('out' or 'in'), tidied, without repeats or built-in names. */
+  function custom(state, kind) {
+    const c = state && state.settings && state.settings.categories;
+    const list = c && typeof c === 'object' && Array.isArray(c[kind]) ? c[kind] : [];
+    const seen = new Set();
+    const out = [];
+    for (const raw of list) {
+      const n = tidyName(raw);
+      const k = n.toLowerCase();
+      if (!n || seen.has(k) || builtIn(n)) continue;
+      seen.add(k);
+      out.push(n);
+    }
+    return out;
+  }
+  let customKey = '';
+  /* Brings EXPENSE and INCOME up to date with your own categories. Cheap when nothing changed. */
+  function useCustom(state) {
+    const out = custom(state, 'out');
+    const inc = custom(state, 'in');
+    const key = out.join('\u0001') + '\u0002' + inc.join('\u0001');
+    if (key === customKey) return;
+    customKey = key;
+    EXPENSE.length = 0;
+    EXPENSE.push(...BASE_EXPENSE, ...out);
+    INCOME.length = 0;
+    INCOME.push(...BASE_INCOME, ...inc);
+  }
+  const isCustom = (state, name) => ['out', 'in'].some((k) => custom(state, k).some((c) => c.toLowerCase() === String(name || '').toLowerCase()));
+  /* The category with this name, in its saved spelling ('gym' finds 'Gym'), or '' when there's none. */
+  function findCategory(name) {
+    const n = String(name || '').trim().toLowerCase();
+    if (!n) return '';
+    return EXPENSE.concat(INCOME, [TRANSFER]).find((c) => c.toLowerCase() === n) || '';
+  }
+  if (GU.store && GU.store.subscribe) GU.store.subscribe(() => useCustom(GU.store.state));
+
   /* Keyword rules for common UK merchants. User rules always win over these. Order matters. */
   const DEFAULT_RULES = [
     [['uber eats', 'deliveroo', 'just eat', 'justeat'], 'Eating out'],
@@ -211,13 +257,18 @@
   }
 
   function categoryOptions(kind) {
-    const exp = { group: 'Money out', options: EXPENSE.filter((c) => !WORK.includes(c)) };
-    const inc = { group: 'Money in', options: INCOME.filter((c) => !WORK.includes(c)) };
+    const s = GU.store && GU.store.state;
+    if (s) useCustom(s);
+    const exp = { group: 'Money out', options: BASE_EXPENSE.filter((c) => !WORK.includes(c)) };
+    const inc = { group: 'Money in', options: BASE_INCOME.filter((c) => !WORK.includes(c)) };
     const work = { group: 'Work money (kept out of your own totals)', options: WORK };
     const other = { group: 'Neither', options: [TRANSFER] };
-    if (kind === 'in') return [inc, work, other];
-    if (kind === 'out') return [exp, work, other];
-    return [exp, inc, work, other];
+    const mine = (list) => (list.length ? [{ group: CUSTOM_GROUP, options: list }] : []);
+    const out = custom(s, 'out');
+    const inn = custom(s, 'in');
+    if (kind === 'in') return [inc].concat(mine(inn), [work, other]);
+    if (kind === 'out') return [exp].concat(mine(out), [work, other]);
+    return [exp, inc].concat(mine(out.concat(inn.filter((c) => !out.includes(c)))), [work, other]);
   }
 
   /* ---------- invoices you've sent: what's still owed to you ---------- */
@@ -293,7 +344,8 @@
 
   GU.finance = {
     outstanding, received, owedToMe, paymentFor, toClaim,
-    EXPENSE, INCOME, TRANSFER, WORK, WORK_IN, WORK_OUT, FREQUENCIES, PERIODS,
+    EXPENSE, INCOME, TRANSFER, WORK, WORK_IN, WORK_OUT, FREQUENCIES, PERIODS, CUSTOM_GROUP,
+    custom, useCustom, isCustom, findCategory, tidyCategory: tidyName,
     categorise, isTransfer, isWork, counts, moneyIn, moneyOut, inMonth, monthSeries, byCategory, periodFilter,
     freqLabel, nextDate, monthlyEquivalent, occurrences, rollForward, categoryOptions,
   };

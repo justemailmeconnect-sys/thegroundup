@@ -11,17 +11,17 @@
     home: {
       label: 'Home',
       start: 'today',
-      groups: [['today', 'inbox'], ['bills', 'debts', 'incomings', 'plans'], ['transactions', 'outgoings'], ['receipts', 'documents', 'visas'], ['todos']],
+      groups: [['today', 'hub'], ['bills', 'debts', 'incomings', 'plans'], ['transactions', 'outgoings'], ['receipts', 'documents', 'visas'], ['todos']],
       titles: ['', 'Money ahead', 'Money so far', 'Paperwork', 'Life'],
     },
     work: {
       label: 'Work',
       start: 'work',
-      groups: [['work', 'inbox'], ['work-back', 'work-ktk', 'work-bills'], ['work-tasks', 'work-projects', 'work-costs', 'work-docs']],
+      groups: [['work', 'hub'], ['work-back', 'work-ktk', 'work-bills'], ['work-tasks', 'work-projects', 'work-costs', 'work-docs']],
       titles: ['', 'Money', 'Running it'],
     },
   };
-  const SHARED = ['inbox', 'settings'];
+  const SHARED = ['hub', 'settings'];
   const isPart = (p) => p === 'home' || p === 'work';
 
   /* The part and the last page in each are kept per device (not synced), so your phone and laptop
@@ -73,7 +73,7 @@
 
   const tabExists = (id) => !!(id && GU.tabs && GU.tabs[id]);
 
-  /* Which part a page belongs to: 'home', 'work' or 'shared' (Inbox, Settings and anything unknown). */
+  /* Which part a page belongs to: 'home', 'work' or 'shared' (the Sorting hub, Settings and anything unknown). */
   function partOf(tabId) {
     const id = String(tabId || '');
     if (!id || SHARED.includes(id)) return 'shared';
@@ -276,11 +276,11 @@
     if (fallbackTab && GU.view) GU.view.go(tabExists(fallbackTab) ? fallbackTab : PARTS[partOf(fallbackTab) === 'work' ? 'work' : 'home'].start);
     return null;
   }
-  /* Marks a record just saved as work (the forms don't all ask yet). */
+  /* Marks a record just saved as work (the forms don't all ask yet), unless you switched its For to Home. */
   function tagWork(c, id) {
     GU.store.commit((s) => {
       const r = (s[c] || []).find((x) => x.id === id);
-      if (!r) return;
+      if (!r || r.context === 'home') return;
       r.context = 'work';
       if (c === 'tasks') {
         let wl = workListId(s);
@@ -304,7 +304,7 @@
   }
   async function upload(scope) {
     const files = await GU.ui.pickFiles();
-    if (files.length) GU.inbox.add(scope ? { files, scope } : { files });
+    if (files.length) GU.hub.add(scope ? { files, scope } : { files });
   }
 
   /* The + Add menu for a part, as items for GU.ui.menu. */
@@ -336,10 +336,10 @@
       ];
     }
     return [
-      { icon: 'inbox', label: 'Anything', hint: 'Upload it and I’ll sort it', onClick: () => upload(null) },
+      { icon: 'funnel', label: 'Anything', hint: 'Upload it and I’ll sort it', onClick: () => upload(null) },
       { icon: 'folder', label: 'A whole folder', hint: 'Every file inside gets sorted', onClick: async () => {
         const files = await GU.ui.pickFolder();
-        if (files.length) GU.inbox.add({ files });
+        if (files.length) GU.hub.add({ files });
         else GU.ui.toast('That folder has no files I can read.');
       } },
       { icon: 'receipt', label: 'Receipt or invoice', hint: 'Upload a photo or PDF', onClick: () => use(() => tabs().receipts.create, [{ pick: true }], 'receipts') },
@@ -416,7 +416,7 @@
       '<section class="where__col where__col--home"><h3>' + icon('home') + 'Mine (Home)</h3><ul class="where__list">' + home.join('') + '</ul></section>' +
       '</div>' +
       '<h3>Not sure?</h3>' +
-      '<p>Drop it in the ' + to('inbox', 'Inbox') + ', or anywhere on an Overview.</p>' +
+      '<p>Drop it in the ' + to('hub', 'Sorting hub') + ', or anywhere on an Overview. You can also tell the Sorting hub where it goes in your own words.</p>' +
       '<ul class="where__list where__list--plain">' +
       '<li>In Work it’s treated as ' + esc(c) + '’s, and I’ll ask ‘Whose money paid for this?’ if I can’t tell.</li>' +
       '<li>In Home it’s treated as yours.</li>' +

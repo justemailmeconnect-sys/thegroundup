@@ -238,16 +238,20 @@
   /* Work money left out of Spending: what you paid for your employer in this period, what they paid back,
      and what's still to come back, with the way to Get paid back. */
   function workStripHTML(s, filt) {
-    const out = sum(filt.filter((t) => t.amount < 0 && t.category === F.WORK_OUT), (t) => -t.amount);
+    // A shop's refund on something bought for work comes off what you paid, as on the Bank page's Work money.
+    const out = sum(filt.filter((t) => t.category === F.WORK_OUT), (t) => -t.amount);
     const back = sum(filt.filter((t) => t.amount > 0 && t.category === F.WORK_IN), (t) => t.amount);
     const w = wm();
-    const due = w && w.dueBack ? w.dueBack(s).total : 0;
+    // A repayment that's come in but isn't ticked off yet is paid back, not still due.
+    const waiting = w && w.awaiting ? w.awaiting(s).total : 0;
+    const due = w && w.dueBack ? Math.max(0, GU.util.round2(w.dueBack(s).total - waiting)) : 0;
     if (!(out > 0) && !(back > 0) && !(due > 0)) return '';
     const c = co(s);
     let text;
     if (out > 0 || back > 0) {
       const bits = [money(out) + ' you paid for ' + c + ' ' + (PERIOD_WORDS[period.out] || ''), money(back) + ' paid back'];
       if (due > 0) bits.push(money(due) + ' still due back');
+      if (waiting > 0) bits.push(money(waiting) + ' come in, to confirm in Get paid back');
       text = '<b>Not counted here:</b> ' + esc(bits.join(' · '));
     } else text = esc(co(s, true) + ' owes you ' + money(due) + '. Work money is kept out of your spending.');
     return '<p class="note-line note-line--back flows-note">' + icon('briefcase') + '<span>' + text + '</span>' +

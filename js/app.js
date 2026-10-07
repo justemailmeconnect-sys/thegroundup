@@ -15,7 +15,7 @@
   const intents = {};
   let current = null;
 
-  /* The part a page belongs to, or '' for the shared pages (Inbox, Settings). */
+  /* The part a page belongs to, or '' for the shared pages (the Sorting hub, Settings). */
   const pagePart = (tabId) => {
     const p = parts.partOf(tabId);
     return isPart(p) ? p : '';
@@ -184,6 +184,8 @@
     } catch (e) {
       console.error(e);
     }
+    // The Sorting hub took over from the Inbox: its count is the same thing.
+    if (counts.hub == null && counts.inbox != null) counts.hub = counts.inbox;
     renderSwitch(part, counts);
     document.querySelectorAll('.rail__item[data-tab]').forEach((a) => {
       const id = a.getAttribute('data-tab');
@@ -212,16 +214,26 @@
       }
       return tab;
     }
+    // Old links to the Inbox open the Sorting hub that replaced it.
+    if (id === 'inbox' && GU.tabs.hub) {
+      try {
+        history.replaceState(null, '', '#hub');
+      } catch (e) {
+        /* the address bar just stays as it is */
+      }
+      return 'hub';
+    }
     if (GU.tabs[id]) return id;
     const start = PARTS[parts.partOf(id) === 'work' ? 'work' : part].start;
     return GU.tabs[start] ? start : 'today';
   }
 
   function render() {
+    GU.finance.useCustom(store.state);
     GU.sections.sync();
     let part = parts.get();
     const tabId = resolve((location.hash || '').slice(1), part);
-    // A page from the other part (a card, a toast, an Inbox 'Open', an old link) flips the switch to match.
+    // A page from the other part (a card, a toast, an 'Open' in the Sorting hub, an old link) flips the switch to match.
     const p = pagePart(tabId);
     if (p && p !== part) part = parts.set(p);
     document.documentElement.dataset.part = part;
@@ -233,11 +245,27 @@
     renderRail(tabId, part);
     renderBanner();
     const host = document.getElementById('view');
+    // A box marked data-keep-focus that you're typing in keeps focus (and your place in it) when the page redraws.
+    const was = !changedTab ? document.activeElement : null;
+    const keep = was && was.id && was.hasAttribute && was.hasAttribute('data-keep-focus') && host.contains(was)
+      ? { id: was.id, start: was.selectionStart, end: was.selectionEnd, scroll: was.scrollTop } : null;
     const fresh = document.createElement('div');
     fresh.className = 'view__inner view--' + tabId;
     host.replaceChildren(fresh);
     tab.render(fresh);
     GU.ui.hydrate(fresh);
+    if (keep) {
+      const el = document.getElementById(keep.id);
+      if (el && el.hasAttribute('data-keep-focus')) {
+        el.focus({ preventScroll: true });
+        try {
+          if (keep.start != null) el.setSelectionRange(Math.min(keep.start, el.value.length), Math.min(keep.end, el.value.length));
+          el.scrollTop = keep.scroll;
+        } catch (e) {
+          /* not a text box */
+        }
+      }
+    }
     const label = tab.label || '';
     document.title = (pagePart(tabId) === 'work' && !/^work\b/i.test(label) ? 'Work · ' : '') + (label ? label + ' · ' : '') + 'The Ground Up';
     if (changedTab) {
@@ -311,7 +339,7 @@
         }
       });
     } else settle();
-    GU.inbox.resume();
+    GU.hub.resume();
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
     }

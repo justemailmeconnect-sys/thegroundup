@@ -219,12 +219,15 @@
      taking longer than usual to come back. One tap to send them. */
   function reclaimNote(plan) {
     const rc = plan.reclaimNotCounted;
-    if (!rc || !(rc.total > 0)) return '';
+    if (!rc || !(rc.total > 0 || rc.confirmTotal > 0)) return '';
     const c = co(store.state);
     let text;
     if (rc.toSendTotal > 0 && rc.lateTotal > 0) text = money(rc.total) + ' ' + c + ' owes you isn’t counted here: ' + money(rc.toSendTotal) + ' you haven’t sent yet, and ' + money(rc.lateTotal) + ' that’s taking longer than usual to come back.';
     else if (rc.toSendTotal > 0) text = money(rc.toSendTotal) + ' ' + c + ' owes you isn’t counted until you send it.';
-    else text = money(rc.lateTotal) + ' you sent ' + c + ' isn’t counted here, because it’s taking longer than usual to come back.';
+    else if (rc.lateTotal > 0) text = money(rc.lateTotal) + ' you sent ' + c + ' isn’t counted here, because it’s taking longer than usual to come back.';
+    else text = '';
+    // Paid back already, but not ticked off: it's in your balance, so it isn't counted again as still to come.
+    if (rc.confirmTotal > 0) text = (text ? text + ' ' : '') + money(rc.confirmTotal) + ' from ' + c + ' has come in already. Confirm what it was for in Get paid back.';
     const btn = rc.toSendTotal > 0
       ? '<button type="button" class="btn btn--sm btn--soft" data-send-back>' + icon('send') + esc('Send to ' + c) + '</button>'
       : '<button type="button" class="btn btn--sm btn--ghost" data-go="work-back">Get paid back' + icon('chevron') + '</button>';

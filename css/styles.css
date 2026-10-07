@@ -471,15 +471,7 @@ dialog.dlg::backdrop { background: var(--backdrop); }
 .dropcover div { background: var(--surface); border: 2px dashed var(--accent-2); border-radius: 18px; padding: 28px 36px; display: grid; justify-items: center; gap: 8px; font-size: 16px; }
 .dropcover .ico { width: 32px; height: 32px; color: var(--accent-2); }
 
-/* ---------- inbox ---------- */
-.thrower { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 12px; display: grid; gap: 10px; margin-bottom: 18px; }
-.thrower textarea { border: 0; background: var(--bg-2); border-radius: 10px; min-height: 84px; font-size: 15px; padding: 12px 14px; }
-.thrower__drop { display: flex; align-items: center; gap: 14px; border: 1.5px dashed var(--line-strong); border-radius: 12px; padding: 18px; cursor: pointer; color: var(--ink-2); }
-.thrower__drop:hover, .thrower__drop.is-over { border-color: var(--accent-2); background: var(--accent-soft); }
-.thrower__drop > .ico { width: 28px; height: 28px; color: var(--accent-2); }
-.thrower__drop span { display: grid; }
-.thrower__drop b { color: var(--ink); font-size: 15px; }
-.thrower__drop small { color: var(--ink-3); font-size: 13px; }
+/* ---------- statement importer bits ---------- */
 .bank-list { margin: 0 0 16px; padding-left: 20px; color: var(--ink-2); font-size: 14px; display: grid; gap: 4px; }
 .bank-list b { color: var(--ink); }
 .check-ok { display: flex; gap: 8px; align-items: center; color: var(--good); font-size: 14px; font-weight: 500; margin: -6px 0 14px; }
@@ -490,20 +482,8 @@ dialog.dlg::backdrop { background: var(--backdrop); }
 .dropbar__btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .visa.is-over { border-color: var(--accent-2); background: var(--accent-soft); }
 .visa__drop-hint { font-size: 12.5px; }
-.thrower__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
-.thrower__mode { flex: 1 1 260px; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
-.thrower__mode .ico { width: 16px; height: 16px; color: var(--accent-2); }
-.inbox-list { list-style: none; margin: 0; padding: 0; }
-.inbox-card { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
-.inbox-card:last-child { border-bottom: 0; }
-.inbox-card__main { display: grid; gap: 7px; min-width: 0; }
-.inbox-card__summary { font-size: 15px; font-weight: 500; }
-.inbox-card__note { font-size: 13px; color: var(--ink-3); }
-.inbox-card__dest { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; color: var(--accent); }
-.inbox-card__dest .ico { width: 15px; height: 15px; }
 .details { display: flex; flex-wrap: wrap; gap: 5px; }
 .detail { font-size: 12.5px; background: var(--surface-2); border-radius: 6px; padding: 2px 7px; color: var(--ink-2); }
-.inbox-card__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .reading { display: flex; align-items: center; gap: 8px; color: var(--ink-3); font-size: 13.5px; }
 .spinner { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent-2); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -859,8 +839,6 @@ dialog.dlg::backdrop { background: var(--backdrop); }
   .doc-row { grid-template-columns: 44px minmax(0, 1fr); }
   .doc-row .thumb { width: 44px; height: 54px; }
   .doc-row__end { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; }
-  .inbox-card { grid-template-columns: minmax(0, 1fr); }
-  .inbox-card > .doc-row__thumb, .inbox-card > .thumb { display: none; }
   .steps em { display: none; }
   .barlist__row { grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr) auto; gap: 8px; }
   .ledger b { font-size: 19px; }
@@ -1458,25 +1436,144 @@ dialog.dlg::backdrop { background: var(--backdrop); }
   .flows-note .btn { margin-left: auto; }
 }
 
-/* ---------- Inbox: Home or Work, and whose money paid ---------- */
-/* The Home / Work chip on each card (a button: tap to move it to the other part), in that part's own colour. */
-.inbox-card__part { padding: 2px 10px 2px 8px; font-size: 12.5px; font-weight: 600; gap: 5px; }
-.inbox-card__part .ico { width: 13px; height: 13px; }
-.inbox-card__part--home { color: var(--home-accent); border-color: color-mix(in srgb, var(--home-accent) 45%, var(--line)); }
-.inbox-card__part--work { color: var(--work-accent); border-color: color-mix(in srgb, var(--work-accent) 45%, var(--line)); }
-.inbox-card__part:hover { color: var(--ink); }
-.inbox-card__ask { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 2px; }
 /* [Company's money] filled in the Work colour; [Mine, get it back] outlined in the Home colour, like the money pills. */
 .btn--ktk { background: var(--work-accent); border-color: var(--work-accent); color: var(--work-door-bg); }
 .btn--ktk:hover { background: color-mix(in srgb, var(--work-accent) 86%, var(--ink)); border-color: transparent; color: var(--work-door-bg); }
 .btn--mine { background: var(--surface); border-color: color-mix(in srgb, var(--home-accent) 60%, var(--line)); color: var(--home-accent); }
 .btn--mine:hover { background: color-mix(in srgb, var(--home-accent) 10%, var(--surface)); border-color: var(--home-accent); color: var(--home-accent); }
-.inbox-ask { margin-bottom: 18px; }
-.inbox-ask .ask-card__opts { justify-content: flex-start; }
-/* 'You're in Work…' above the Sort it row. */
-.thrower__part { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--ink-2); padding: 0 2px; }
-.thrower__part .ico { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--work-accent); }
-.thrower__part .link--btn { font-weight: 600; }
+
+/* ---------- the Sorting hub ---------- */
+/* The box: one calm card you type, paste or drop into. */
+.hub-compose { position: relative; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 18px; box-shadow: var(--shadow); padding: 8px 10px 8px; display: grid; gap: 4px; margin-bottom: 12px; transition: border-color 0.12s, box-shadow 0.12s; }
+.hub-compose:focus-within { border-color: var(--accent-2); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+.hub-compose textarea, .hub-compose textarea:focus { display: block; width: 100%; border: 0; outline: 0; background: transparent; resize: none; min-height: 96px; max-height: 45vh; padding: 10px 10px 6px; font-size: 17px; line-height: 1.45; color: var(--ink); }
+.hub-compose textarea::placeholder { color: var(--ink-3); }
+.hub-compose__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 8px 0 0 2px; border-top: 1px solid var(--line); }
+.hub-compose__tools { display: flex; gap: 2px; }
+.hub-compose__tools .icon-btn { width: 38px; height: 38px; border-radius: 10px; }
+.hub-compose__tools .icon-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.hub-compose__mode { flex: 1 1 220px; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); min-width: 0; }
+.hub-compose__mode .ico { width: 16px; height: 16px; color: var(--accent-2); }
+.hub-compose__send { min-height: 40px; padding: 0 18px; border-radius: 11px; }
+.hub-compose__over { position: absolute; inset: -1px; border-radius: inherit; border: 2px dashed var(--accent-2); background: color-mix(in srgb, var(--accent-soft) 94%, transparent); display: none; place-items: center; align-content: center; gap: 6px; color: var(--accent); font-size: 16px; pointer-events: none; }
+.hub-compose.is-over .hub-compose__over { display: grid; }
+.hub-compose__over .ico { width: 28px; height: 28px; }
+/* Things you can say, under the box. */
+.hub-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 20px; }
+.hub-hints__label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 4px; }
+.hub-hint { font-size: 12.5px; padding: 4px 11px; background: transparent; }
+/* The sorting agent's reply, under the box, while it works and after. */
+.hub-reply { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px 12px; align-items: start; background: var(--part-tint); border: 1px solid color-mix(in srgb, var(--accent-2) 28%, var(--line)); border-radius: 14px; padding: 12px 12px 12px 14px; margin: 0 0 20px; }
+.hub-reply.is-error { border-color: color-mix(in srgb, var(--crit) 35%, var(--line)); }
+.hub-reply__mark { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.hub-reply__mark .ico { width: 16px; height: 16px; }
+.hub-reply.is-busy .hub-reply__mark { animation: hub-breathe 1.6s ease-in-out infinite; }
+@keyframes hub-breathe { 50% { opacity: 0.55; } }
+.hub-reply__body { min-width: 0; display: grid; gap: 4px; }
+.hub-reply__q { font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.hub-reply__text { font-size: 14.5px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+.hub-reply__text p { margin: 0 0 4px; }
+.hub-reply__text p:last-child { margin-bottom: 0; }
+.hub-reply__text ul, .hub-reply__text ol { margin: 0 0 4px; padding-left: 18px; }
+.hub-reply__status { display: flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 13.5px; }
+.hub-reply__note { color: var(--ink-2); font-size: 13px; }
+.hub-reply__note.is-error { color: var(--crit); }
+.hub-reply__changes { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; font-size: 13px; color: var(--ink-2); }
+.hub-reply__changes li { display: flex; gap: 6px; align-items: flex-start; }
+.hub-reply__changes .ico { width: 14px; height: 14px; color: var(--good); margin-top: 3px; flex: none; }
+.hub-reply__acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+/* 'You're in Work…' under the box. */
+.hub-part { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--ink-2); margin: -8px 2px 18px; }
+.hub-part .ico { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--work-accent); }
+.hub-part .link--btn { font-weight: 600; }
+.hub-ask { margin-bottom: 18px; }
+.hub-ask .ask-card__opts { justify-content: flex-start; }
+/* Waiting to be sorted. */
+.hub-waiting, .hub-recent { margin-bottom: 18px; }
+.hub-count { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 600 12px/1 var(--font-body); }
+.hub-list, .hub-group__list { list-style: none; margin: 0; padding: 0; }
+.hub-list > li { border-bottom: 1px solid var(--line); }
+.hub-list > li:last-child { border-bottom: 0; }
+.hub-card { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 14px; padding: 16px 18px; }
+.hub-card.is-reading { opacity: 0.85; }
+.hub-card__main { display: grid; gap: 6px; min-width: 0; }
+.hub-card__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.hub-card__head b { font-size: 15.5px; font-weight: 600; overflow-wrap: anywhere; }
+.hub-card__facts { display: inline-flex; flex-wrap: wrap; gap: 0 8px; font-size: 13px; color: var(--ink-2); }
+.hub-card__facts span + span::before { content: "·"; margin-right: 8px; color: var(--ink-3); }
+.hub-card__sum { font-size: 13.5px; color: var(--ink-2); }
+.hub-card__note { font-size: 13px; color: var(--ink-3); overflow-wrap: anywhere; }
+.hub-card__dest { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; }
+.hub-card__to { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); min-width: 0; }
+.hub-card__to b { font-weight: 600; overflow-wrap: anywhere; }
+.hub-card__to .ico { width: 15px; height: 15px; flex: none; }
+.pill--new { background: var(--accent); color: var(--accent-ink); }
+.pill--new .ico { width: 11px; height: 11px; }
+.hub-card__why, .hub-card__held { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; color: var(--ink-3); }
+.hub-card__why .ico, .hub-card__held .ico { width: 14px; height: 14px; margin-top: 2px; flex: none; }
+.hub-card__held { color: var(--warn); }
+.hub-card__dup { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: start; background: var(--warn-soft); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; color: var(--ink); }
+.hub-card__dup > .ico { color: var(--warn); margin-top: 1px; }
+.hub-card__dup-acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-card__ask { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 2px; }
+.hub-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.hub-card__remove { margin-left: auto; }
+.hub-card__more { padding: 0 8px; }
+.btn.is-on { background: var(--accent-soft); border-color: var(--accent-2); color: var(--accent); }
+/* The Home / Work chip on each card (a button: tap to move it to the other part), in that part's own colour. */
+.hub-card__part { padding: 2px 10px 2px 8px; font-size: 12.5px; font-weight: 600; gap: 5px; }
+.hub-card__part .ico { width: 13px; height: 13px; }
+.hub-card__part--static { display: inline-flex; align-items: center; border: 1px solid; border-radius: 999px; }
+.hub-card__part--home { color: var(--home-accent); border-color: color-mix(in srgb, var(--home-accent) 45%, var(--line)); }
+.hub-card__part--work { color: var(--work-accent); border-color: color-mix(in srgb, var(--work-accent) 45%, var(--line)); }
+button.hub-card__part:hover { color: var(--ink); }
+/* 'Tell me where…' and 'Always put … here'. */
+.hub-tell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: var(--part-tint); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+.hub-tell input[type="text"] { flex: 1 1 240px; width: auto; min-width: 0; min-height: 34px; padding: 4px 10px; font-size: 14px; }
+.hub-card__offer { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); background: var(--accent-soft); border-radius: 10px; padding: 6px 6px 6px 10px; }
+.hub-card__offer > .ico { width: 15px; height: 15px; color: var(--accent); flex: none; }
+.hub-card__offer .link--btn { flex: 1; text-align: left; font-size: 13px; }
+/* A group of similar things, with one action for all of them. */
+.hub-group__head { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 14px 18px; }
+.hub-group__stack { position: relative; width: 46px; height: 56px; }
+.hub-group__stack .thumb { position: relative; z-index: 1; width: 46px; height: 56px; box-shadow: 4px -4px 0 -1px var(--surface), 4px -4px 0 0 var(--line-strong); }
+.hub-group__stack em { position: absolute; z-index: 2; right: -6px; bottom: -6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font: 600 12px/1 var(--font-body); font-style: normal; }
+.hub-group__text { display: grid; gap: 3px; min-width: 0; }
+.hub-group__text b { font-size: 15.5px; font-weight: 600; }
+.hub-group__text small { font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.hub-group__to { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
+.hub-group__acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.hub-group__list { margin: 0 18px 12px 84px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.hub-group__list > li + li { border-top: 1px solid var(--line); }
+.hub-card--nested { padding: 12px 14px; grid-template-columns: 40px minmax(0, 1fr); }
+.hub-card--nested .thumb { width: 40px; height: 48px; }
+/* Recently sorted and your rules. */
+.hub-recent .row-item--change .row-item__icon { background: var(--accent-soft); color: var(--accent); }
+.hub-rules { margin-bottom: 18px; }
+.hub-rules summary .muted { display: inline-flex; align-items: center; gap: 6px; }
+.hub-rules__chev { width: 15px; height: 15px; transition: transform 0.15s; }
+.hub-rules[open] .hub-rules__chev { transform: rotate(90deg); }
+.hub-rules .panel__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.hub-rules__auto { margin-left: auto; font-size: 13.5px; }
+@media (max-width: 720px) {
+  .hub-group__head { grid-template-columns: 46px minmax(0, 1fr); }
+  .hub-group__acts { grid-column: 1 / -1; justify-content: flex-start; }
+  .hub-group__list { margin: 0 12px 12px; }
+}
+@media (max-width: 560px) {
+  .hub-compose textarea { font-size: 16px; min-height: 84px; }
+  .hub-compose__mode { order: 3; flex-basis: 100%; font-size: 12.5px; }
+  .hub-compose__send { margin-left: auto; }
+  .hub-hint:nth-of-type(n + 4) { display: none; }
+  .hub-reply { grid-template-columns: 26px minmax(0, 1fr); padding: 10px 12px; }
+  .hub-reply__mark { width: 26px; height: 26px; }
+  .hub-reply__acts { grid-column: 1 / -1; justify-content: flex-start; }
+  .hub-card, .hub-card--nested { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .hub-card > .hub-card__thumb { display: none; } /* the file is under ⋯ › View the file */
+  .hub-card__remove { display: none; } /* under ⋯ on a phone */
+  .hub-group__head { padding: 12px 14px; }
+  .hub-rules__auto { margin-left: 0; }
+}
 
 /* ---------- Settings › Work: the three 'days' boxes side by side, stacked on phones ---------- */
 .emp-days { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }

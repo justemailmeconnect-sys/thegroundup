@@ -50,8 +50,9 @@
       return {};
     }
   }
-  const memo = loadMemo(); // {uid, synced: {key: hash}, device, welcomed}
+  const memo = loadMemo(); // {uid, synced: {key: hash}, recs: {key: {id or field: hash}}, device, welcomed}
   memo.synced = memo.synced || {};
+  memo.recs = memo.recs && typeof memo.recs === 'object' ? memo.recs : {};
   if (!memo.device) memo.device = 'd' + GU.util.uid();
   function saveMemo() {
     try {
@@ -124,6 +125,71 @@
     return out;
   }
 
+  /* ---------- merging record by record ---------- */
+  /* The hash of each record (by id) in a list, or of each field in an object such as settings: what this device
+     last had in common with the server, so a merge can tell which records were changed here. A missing field and
+     an empty one (null) hash the same. null when a list has records with no id. */
+  const recHash = (v) => hash(JSON.stringify(v === undefined ? null : v));
+  function recsOf(v) {
+    if (Array.isArray(v)) {
+      if (!v.every((x) => x && typeof x === 'object' && x.id != null)) return null;
+      const out = {};
+      for (const x of v) out[x.id] = recHash(x);
+      return out;
+    }
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const k of Object.keys(v)) out[k] = recHash(v[k]);
+      return out;
+    }
+    return null;
+  }
+  const canMerge = (a, b) => (Array.isArray(a) && Array.isArray(b) && recsOf(a) !== null && recsOf(b) !== null) ||
+    (!!a && !!b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b));
+  /* Both devices changed a part since they last synced: each record (or field) changed on this device keeps this
+     device's copy; everything else takes the other device's, deletions on either side included. A record changed
+     on both keeps this device's. `base` is recsOf() of what they last had in common. */
+  function merge3(local, theirs, base) {
+    const was = (id) => (Object.prototype.hasOwnProperty.call(base, id) ? base[id] : null);
+    if (Array.isArray(local)) {
+      const mine = new Map(local.map((x) => [x.id, x]));
+      const other = new Map(theirs.map((x) => [x.id, x]));
+      const out = [];
+      for (const x of local) {
+        const here = recHash(x) !== was(x.id); // changed (or added) on this device
+        if (other.has(x.id)) out.push(here ? x : other.get(x.id));
+        else if (here) out.push(x); // deleted on the other device, but changed here: kept
+      }
+      for (const r of theirs) if (!mine.has(r.id) && recHash(r) !== was(r.id)) out.push(r); // deleted here and unchanged there: stays deleted
+      return out;
+    }
+    const out = {};
+    const none = recHash(null);
+    for (const k of new Set(Object.keys(theirs).concat(Object.keys(local)))) {
+      const here = recHash(local[k]) !== (was(k) || none);
+      const v = here ? local[k] : theirs[k];
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  /* No record-by-record memory for a part (its first merge since this version): this device's copy of each record
+     wins, as before, but an empty field here never wipes one the other device has filled in. */
+  function legacyMerge(local, theirs) {
+    const out = union(local, theirs, false);
+    if (out && typeof out === 'object' && !Array.isArray(out) && theirs && typeof theirs === 'object' && !Array.isArray(theirs)) {
+      for (const k of Object.keys(out)) if (out[k] == null && theirs[k] != null) out[k] = theirs[k];
+    }
+    return out;
+  }
+  /* What a device had in common with the server when it last synced, for parts it hasn't changed since. */
+  function seedBases(state) {
+    for (const k of Object.keys(memo.synced)) {
+      if (memo.recs[k] || !state || state[k] === undefined) continue;
+      const v = partOf(state, k);
+      if (hash(JSON.stringify(v)) === memo.synced[k]) memo.recs[k] = recsOf(v);
+    }
+  }
+
   /* Everything in `primary`, plus records only `extra` has (matched by id). For objects, `primary` wins key by key. */
   function union(primary, extra, skipDemo) {
     if (Array.isArray(primary) && Array.isArray(extra)) {
@@ -138,6 +204,8 @@
     const remote = assemble(snap);
     const state = store.state;
     const next = {};
+    const theirsOf = {};
+    const legacy = [];
     let changed = false;
     for (const [k, r] of Object.entries(remote)) {
       if (memo.synced[k] === r.h || r.mine) continue;
@@ -150,14 +218,32 @@
       const localHash = state[k] === undefined ? null : hash(JSON.stringify(partOf(state, k)));
       if (localHash === r.h) {
         memo.synced[k] = r.h;
+        memo.recs[k] = recsOf(theirs);
         continue;
       }
+      const local = state[k] === undefined ? undefined : partOf(state, k);
       const untouched = memo.synced[k] != null && localHash === memo.synced[k];
+      const base = memo.recs[k];
       if (untouched || deviceFresh || state[k] === undefined) next[k] = theirs; // nothing new here: take theirs
-      else if (memo.synced[k] == null) next[k] = union(theirs, partOf(state, k), true); // first sync of a device that already had data: theirs, plus anything only this device has
-      else next[k] = union(partOf(state, k), theirs, false); // both changed: keep yours, add what's new from the other device
+      else if (memo.synced[k] == null) next[k] = union(theirs, local, true); // first sync of a device that already had data: theirs, plus anything only this device has
+      else if (base && canMerge(local, theirs)) next[k] = merge3(local, theirs, base); // both changed: yours where you changed it, theirs elsewhere
+      else {
+        next[k] = legacyMerge(local, theirs); // both changed, and no record of what was in common: keep yours, add what's new
+        legacy.push(k);
+      }
+      theirsOf[k] = theirs;
       memo.synced[k] = r.h;
+      memo.recs[k] = recsOf(theirs);
       changed = true;
+    }
+    // A first merge like that keeps this device's old copies, so put back what the Home/Work re-sort changed on the other device.
+    if (legacy.length && GU.refile && GU.refile.heal) {
+      try {
+        const logged = (m) => !!(m && m.refileV1 && Array.isArray(m.refileV1.changes) && m.refileV1.changes.length);
+        GU.refile.heal(next, theirsOf, legacy, [theirsOf.meta, next.meta, state.meta].find(logged) || null);
+      } catch (e) {
+        console.warn('[sync] heal', e);
+      }
     }
     saveMemo();
     if (!changed) return Object.keys(remote).length > 0;
@@ -216,7 +302,7 @@
         const json = JSON.stringify(partOf(state, k));
         if (json === undefined) continue;
         const h = hash(json);
-        if (memo.synced[k] !== h) changes.push({ k, json, h });
+        if (memo.synced[k] !== h) changes.push({ k, json, h, recs: recsOf(partOf(state, k)) });
       }
       if (!changes.length) return;
       setStatus('saving', 'Saving…');
@@ -228,6 +314,7 @@
         for (let i = parts.length; i < (remoteParts[c.k] || 0); i++) await col.doc('k.' + c.k + '.' + i).delete();
         remoteParts[c.k] = parts.length;
         memo.synced[c.k] = c.h;
+        memo.recs[c.k] = c.recs;
         metaKeys[c.k] = { h: c.h, n: parts.length };
       }
       const metaRef = col.doc('meta');
@@ -411,8 +498,12 @@
       setStatus('off', 'Sync isn’t available here (sign in to claude.ai to sync), so changes are saved in this browser only.');
       return { remote: false };
     }
-    if (memo.uid && memo.uid !== uid) memo.synced = {};
+    if (memo.uid && memo.uid !== uid) {
+      memo.synced = {};
+      memo.recs = {};
+    }
     memo.uid = uid;
+    seedBases(store.state);
     col = db.collection('data/users/' + uid);
     window.claude.use('assets').then((a) => {
       assets = a;

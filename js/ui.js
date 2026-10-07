@@ -57,7 +57,11 @@
     spark: '<path d="M11 3.5c.7 4.3 2.3 5.9 6.5 6.5-4.2.6-5.8 2.2-6.5 6.5-.7-4.3-2.3-5.9-6.5-6.5 4.2-.6 5.8-2.2 6.5-6.5z"/><path d="M18.5 14.5c.3 1.9 1 2.6 2.5 2.9-1.5.3-2.2 1-2.5 2.9-.3-1.9-1-2.6-2.5-2.9 1.5-.3 2.2-1 2.5-2.9z"/>',
     send: '<path d="M4.5 11.5 19.5 4l-4.8 15.5-3.4-6.4z"/><path d="m11.3 13.1 8.2-9.1"/>',
     stop: '<rect x="7" y="7" width="10" height="10" rx="2"/>',
+    funnel: '<path d="M3.5 4.5h17l-6.5 8v6l-4 2v-8z"/>',
+    tag: '<path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l8 8a1.5 1.5 0 0 1 0 2.1l-6.4 6.4a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.4"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   };
+  const ICONS = Object.keys(P);
   function icon(name, cls) {
     return '<svg class="ico' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || P.info) + '</svg>';
   }
@@ -90,8 +94,19 @@
   }
 
   /* ---------- toasts ---------- */
+  /* While quietly() runs, toasts are held back: the Sorting hub lists its own changes, each with Undo. */
+  let hush = 0;
+  function quietly(fn) {
+    hush++;
+    try {
+      return fn();
+    } finally {
+      hush--;
+    }
+  }
   function toast(msg, opts) {
     opts = opts || {};
+    if (hush) return () => {};
     let wrap = document.querySelector('.toasts');
     if (!wrap) {
       wrap = document.createElement('div');
@@ -803,7 +818,7 @@
 
   GU.ui = {
     saveFile, makeZip, downloadFiles, dlButton,
-    icon, pill, emptyState, chips, selectOptions, toast, menu, closeMenu,
+    icon, ICONS, pill, emptyState, chips, selectOptions, toast, quietly, menu, closeMenu,
     openDialog, confirmBox, formDialog, attachments, hydrate, thumbHTML, viewFiles, pickFiles, pickFolder, filesFromDrop, pathOf, folderSummary, dropbar, wireDropbar, download, isImage, ACCEPT,
   };
 })();
