@@ -33,6 +33,8 @@
     return: { label: 'Return', tab: 'receipts' },
     debt: { label: 'Debt', tab: 'debts' },
     project: { label: 'Work project', tab: 'work-projects' },
+    // A job or project at home (Home › Home projects), on its start and due dates.
+    homeproject: { label: 'Home project', tab: 'home-projects' },
     // Something you've been asked to get, on the date it's needed (Work › To buy).
     request: { label: 'To get', tab: 'work-requests' },
     // A work invoice the business pays, and money it should pay you back. Named after your employer.
@@ -116,6 +118,7 @@
       }
     }
     if (GU.work && GU.work.dates) for (const p of GU.work.dates(state, to)) push(Object.assign({ kind: 'project' }, p, { part: 'work' }));
+    if (GU.homeProjects && GU.homeProjects.dates) for (const p of GU.homeProjects.dates(state, to)) push(Object.assign({ kind: 'homeproject' }, p, { part: 'home', tab: 'home-projects' }));
     if (GU.requests && GU.requests.dates) for (const p of GU.requests.dates(state, to)) push(Object.assign({ kind: 'request' }, p, { part: 'work' }));
     for (const d of state.documents) {
       if (d.expiryDate && d.expiryDate >= t && d.expiryDate <= to)
@@ -160,6 +163,8 @@
       for (const x of GU.debts.spotted(state).slice(0, 2)) out.push({ level: 'info', tab: 'debts', title: plural(x.count, 'payment') + ' to ' + x.lender + ' look like a debt', detail: 'Track it to see what’s left to pay' });
     }
     if (GU.money) for (const f of GU.money.accountFixes(state)) out.push({ level: 'warn', tab: 'transactions', title: f.title, detail: f.kind === 'merge' ? 'Some payments are counted twice. Fix it on the Bank tab.' : 'Fix it in one tap on the Bank tab.' });
+    // A project at home that's late or due within the week: one line each (Work's are in GU.work.checks).
+    if (GU.homeProjects && GU.homeProjects.checks) for (const c of GU.homeProjects.checks(state)) out.push(c);
     const toCheck = state.bills.filter((b) => b.review && b.active !== false && !isWorkBill(b)).length;
     if (toCheck) out.push({ level: 'info', tab: 'bills', title: plural(toCheck, 'bill') + ' I found in your statements', detail: 'Check they’re right: keep them, or tell me which aren’t regular bills' });
     const uncategorised = state.transactions.filter((x) => !x.category).length;
@@ -216,6 +221,8 @@
     const mine = timeline(state, 0, 'home');
     for (const it of mine) {
       if (it.kind === 'income' || it.kind === 'warranty' || it.kind === 'debt') continue;
+      // A home project that's late or due soon is already counted once, from its Needs attention line.
+      if (it.kind === 'homeproject') continue;
       if (it.kind === 'bill' && !it.action) continue;
       bump(it.tab || KINDS[it.kind].tab);
       home++;

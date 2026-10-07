@@ -1,5 +1,5 @@
 /* The Ground Up: search everywhere. One box that looks through both Home and Work: bank lines, receipts and
-   invoices, bills, debts, income, documents, tasks, section items, work notes and projects, plans,
+   invoices, bills, debts, income, documents, tasks, home projects, section items, work notes and projects, plans,
    requests and Sorting hub items. Opens from the rail, the phone bar, / and Ctrl or Cmd + Shift + F. */
 (function () {
   'use strict';
@@ -17,6 +17,7 @@
     { id: 'income', label: 'Income', icon: 'in' },
     { id: 'doc', label: 'Documents', icon: 'folder' },
     { id: 'task', label: 'Tasks', icon: 'todo' },
+    { id: 'hproject', label: 'Home projects', icon: 'star' },
     { id: 'item', label: 'Section items', icon: 'star' },
     { id: 'note', label: 'Work notes and projects', icon: 'note' },
     { id: 'plan', label: 'Plans', icon: 'trend' },
@@ -130,6 +131,12 @@
       add({ k: 'note', c: 'workNotes', rec: n, title: n.title || 'Note', f2: [n.body], date: n.updated || n.created, part: 'work', tab, where: 'Note · ' + (tabName(tab) || 'Overview') });
     }
     for (const p of s.projects || []) {
+      // A project at home is a Home project; no mark means a work project.
+      if (P && P.isHomeProject(p)) {
+        add({ k: 'hproject', c: 'projects', rec: p, title: p.name, f1: [p.client, p.status], f2: [p.notes, ...fileNames(p)], date: p.deadline || p.start, dateLead: p.deadline ? 'due ' : 'starts ', amount: p.value, part: 'home',
+          tab: pickTab('home-projects', 'today'), where: 'Home projects', tail: ['Done', 'Cancelled'].includes(p.status) ? low(p.status) : '' });
+        continue;
+      }
       add({ k: 'note', c: 'projects', rec: p, title: p.name, f1: [p.client, p.status], f2: [p.notes, ...fileNames(p)], date: p.deadline || p.start, amount: p.value, part: 'work',
         tab: pickTab('work-projects', 'work'), where: 'Projects' });
     }

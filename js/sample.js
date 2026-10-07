@@ -226,6 +226,9 @@
       { id: 'pj-' + uid(), name: 'Move to the new office', client: 'Acme Care', status: 'Booked', start: d(12), deadline: d(55), workFolder: officeFolder.id, notes: 'Book the van, and tell suppliers and the bank the new address.', files: [], created: d(-14), demo: true },
       { id: 'pj-' + uid(), name: 'New staff rota', client: 'Acme Care', status: 'In progress', start: d(-9), deadline: d(6), notes: 'Everyone on the rota app by the end of the month.', files: [], created: d(-20), demo: true },
       { id: 'pj-' + uid(), name: 'Get ready for the next inspection', status: 'Idea', notes: 'Training records and policies in one folder.', files: [], created: d(-5), demo: true },
+      // Jobs at home (Home › Home projects), marked as home.
+      { id: 'pj-' + uid(), context: 'home', name: 'Paint the garage', client: 'Dad', status: 'In progress', start: d(-3), deadline: d(9), value: 150, notes: 'Two coats of masonry paint, doors last. Dad has the ladder.', files: [], created: d(-6), demo: true },
+      { id: 'pj-' + uid(), context: 'home', name: 'Fix the garden gate', client: 'Gran', status: 'Booked', start: d(16), deadline: d(24), value: 60, notes: 'New hinges and a latch from the hardware shop.', files: [], created: d(-2), demo: true },
     ];
     // Ideas to save for: your own, in Home › Plans. (What the business wants you to get is in Work › To buy.)
     const idea = (o) => Object.assign({ id: 'ci-' + uid(), context: 'home', status: 'open', files: [], demo: true }, o);

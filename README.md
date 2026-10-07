@@ -22,6 +22,7 @@ The site has two parts, like the two halves of a shop's website: **Home** is you
 | **Receipts** | Receipts, invoices you need to pay, invoices someone owes you, paid invoices and warranties, each with its photo or PDF. **Owed to you** keeps a running total of unpaid invoices you've sent for your own side work, soonest due first, with what's late, what's due in the next 30 days and what you've been paid this tax year. Part payments come off the total and the rest stays owed. If a matching payment turns up in your bank statements, it asks whether that's the one. |
 | **Documents** | Passports, licences, visa and immigration papers, certificates, contracts and policies, with scans, where the original is kept, and reminders before anything expires. Reference numbers stay hidden until you tap Show. Payslips and tax papers stay here, because they're about your own pay. |
 | **To-do** | Your own lists, Today and Upcoming views, and quick add that understands "tomorrow", "on Friday" or "14 Nov". Work tasks are in Work › Tasks. |
+| **Home projects** | Jobs and projects you've been asked to do outside the business (by your dad, say) and your own: who asked, where it's at (idea, planned, booked, in progress, done), start and due dates, a budget, files and notes. Type one like "Paint the garage by 20 Nov, about £150" and the date and cost are picked out for you. Rows sit in lanes (In progress, Coming up, Ideas, Done) with the open projects, the next deadline and the budget at the top; **Download CSV** gives the list as a spreadsheet. A project due within a week, or late, shows in Needs attention and on the Home timeline. A project can move to Work from its ⋯ menu (and one in Work › Projects can move to Home). |
 | **Your sections** | Extra drawers like Car, Pets or Kids & school, made by you or by the assistant when something doesn't fit anywhere else. A section can be moved to Work from **Rename or move**. |
 
 ### Work
@@ -34,7 +35,7 @@ The site has two parts, like the two halves of a shop's website: **Home** is you
 | **… pays** | Named after the business ("Acme pays"). Orders, invoices and receipts the business pays for itself, on its own card or account. None of it is your money, so it never shows in Home. Invoices wait until you mark them **Paid by …**. |
 | **Bills** | Regular work costs, in two groups: ones that come out of your account and the business pays you back (each payment joins Get paid back by itself), and ones the business pays directly. |
 | **Tasks** | The Work to-do list, with quick add. |
-| **Projects** | Jobs and pieces of work, from idea to done, with dates. |
+| **Projects** | Jobs and pieces of work, from idea to done, with dates. Projects you do at home are in Home › Home projects; **Move to Home** in a project's ⋯ menu sends one there. |
 | **Contracts & documents** | Leases, licences, insurance, supplier terms and registrations, with end-date reminders. |
 
 Every Work page keeps folders, search and notes (a small **+ Note** button until the page has some, then a Notes panel).
@@ -162,7 +163,7 @@ Live bank connections (Open Banking) need a small server and an account with a p
 
 ## Planning ahead
 
-Home's menu is grouped by what you need: **Overview** and the **Sorting hub**; money ahead (**Bills**, **Debts**, **Income**, **Plans**); money so far (**Bank**, **Spending**); paperwork (**Receipts**, **Documents**); and life (**To-do** and your sections). Work's menu has **Overview** and the **Sorting hub**; money (**To buy**, **Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Contracts & documents**).
+Home's menu is grouped by what you need: **Overview**, the **Sorting hub**, **To-do** and **Home projects**; money ahead (**Bills**, **Debts**, **Plans**); money so far (**Bank**, **Spending**, **Income**, **Tax year**); paperwork (**Receipts**, **Documents**); and your sections. Work's menu has **Overview** and the **Sorting hub**; money (**To buy**, **Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Contracts & documents**).
 
 Home's overview starts from your balances (from your statements, or what you put in with **Update balances**) and adds everything expected from today: income on its next dates, bills, debt payments, every instalment of a payment schedule and unpaid invoices. Each account is followed separately, so if your income lands in one account and your bills leave another you'll see which one runs short and when.
 

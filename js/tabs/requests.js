@@ -159,6 +159,8 @@
   }
 
   /* ---------- reading what you type ---------- */
+  /* A price in some text: '£35', 'about £35', '35 quid'. Group 1 or 2 is the amount. Home › Home projects reads its budget with it too. */
+  const PRICE_RE = /(?:\b(?:about|around|roughly|approx(?:imately)?\.?|circa|maybe|up to|under|max)\s*)?(?:£|€|\$)\s?(\d[\d,]*(?:\.\d{1,2})?)|(?:\b(?:about|around|roughly|approx(?:imately)?)\s+)?\b(\d[\d,]*(?:\.\d{1,2})?)\s?(?:quid|pounds?|gbp)\b/i;
   /* 'Printer toner, about £35, by Friday' → {title, estimate, qty, needBy, link, payer}. Understands a price (£35,
      about £35, 35 quid), a quantity (3x toner, toner x3), a date (by Friday, tomorrow, 12 Oct), a link, and 'on the
      company card' for the business's money. The price is for one ('3x gloves £12' is £12 each, £36 in all); say
@@ -187,7 +189,7 @@
       t = t.replace(q[0], ' ');
     }
     // The price: for one, unless it says 'in total' (shared out between how many).
-    const am = /(?:\b(?:about|around|roughly|approx(?:imately)?\.?|circa|maybe|up to|under|max)\s*)?(?:£|€|\$)\s?(\d[\d,]*(?:\.\d{1,2})?)|(?:\b(?:about|around|roughly|approx(?:imately)?)\s+)?\b(\d[\d,]*(?:\.\d{1,2})?)\s?(?:quid|pounds?|gbp)\b/i.exec(t);
+    const am = PRICE_RE.exec(t);
     if (am) {
       let value = parseFloat((am[1] || am[2]).replace(/,/g, ''));
       let rest = t.slice(am.index + am[0].length);
@@ -998,6 +1000,6 @@
   }
 
   GU.requests = { add, addAll, cleanLink, parseLine, titleFromLink, checks, dates, cardHTML, totals, candidates, create,
-    forecast, lineTotal, unitOf, readPrice, readQty, csvRows, csvCell, oldIdeas, moveIdeas, addIdeas };
+    forecast, lineTotal, unitOf, readPrice, readQty, PRICE_RE, csvRows, csvCell, oldIdeas, moveIdeas, addIdeas };
   GU.tabs[TAB] = { label: 'To buy', short: 'To buy', icon: 'bag', part: 'work', render, create, edit };
 })();

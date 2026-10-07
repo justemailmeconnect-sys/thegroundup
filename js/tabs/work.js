@@ -101,7 +101,8 @@
     if (area === 'tasks') return s.tasks.filter((t) => isWorkTask(s, t));
     if (area === 'invoices') return s.paperwork.filter((p) => p.context === 'work' && (['ktk', 'unsorted'].includes(laneOf(p)) || looseOut(p)));
     if (area === 'back') return wm() ? s.paperwork.filter(wm().isClaim) : [];
-    if (area === 'projects') return s.projects || [];
+    // Home projects (Home › Home projects) share the records but not the page: no context means work.
+    if (area === 'projects') return (s.projects || []).filter((p) => !parts().isHomeProject(p));
     if (area === 'bills') return s.bills.filter(isWorkBill);
     if (area === 'contracts') return s.documents.filter(isWorkDoc);
     return [];
@@ -271,7 +272,7 @@
   function dates(s, to) {
     const out = [];
     const t = today();
-    for (const p of s.projects || []) {
+    for (const p of itemsOf(s, 'projects')) {
       if (CLOSED.includes(p.status)) continue;
       if (p.start && p.start >= t && p.start <= to) out.push({ date: p.start, title: p.name + ' starts', meta: [p.client, 'Work project'].filter(Boolean).join(' · '), ref: { c: 'projects', id: p.id } });
       if (p.deadline && p.deadline <= to) out.push({ date: p.deadline, title: p.name + ' due', meta: [p.client, 'Work project'].filter(Boolean).join(' · '), ref: { c: 'projects', id: p.id } });
@@ -441,13 +442,16 @@
         '<span class="wk-row__act">' + act + GU.ui.dlButton(r.files, r.title) + moreBtn(c, r) + '</span></li>';
     }
     if (area === 'projects') {
+      const home = parts().isHomeProject(r);
       const late = r.deadline && !CLOSED.includes(r.status) && daysUntil(r.deadline) < 0;
       const tone = { Idea: 'muted', Planned: 'info', Booked: 'info', 'In progress': 'warn', Done: 'good', Cancelled: 'muted' }[r.status] || 'muted';
       const when = [r.start ? (r.start >= today() ? 'Starts ' : 'Started ') + short(r.start) : '', r.deadline ? 'due ' + short(r.deadline) : ''].filter(Boolean).join(', ');
+      // A home project's fee is what it should cost, not money coming in: plain figure with 'budget' under it.
+      const worth = Number(r.value) > 0 ? (home ? '<b>' + esc(money(r.value)) + '</b><em>budget</em>' : '<b class="is-in">' + esc(money(r.value)) + '</b>') : '';
       return '<li class="wk-row"><span class="wk-row__lead wk-row__ico">' + icon('star') + '</span>' +
-        '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' + esc([r.client, when].filter(Boolean).join(' · ')) + '</em>' +
+        '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' + esc([r.client ? (home ? 'Asked by ' : '') + r.client : '', when].filter(Boolean).join(' · ')) + '</em>' +
         '<span class="wk-row__chips">' + pill(r.status || 'Idea', tone) + (late ? pill('Past deadline', 'crit', 'alert') : '') + chipF + '</span></button>' +
-        '<span class="wk-row__end">' + (Number(r.value) > 0 ? '<b class="is-in">' + esc(money(r.value)) + '</b>' : '') + '</span>' +
+        '<span class="wk-row__end">' + worth + '</span>' +
         '<span class="wk-row__act">' + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
     }
     if (area === 'bills') {
@@ -603,6 +607,20 @@
   }
   const groupTotal = (items, fn) => money(sum(items, fn));
 
+  /* A project list in its lanes, soonest first: on the go, coming up, ideas, and done or cancelled (folded). Work › Projects
+     and Home › Home projects both use it. */
+  function projectLanes(list) {
+    const order = (p) => (p.start || p.deadline || '9999');
+    const by = (st) => list.filter((p) => st.includes(p.status || 'Idea')).sort((a, b) => order(a).localeCompare(order(b)));
+    return [{ title: 'In progress', items: by(['In progress']) }, { title: 'Coming up', items: by(['Booked', 'Planned']) }, { title: 'Ideas', items: by(['Idea']) }, { title: 'Done or cancelled', items: by(CLOSED), closed: true }];
+  }
+  /* Groups of rows as lanes (a title, a note, the rows; a closed group is a fold). open: whether the folds start open. */
+  function groupsHTML(s, area, groups, open) {
+    return groups.filter((g) => g.items.length).map((g) => (g.closed ? '<details class="wk-group"' + (open ? ' open' : '') + '><summary>' + esc(g.title) + ' (' + g.items.length + ')</summary>' : g.title ? '<h3 class="wk-group__title">' + esc(g.title) + '</h3>' : '') +
+      (g.note ? '<p class="wk-group__note">' + esc(g.note) + '</p>' : '') +
+      '<ul class="wk-rows">' + g.items.map((r) => rowHTML(s, area, r)).join('') + '</ul>' + (g.closed ? '</details>' : '')).join('');
+  }
+
   function areaBody(s, area) {
     const list = filtered(s, area);
     const c = co();
@@ -633,9 +651,7 @@
           .concat(byMonth(paid, 'Paid by ' + c + ' · ').map((g) => Object.assign(g, { title: g.title + ' · ' + groupTotal(g.items, amount) })));
       }
     } else if (area === 'projects') {
-      const order = (p) => (p.start || p.deadline || '9999');
-      const by = (st) => list.filter((p) => st.includes(p.status || 'Idea')).sort((a, b) => order(a).localeCompare(order(b)));
-      groups = [{ title: 'In progress', items: by(['In progress']) }, { title: 'Coming up', items: by(['Booked', 'Planned']) }, { title: 'Ideas', items: by(['Idea']) }, { title: 'Done or cancelled', items: by(CLOSED), closed: true }];
+      groups = projectLanes(list);
     } else if (area === 'bills') {
       const live = list.filter((b) => b.active !== false).sort((a, b) => (a.nextDue || '9').localeCompare(b.nextDue || '9'));
       const mo = (items) => money(sum(items, (b) => F.monthlyEquivalent(b.amount, b.frequency))) + ' a month';
@@ -667,9 +683,7 @@
     if (empty && area === 'invoices' && list.length && !ui.q) return extra + '<p class="wk-quiet">' + esc(emptyTitle + '. ' + emptyText) + '</p>';
     return extra + '<section class="panel">' +
       (empty ? emptyState({ icon: a.icon, title: emptyTitle, text: esc(emptyText) })
-        : groups.map((g) => (g.closed ? '<details class="wk-group"' + (ui.showDone ? ' open' : '') + '><summary>' + esc(g.title) + ' (' + g.items.length + ')</summary>' : g.title ? '<h3 class="wk-group__title">' + esc(g.title) + '</h3>' : '') +
-          (g.note ? '<p class="wk-group__note">' + esc(g.note) + '</p>' : '') +
-          '<ul class="wk-rows">' + g.items.map((r) => rowHTML(s, area, r)).join('') + '</ul>' + (g.closed ? '</details>' : '')).join('')) + '</section>';
+        : groupsHTML(s, area, groups, ui.showDone)) + '</section>';
   }
 
   const WHO_MAX = 12;
@@ -1142,8 +1156,21 @@
   }
 
   /* ---------- projects ---------- */
-  function projectFields(area) {
+  /* The form for a project. ctx 'home' is Home › Home projects (who asked, a budget, no work folder); anything else is Work. */
+  function projectFields(area, ctx) {
     const s = store.state;
+    if (ctx === 'home') {
+      return [
+        { name: 'name', label: 'Project', required: true, placeholder: 'e.g. Paint the garage, Fix the fence' },
+        { name: 'client', label: 'Asked by', half: true, optional: true, placeholder: 'e.g. Dad' },
+        { name: 'status', label: 'Where it’s at', type: 'select', options: STATUSES, default: 'Planned', half: true },
+        { name: 'start', label: 'Starts', type: 'date', half: true, optional: true },
+        { name: 'deadline', label: 'Due', type: 'date', half: true, optional: true },
+        { name: 'value', label: 'Budget', type: 'money', half: true, optional: true, help: 'What it should cost.' },
+        { name: 'files', label: 'Files', type: 'files', dropLabel: 'Add photos, quotes or plans' },
+        { name: 'notes', label: 'Notes', type: 'textarea', rows: 4, optional: true, placeholder: 'What’s involved, what to buy, next steps…' },
+      ];
+    }
     return [
       { name: 'name', label: 'Project', required: true, placeholder: 'e.g. Shop refit, New website' },
       { name: 'client', label: 'Client or who it’s for', half: true, optional: true },
@@ -1156,21 +1183,58 @@
       { name: 'notes', label: 'Notes', type: 'textarea', rows: 4, optional: true, placeholder: 'What’s involved, who to talk to, next steps…' },
     ];
   }
+  /* Opens a project's form. A new one is a Work project unless opts.context is 'home'; an old one keeps the part it is in.
+     opts.values fills in a new project (a name, say). */
   function editProject(id, opts) {
+    opts = opts || {};
     const p = id ? store.find('projects', id) : null;
+    const ctx = p ? (parts().isHomeProject(p) ? 'home' : 'work') : opts.context === 'home' ? 'home' : 'work';
     formDialog({
-      title: p ? 'Edit project' : 'New project',
-      fields: projectFields('projects'),
-      values: p || { status: 'Planned', workFolder: (opts && opts.folder) || '' },
+      title: p ? (ctx === 'home' ? 'Edit home project' : 'Edit project') : ctx === 'home' ? 'New home project' : 'New project',
+      fields: projectFields('projects', ctx),
+      values: p || Object.assign({ status: 'Planned' }, ctx === 'home' ? {} : { workFolder: opts.folder || '' }, opts.values || {}),
       submitLabel: p ? 'Save' : 'Add project',
       onSubmit: (v) => {
         const rec = Object.assign(p ? Object.assign({}, p) : { id: 'pj-' + uid(), created: today() }, v, { updated: today() });
+        // Home is marked; a Work project made here is marked work. An older Work project with no mark is left as it is.
+        if (ctx === 'home') rec.context = 'home';
+        else if (!p) rec.context = 'work';
         store.upsert('projects', rec);
         if (!p) toast('Added ' + rec.name);
       },
       onDelete: p ? () => store.remove('projects', p.id, p.name) : null,
       deleteMessage: 'This deletes the project and its files. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
     });
+  }
+  /* A project to the other part ('home' or 'work'), with Undo. A project in Home has no Work folder, so it leaves it. */
+  function moveProject(id, ctx) {
+    const r = store.find('projects', id);
+    if (!r) return;
+    ctx = ctx === 'home' ? 'home' : 'work';
+    if ((ctx === 'home') === parts().isHomeProject(r)) return;
+    const before = JSON.parse(JSON.stringify(r));
+    store.commit((s) => {
+      const x = s.projects.find((y) => y.id === id);
+      if (!x) return;
+      x.context = ctx;
+      if (ctx === 'home') delete x.workFolder;
+      x.updated = today();
+    });
+    toast(ctx === 'home' ? 'Moved ' + r.name + ' to Home › Home projects' : 'Moved ' + r.name + ' to Work › ' + labelOf('projects'), { action: 'Undo', onAction: () => store.upsert('projects', before) });
+  }
+  /* Marks a project In progress or Done, with Undo. */
+  function setProjectStatus(id, status) {
+    const r = store.find('projects', id);
+    if (!r || r.status === status) return;
+    const before = JSON.parse(JSON.stringify(r));
+    store.commit((s) => {
+      const x = s.projects.find((y) => y.id === id);
+      if (x) {
+        x.status = status;
+        x.updated = today();
+      }
+    });
+    toast(status === 'Done' ? 'Marked ' + r.name + ' as done' : 'Marked ' + r.name + ' as in progress', { action: 'Undo', onAction: () => store.upsert('projects', before) });
   }
 
   /* ---------- your own cost ideas (Home › Plans) ---------- */
@@ -1386,7 +1450,9 @@
       { icon: 'edit', label: 'Open and edit', onClick: () => GU.view.open({ c, id }) },
       { icon: 'edit', label: 'Rename', onClick: () => rename(c, id) },
     ];
-    if (!idea) items.push({ icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) });
+    const homeProject = c === 'projects' && parts().isHomeProject(r);
+    // A home project has no work folders.
+    if (!idea && !homeProject) items.push({ icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) });
     const setPayer = (who) => W && W.setPayer && W.setPayer(c, id, who);
     if (c === 'paperwork') {
       const ln = laneOf(r);
@@ -1403,7 +1469,9 @@
         items.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => ideaStatus(id, 'dropped') });
       } else items.push({ icon: 'repeat', label: 'Back to the plan', onClick: () => ideaStatus(id, 'open') });
     } else if (c === 'projects') {
-      for (const st of ['In progress', 'Done'].filter((x) => x !== r.status)) items.push({ icon: st === 'Done' ? 'check' : 'clock', label: 'Mark ' + st.toLowerCase(), onClick: () => store.commit((x) => (x.projects.find((p) => p.id === id).status = st)) });
+      for (const st of ['In progress', 'Done'].filter((x) => x !== r.status)) items.push({ icon: st === 'Done' ? 'check' : 'clock', label: 'Mark ' + st.toLowerCase(), onClick: () => setProjectStatus(id, st) });
+      if (homeProject) items.push({ icon: 'briefcase', label: 'Move to Work', hint: 'It’s for work, not a home project', onClick: () => moveProject(id, 'work') });
+      else items.push({ icon: 'home', label: 'Move to Home', hint: 'It’s mine, not for work', onClick: () => moveProject(id, 'home') });
     }
     if (idea) {
       if (GU.costs.isOpen(r)) items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Adds it to Work › To buy', onClick: () => toWork(id) });
@@ -1488,7 +1556,8 @@
   }
 
   GU.work = {
-    AREAS, TAB_OF, CONTRACT, labelOf, itemsOf, checks, dates, figures, workListId, ensureWorkList,
+    AREAS, TAB_OF, CONTRACT, STATUSES, CLOSED, labelOf, itemsOf, checks, dates, figures, workListId, ensureWorkList,
+    projectLanes, groupsHTML, editProject, moveProject, setProjectStatus,
     isWorkBill: (b) => parts().isWorkBill(b), isWorkTask: (s, t) => parts().isWorkTask(s, t),
     forecastHTML, editIdea, ideaStatus, forecastSettings, rowHTML, rowClick, newFolder, show, sendToCo, moveFromHome, takeOut, card: cardBtn, editNote, notesOf,
   };

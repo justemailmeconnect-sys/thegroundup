@@ -227,7 +227,7 @@
     if (GU.work) {
       const checks = GU.work.checks(s);
       if (checks.length) line('\nWORK, what needs doing: ' + checks.slice(0, 12).map((c) => clip(c.title) + ' (' + clip(c.detail) + ')').join('; '));
-      const projects = (s.projects || []).filter((p) => !['Done', 'Cancelled'].includes(p.status));
+      const projects = (s.projects || []).filter((p) => !['Done', 'Cancelled'].includes(p.status) && !(GU.parts && GU.parts.isHomeProject(p)));
       if (projects.length) line('WORK PROJECTS: ' + projects.slice(0, 30).map((p) => clip(p.name) + ' [' + clip(p.status || 'Idea', 20) + ']' + (p.start ? ' starts ' + day(p.start) : '') + (p.deadline ? ' due ' + day(p.deadline) : '') + (Number(p.value) ? ' worth ' + money(p.value) : '')).join('; '));
     }
     // Work › To buy: what the things the business asked the user to get come to (a price is for one; qty × price is the line).
@@ -245,6 +245,14 @@
     if (GU.costs && (s.costIdeas || []).some((i) => GU.costs.isOpen(i) && GU.costs.ideaPart(i) === 'home')) {
       const c = GU.costs.schedule(s);
       line('\nPLANS (things the user is saving up for, their own, not for work; includes about ' + money(c.base.everyday, { whole: true }) + ' a month everyday spending): spare about ' + money(c.spare, { whole: true }) + ' a month; could spend ' + money(c.freeNow, { whole: true }) + ' now. Ideas: ' + c.results.slice(0, 30).map((r) => clip(r.idea.name) + ' ' + money(r.cost, { whole: true }) + ': ' + (r.date ? 'earliest ' + day(r.date) + (r.account ? ' from ' + clip(r.account, 40) : '') : 'does not fit in ' + c.base.cfg.months + ' months, ' + money(r.shortfall, { whole: true }) + ' short')).join('; '));
+    }
+    // Home › Home projects: jobs the user has been asked to do outside the business (or their own), with who asked and the budget.
+    const homeProjects = (s.projects || []).filter((p) => GU.parts && GU.parts.isHomeProject(p) && !['Done', 'Cancelled'].includes(p.status))
+      .sort((a, b) => (day(a.deadline) || '9999').localeCompare(day(b.deadline) || '9999'));
+    if (homeProjects.length) {
+      const budget = sum(homeProjects, (p) => Number(p.value) || 0);
+      line('\nHOME PROJECTS (jobs at home the user has been asked to do, or their own; not for work; ' + homeProjects.length + ' open' + (budget ? ', ' + money(budget) + ' budgeted' : '') + '): ' +
+        homeProjects.slice(0, 30).map((p) => clip(p.name) + ' [' + clip(p.status || 'Idea', 20) + ']' + (p.client ? ' asked by ' + clip(p.client, 40) : '') + (p.start ? ' starts ' + day(p.start) : '') + (p.deadline ? ' due ' + day(p.deadline) : '') + (Number(p.value) ? ' budget ' + money(p.value) : '')).join('; '));
     }
     const tasks = s.tasks.filter((k) => !k.done).sort((a, b) => (day(a.due) || '9').localeCompare(day(b.due) || '9'));
     if (tasks.length) line('\nOPEN TASKS: ' + tasks.slice(0, 25).map((k) => clip(k.title) + (k.due ? ' (due ' + day(k.due) + ')' : '') + ' [' + clip((s.todoLists.find((l) => l.id === k.listId) || {}).name, 30) + ']').join('; '));
@@ -373,8 +381,8 @@
     },
     {
       name: 'find_records',
-      description: 'Find saved records with their ids: bills, debts, tasks, receipts (receipts and invoices), documents, projects, cost_ideas, income or section_items. Optional words to match. Returns the total count and up to 40 compact rows. receipts and section_items come newest first; the others soonest first (bills by next due, tasks by due date, documents by expiry, projects by deadline, debts and income by next payment, cost_ideas by want-by date), with done, closed or inactive ones last. Narrow it with query when count is over 40.',
-      inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['bills', 'debts', 'tasks', 'receipts', 'documents', 'projects', 'cost_ideas', 'income', 'section_items'] }, query: { type: 'string' } }, required: ['kind'] },
+      description: 'Find saved records with their ids: bills, debts, tasks, receipts (receipts and invoices), documents, projects (Work › Projects), home_projects (Home › Home projects: jobs at home the user was asked to do), cost_ideas, income or section_items. Optional words to match. Returns the total count and up to 40 compact rows. receipts and section_items come newest first; the others soonest first (bills by next due, tasks by due date, documents by expiry, projects and home_projects by deadline, debts and income by next payment, cost_ideas by want-by date), with done, closed or inactive ones last. Narrow it with query when count is over 40.',
+      inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['bills', 'debts', 'tasks', 'receipts', 'documents', 'projects', 'home_projects', 'cost_ideas', 'income', 'section_items'] }, query: { type: 'string' } }, required: ['kind'] },
       execute(i) {
         progress('Looking that up…');
         const s = store.state;
@@ -394,7 +402,9 @@
           receipts: () => s.paperwork.filter((p) => has(p.title, p.party, p.reference, p.category)).sort(newestFirst)
             .map((p) => ({ id: p.id, title: clip(p.title), kind: clip(p.kind, 20), party: clip(p.party, 60), amount: num(p.amount), date: day(p.date), status: clip(p.status, 20), work: p.context === 'work', claimBack: !!p.claim && !p.claimed })),
           documents: () => s.documents.filter((d) => has(d.title, d.type, d.holder)).sort(soon((d) => d.expiryDate)).map((d) => ({ id: d.id, title: clip(d.title), type: clip(d.type, 40), expires: day(d.expiryDate) })),
-          projects: () => (s.projects || []).filter((p) => has(p.name, p.client)).sort((a, b) => ended((p) => ['Done', 'Cancelled'].includes(p.status))(a, b) || soon((p) => p.deadline)(a, b)).map((p) => ({ id: p.id, name: clip(p.name), client: clip(p.client, 60), status: clip(p.status, 20), start: day(p.start), due: day(p.deadline), value: Number(p.value) || null })),
+          home_projects: () => (s.projects || []).filter((p) => GU.parts && GU.parts.isHomeProject(p) && has(p.name, p.client, p.notes)).sort((a, b) => ended((p) => ['Done', 'Cancelled'].includes(p.status))(a, b) || soon((p) => p.deadline)(a, b))
+            .map((p) => ({ id: p.id, name: clip(p.name), askedBy: clip(p.client, 60), status: clip(p.status, 20), start: day(p.start), due: day(p.deadline), budget: Number(p.value) || null })),
+          projects: () => (s.projects || []).filter((p) => !(GU.parts && GU.parts.isHomeProject(p)) && has(p.name, p.client)).sort((a, b) => ended((p) => ['Done', 'Cancelled'].includes(p.status))(a, b) || soon((p) => p.deadline)(a, b)).map((p) => ({ id: p.id, name: clip(p.name), client: clip(p.client, 60), status: clip(p.status, 20), start: day(p.start), due: day(p.deadline), value: Number(p.value) || null })),
           cost_ideas: () => (s.costIdeas || []).filter((c) => has(c.name)).sort((a, b) => ended((c) => GU.costs ? !GU.costs.isOpen(c) : (c.status || 'open') !== 'open')(a, b) || soon((c) => c.wantBy)(a, b)).map((c) => ({ id: c.id, name: clip(c.name), cost: num(c.cost), monthly: num(c.monthly) || 0, status: clip(c.status || 'open', 20), wantBy: day(c.wantBy) })),
           income: () => (s.incomeSources || []).filter((x) => has(x.name, x.from)).sort((a, b) => ended((x) => x.active === false)(a, b) || soon((x) => x.nextDate)(a, b)).map((x) => ({ id: x.id, name: clip(x.name), from: clip(x.from, 60), amount: num(x.amount), every: freq(x.frequency), next: day(x.nextDate) })),
           section_items: () => (s.sectionItems || []).filter((x) => has(x.title, x.party, x.group)).sort(newestFirst)
@@ -577,7 +587,7 @@
     },
     {
       name: 'open_page',
-      description: 'Show the user a page of the dashboard: today (Home), hub (the Sorting hub), work, work-back (Get paid back), bills, debts, incomings (Income), todos, receipts, documents, transactions (Bank), outgoings (Spending) or settings.',
+      description: 'Show the user a page of the dashboard: today (Home), hub (the Sorting hub), work, work-back (Get paid back), bills, debts, incomings (Income), todos, home-projects (Home projects), receipts, documents, transactions (Bank), outgoings (Spending) or settings.',
       inputSchema: { type: 'object', properties: { page: { type: 'string' } }, required: ['page'] },
       execute(i) {
         const want = squash(i.page, 40).toLowerCase();
@@ -589,6 +599,25 @@
         GU.view.go(page);
         phoneClose(); // going to the page that's already showing changes no hash
         return { ok: true, page };
+      },
+    },
+    {
+      name: 'add_home_project',
+      description: 'Add a project or job at home, in Home › Home projects: something the user has been asked to do outside the business (by their dad, say) or plans for themselves, like painting the garage. asked_by is who asked (free text). status is idea, planned (the default), booked, in progress, done or cancelled. start and due are optional YYYY-MM-DD. budget is what it should cost in pounds. Not for work (the business\'s projects are in Work) and not for something to buy (use add_request or add_cost_idea). Returns the new project id.',
+      inputSchema: { type: 'object', properties: { name: { type: 'string' }, asked_by: { type: 'string' }, status: { type: 'string', enum: ['idea', 'planned', 'booked', 'in progress', 'done', 'cancelled'] }, start: { type: 'string', description: 'YYYY-MM-DD' }, due: { type: 'string', description: 'YYYY-MM-DD' }, budget: { type: 'number' }, notes: { type: 'string' } }, required: ['name'] },
+      execute(i) {
+        if (!GU.homeProjects || !GU.homeProjects.add) throw new Error('Home › Home projects isn\'t available here.');
+        const name = squash(i.name, 120);
+        if (!name) throw new Error('A name is needed');
+        if (toNum(i.budget) < 0) throw new Error('budget can\'t be negative');
+        const status = oneOf(i.status, 'status', ['idea', 'planned', 'booked', 'in progress', 'done', 'cancelled'], 'planned');
+        const start = realDate(i.start, 'start');
+        const due = realDate(i.due, 'due');
+        if (start && due && start > due) throw new Error('start can\'t be after due');
+        const budget = i.budget == null || i.budget === '' ? null : amountIn(i.budget, 'budget', true);
+        const res = GU.homeProjects.add({ name, client: squash(i.asked_by, 80), status, start, deadline: due, value: budget, notes: str(i.notes, 2000) });
+        record('Added home project “' + name + '”' + (due ? ', due ' + fmtDate(due, { short: true }) : '') + (budget ? ' (' + money(budget, { whole: true }) + ')' : ''), undoAdd('projects', res.rec.id, name));
+        return { ok: true, id: res.rec.id, status: res.rec.status, due: due || null };
       },
     },
   ];

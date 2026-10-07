@@ -11,8 +11,8 @@
     home: {
       label: 'Home',
       start: 'today',
-      // Overview, Sorting hub and To-do first (no heading), then what's coming, what's happened, and the paperwork.
-      groups: [['today', 'hub', 'todos'], ['bills', 'debts', 'plans'], ['transactions', 'outgoings', 'incomings', 'taxyear'], ['receipts', 'documents']],
+      // Overview, Sorting hub, To-do and Home projects first (no heading), then what's coming, what's happened, and the paperwork.
+      groups: [['today', 'hub', 'todos', 'home-projects'], ['bills', 'debts', 'plans'], ['transactions', 'outgoings', 'incomings', 'taxyear'], ['receipts', 'documents']],
       titles: ['', 'Money ahead', 'Money so far', 'Paperwork'],
     },
     work: {
@@ -170,6 +170,9 @@
     return !!(wl && t.listId === wl && t.context !== 'home');
   }
   const isWorkDoc = (d) => !!d && d.context === 'work';
+  /* Projects were first made in Work, so one with no context is a work project. Home projects are marked 'home'. */
+  const projectPart = (p) => (p && p.context === 'home' ? 'home' : 'work');
+  const isHomeProject = (p) => !!p && p.context === 'home';
   const isWorkPaper = (p) => !!p && p.context === 'work';
   /* Cost ideas were first made in Work, so one with no context is a work idea. */
   const ideaPart = (i) => (i && i.context === 'home' ? 'home' : 'work');
@@ -343,6 +346,7 @@
       { icon: 'receipt', label: 'Receipt or invoice', hint: 'Upload a photo or PDF', onClick: () => use(() => tabs().receipts.create, [{ pick: true }], 'receipts') },
       { icon: 'bills', label: 'Bill', hint: 'A regular payment', onClick: () => use(() => tabs().bills.create, [], 'bills') },
       { icon: 'todo', label: 'Task', hint: 'Something to do', onClick: () => use(() => tabs().todos.create, [], 'todos') },
+      { icon: 'star', label: 'A project', hint: 'A job someone’s asked you to do at home', onClick: () => use(() => tabs()['home-projects'].create, [], 'home-projects') },
       { icon: 'coin', label: 'Transaction', hint: 'Money in or out', onClick: () => use(() => tabs().transactions.create, [], 'transactions') },
       { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance…', onClick: () => use(() => tabs().debts.create, [], 'debts') },
       { icon: 'upload', label: 'Bank statement', hint: 'Import a CSV or PDF', onClick: () => use(() => tabs().transactions.importCSV, [], 'transactions') },
@@ -398,6 +402,7 @@
       row('Something I’m saving up for', to('plans', 'Home › Plans')),
       row('Passport, visa or immigration papers, certificates, tenancy, insurance', to('documents', 'Home › Documents')),
       row('A to-do for me', to('todos', 'Home › To-do')),
+      row('A project someone’s asked me to do at home', to('home-projects', 'Home › Home projects'), 'Say what it is, when it’s due and what it should cost.'),
       row('Anything else (a wedding, the car, pets)', 'one of your categories', 'Or make a new category from + Add, or at the bottom of the menu.'),
     ];
     const body = '<div class="where">' +
@@ -489,7 +494,7 @@
     PARTS, SHARED,
     get, set, lastTab, remember, go, partOf, groups,
     co, coName, paysLabel,
-    isWorkBill, isWorkTask, isWorkDoc, isWorkPaper, ideaPart, workListId,
+    isWorkBill, isWorkTask, isWorkDoc, isWorkPaper, ideaPart, workListId, projectPart, isHomeProject,
     doorsHTML, addMenu, whereHelp,
   };
 })();

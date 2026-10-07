@@ -1171,6 +1171,8 @@ dialog.dlg::backdrop { background: var(--backdrop); }
 .kind--ktk { background: color-mix(in srgb, var(--work-accent, var(--accent)) 14%, transparent); color: var(--work-accent, var(--accent)); }
 .kind--reclaim { background: var(--k-in-bg); color: var(--k-in); }
 .kind--project { background: color-mix(in srgb, var(--work-accent, var(--accent)) 10%, transparent); color: var(--work-accent, var(--accent)); }
+/* A job at home (Home › Home projects), in the Home timeline. */
+.kind--homeproject { background: var(--accent-soft); color: var(--accent); }
 
 /* ---------- 'Check these' (GU.refile.cardHTML): questions with several things to decide ---------- */
 .rf-card .rf-group { grid-template-columns: minmax(0, 1fr); background: var(--bg-2); padding-top: 10px; padding-bottom: 10px; }
