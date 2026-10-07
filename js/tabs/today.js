@@ -116,12 +116,21 @@
       esc(plural(list.length, 'invoice') + (late.length ? ' · ' + money(sum(late, (x) => x.left)) + ' late' : next ? ' · next due ' + fmtDate(next.p.dueDate, { short: true }) : '')) + '</em></button>';
   }
 
+  /* Work expenses you still have to claim back. */
+  function claimCard(s) {
+    const list = GU.finance.toClaim(s);
+    if (!list.length) return '';
+    const oldest = list.find((x) => x.p.date);
+    return '<button type="button" class="now-card now-card--owed" data-claims><span>To claim back</span><b>' + esc(money(sum(list, (x) => x.amount))) + '</b><em>' +
+      esc(plural(list.length, 'item') + (oldest ? ' · oldest ' + fmtDate(oldest.p.date, { short: true }) : '')) + '</em></button>';
+  }
+
   function nowHTML(s) {
     const list = GU.money.accounts(s).filter((x) => x.info || x.count);
     if (!list.length) {
       return '<section class="now"><header class="sec-head"><h2>Right now</h2></header><div class="now-empty">' + icon('bank') +
         '<p>Tell me what’s in your accounts and I’ll plan the rest of the month from there.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div>' +
-        (owedCard(s) ? '<div class="now-cards">' + owedCard(s) + '</div>' : '') + '</section>';
+        (owedCard(s) + claimCard(s) ? '<div class="now-cards">' + owedCard(s) + claimCard(s) + '</div>' : '') + '</section>';
     }
     const known = list.filter((x) => x.info);
     const total = sum(known, (x) => x.info.balance);
@@ -138,7 +147,7 @@
         return '<button type="button" class="now-card' + (neg ? ' is-neg' : '') + '" data-account="' + esc(x.account.id) + '"><span>' + esc(x.account.name) + '</span><b>' + (b ? esc(money(b.balance)) : '–') + '</b><em>' + esc(od || (b ? 'in credit' : 'no balance yet')) + '</em></button>';
       }).join('') +
       (known.length > 1 ? '<div class="now-card now-card--total' + (total < 0 ? ' is-neg' : '') + '"><span>Together</span><b>' + esc(money(total)) + '</b><em>' + esc(spare ? money(total + spare) + ' available with overdrafts' : 'across your accounts') + '</em></div>' : '') +
-      owedCard(s) +
+      owedCard(s) + claimCard(s) +
       '</div></section>';
   }
 
@@ -310,6 +319,7 @@
       }
       if (e.target.closest('[data-balances]')) return GU.tabs.transactions.updateBalances();
       if (e.target.closest('[data-owed]')) return GU.tabs.receipts.showOwed();
+      if (e.target.closest('[data-claims]')) return GU.tabs.receipts.showClaims();
       if (e.target.closest('[data-add-income]')) return GU.tabs.incomings.createSource();
       if (e.target.closest('[data-add-bill]')) return GU.tabs.bills.create();
       if (e.target.closest('[data-add-schedule]')) return GU.tabs.debts.scheduleDialog('');

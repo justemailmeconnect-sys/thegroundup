@@ -249,8 +249,21 @@
     }) || null;
   }
 
+  /* ---------- work expenses to claim back ---------- */
+  /* Everything marked to claim back and not claimed yet, oldest first, each with the running total up to it. */
+  function toClaim(state) {
+    let run = 0;
+    return (state.paperwork || [])
+      .filter((p) => p.claim && !p.claimed)
+      .sort((a, b) => (a.date || '9').localeCompare(b.date || '9') || (a.created || '').localeCompare(b.created || ''))
+      .map((p) => {
+        const amount = Math.abs(Number(p.amount) || 0);
+        return { p, amount, noAmount: p.amount == null || p.amount === '', running: (run = round2(run + amount)) };
+      });
+  }
+
   GU.finance = {
-    outstanding, received, owedToMe, paymentFor,
+    outstanding, received, owedToMe, paymentFor, toClaim,
     EXPENSE, INCOME, TRANSFER, FREQUENCIES, PERIODS,
     categorise, isTransfer, moneyIn, moneyOut, inMonth, monthSeries, byCategory, periodFilter,
     freqLabel, nextDate, monthlyEquivalent, occurrences, rollForward, categoryOptions,

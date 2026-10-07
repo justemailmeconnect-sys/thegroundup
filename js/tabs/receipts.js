@@ -86,27 +86,82 @@
       if (match) taken.add(match.id);
       const n = p.dueDate ? daysUntil(p.dueDate) : null;
       const due = !p.dueDate ? '<b>No due date</b>' : '<b>' + esc(fmtDate(p.dueDate, { short: true })) + '</b><em class="' + (x.late ? 'is-crit' : n <= 7 ? 'is-warn' : '') + '">' + esc(x.late ? -n + (n === -1 ? ' day late' : ' days late') : relDays(p.dueDate)) + '</em>';
-      return '<li class="owed-row' + (x.late ? ' is-late' : '') + '">' +
-        '<span class="owed-row__due">' + due + '</span>' +
-        '<button type="button" class="owed-row__main" data-edit="' + esc(p.id) + '"><b>' + esc(p.party || p.title) + '</b><em>' + esc([p.party ? p.title : '', p.reference, p.date ? 'sent ' + fmtDate(p.date, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></button>' +
-        '<span class="owed-row__amt">' + (x.noAmount ? '<b class="muted">No amount</b>' : '<b>' + esc(money(x.left)) + '</b>' + (x.paid ? '<em>' + esc(money(x.paid) + ' of ' + money(p.amount) + ' paid') + '</em>' : '')) + '</span>' +
-        '<span class="owed-row__run"><b>' + esc(money(x.running)) + '</b><em>running total</em></span>' +
-        '<span class="owed-row__act"><button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(p.id) + '">' + icon('check') + 'Got paid</button></span>' +
-        (match ? '<p class="owed-row__match">' + icon('bank') + '<span>Looks paid: <b>' + esc(money(match.amount)) + '</b> came in from ' + esc(match.description || 'someone') + ' on ' + esc(fmtDate(match.date, { short: true })) + '.</span>' +
+      return '<li class="tally-row' + (x.late ? ' is-late' : '') + '">' +
+        '<span class="tally-row__due">' + due + '</span>' +
+        '<button type="button" class="tally-row__main" data-edit="' + esc(p.id) + '"><b>' + esc(p.party || p.title) + '</b><em>' + esc([p.party ? p.title : '', p.reference, p.date ? 'sent ' + fmtDate(p.date, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></button>' +
+        '<span class="tally-row__amt">' + (x.noAmount ? '<b class="muted">No amount</b>' : '<b>' + esc(money(x.left)) + '</b>' + (x.paid ? '<em>' + esc(money(x.paid) + ' of ' + money(p.amount) + ' paid') + '</em>' : '')) + '</span>' +
+        '<span class="tally-row__run"><b>' + esc(money(x.running)) + '</b><em>running total</em></span>' +
+        '<span class="tally-row__act"><button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(p.id) + '">' + icon('check') + 'Got paid</button></span>' +
+        (match ? '<p class="tally-row__match">' + icon('bank') + '<span>Looks paid: <b>' + esc(money(match.amount)) + '</b> came in from ' + esc(match.description || 'someone') + ' on ' + esc(fmtDate(match.date, { short: true })) + '.</span>' +
           '<button type="button" class="btn btn--sm btn--primary" data-match="' + esc(p.id + ':' + match.id) + '">Yes, that’s it</button><button type="button" class="btn btn--sm btn--ghost" data-nomatch="' + esc(p.id + ':' + match.id) + '">No</button></p>' : '') +
         '</li>';
     });
-    return '<section class="panel owed"><header class="panel__head"><h2>' + icon('in') + 'Owed to you</h2>' +
+    return '<section class="panel tally"><header class="panel__head"><h2>' + icon('in') + 'Owed to you</h2>' +
       '<span class="muted">' + (ui.context === 'all' ? '' : esc(ui.context === 'work' ? 'Work only · ' : 'Home only · ')) + 'soonest due first</span>' +
       '<button type="button" class="btn btn--sm" data-new-owed>' + icon('plus') + 'Invoice you’ve sent</button></header>' +
-      '<div class="owed__sum">' +
+      '<div class="tally__sum">' +
       '<div><span>Still to come</span><b class="is-in">' + esc(money(total)) + '</b><em>' + esc(plural(list.length, 'invoice')) + (list.some((x) => x.noAmount) ? ', some without an amount' : '') + '</em></div>' +
       '<div><span>Late</span><b class="' + (late.length ? 'is-crit' : '') + '">' + esc(money(sum(late, (x) => x.left))) + '</b><em>' + esc(late.length ? plural(late.length, 'invoice') + ' past the due date' : 'nothing late') + '</em></div>' +
       '<div><span>Due in the next 30 days</span><b>' + esc(money(sum(soon, (x) => x.left))) + '</b><em>' + esc(soon.length ? plural(soon.length, 'invoice') : 'nothing due soon') + '</em></div>' +
       '<div><span>Paid to you since ' + esc(fmtDate(ty, { short: true })) + '</span><b>' + esc(money(got)) + '</b><em>this tax year</em></div>' +
       '</div>' +
-      '<ol class="owed__list">' + rows.join('') + '</ol>' +
-      '<footer class="owed__foot"><span>Total owed to you</span><b class="is-in">' + esc(money(total)) + '</b></footer></section>';
+      '<ol class="tally__list">' + rows.join('') + '</ol>' +
+      '<footer class="tally__foot"><span>Total owed to you</span><b class="is-in">' + esc(money(total)) + '</b></footer></section>';
+  }
+
+  /* Work expenses marked to claim back: the total, oldest first, with a running total. */
+  function claimsHTML(s, t) {
+    const list = F.toClaim(s).filter((x) => ui.context === 'all' || (x.p.context || 'home') === ui.context);
+    if (!list.length) return '';
+    const total = sum(list, (x) => x.amount);
+    const oldest = list.find((x) => x.p.date);
+    const ty = taxYearStart(t);
+    const claimed = sum(s.paperwork.filter((p) => p.claim && p.claimed && (p.claimedDate || p.date || '') >= ty), (p) => Math.abs(Number(p.amount) || 0));
+    const files = [].concat(...list.map((x) => x.p.files || []));
+    const rows = list.map((x) => {
+      const p = x.p;
+      const age = p.date ? -daysUntil(p.date) : null;
+      return '<li class="tally-row">' +
+        '<span class="tally-row__due"><b>' + esc(p.date ? fmtDate(p.date, { short: true }) : 'No date') + '</b>' + (age != null ? '<em>' + esc(age <= 0 ? 'today' : age === 1 ? 'yesterday' : age + ' days ago') + '</em>' : '') + '</span>' +
+        '<button type="button" class="tally-row__main" data-edit="' + esc(p.id) + '"><b>' + esc(p.party || p.title) + '</b><em>' + esc([p.party ? p.title : '', p.category, p.kind === 'invoice-in' && p.status !== 'paid' ? 'not paid yet' : ''].filter(Boolean).join(' · ')) + '</em></button>' +
+        '<span class="tally-row__amt">' + (x.noAmount ? '<b class="muted">No amount</b>' : '<b>' + esc(money(x.amount)) + '</b>') + '</span>' +
+        '<span class="tally-row__run"><b>' + esc(money(x.running)) + '</b><em>running total</em></span>' +
+        '<span class="tally-row__act">' + GU.ui.dlButton(p.files, p.title) + '<button type="button" class="btn btn--sm btn--soft" data-claimed="' + esc(p.id) + '">' + icon('check') + 'Claimed</button></span>' +
+        '</li>';
+    });
+    return '<section class="panel tally"><header class="panel__head"><h2>' + icon('flag') + 'To claim back</h2>' +
+      '<span class="muted">' + (ui.context === 'all' ? '' : esc(ui.context === 'work' ? 'Work only · ' : 'Home only · ')) + 'oldest first</span>' +
+      (files.length ? '<button type="button" class="btn btn--sm" data-dl="' + esc(files.map((f) => f.id).join(',')) + '" data-dl-name="Expenses to claim back ' + esc(t) + '">' + icon('download') + 'Download ' + (files.length > 1 ? 'all ' + files.length + ' receipts' : 'the receipt') + '</button>' : '') +
+      '<button type="button" class="btn btn--sm" data-claimed-all>' + icon('check') + 'Mark all claimed</button></header>' +
+      '<div class="tally__sum">' +
+      '<div><span>Still to claim</span><b class="is-in">' + esc(money(total)) + '</b><em>' + esc(plural(list.length, 'item') + (list.some((x) => x.noAmount) ? ', some without an amount' : '')) + '</em></div>' +
+      '<div><span>Oldest</span><b>' + esc(oldest ? fmtDate(oldest.p.date, { short: true }) : '–') + '</b><em>' + esc(oldest ? (-daysUntil(oldest.p.date) > 0 ? -daysUntil(oldest.p.date) + ' days waiting' : 'from today') : '') + '</em></div>' +
+      '<div><span>Claimed since ' + esc(fmtDate(ty, { short: true })) + '</span><b>' + esc(money(claimed)) + '</b><em>this tax year</em></div>' +
+      '</div>' +
+      '<ol class="tally__list">' + rows.join('') + '</ol>' +
+      '<footer class="tally__foot"><span>Total to claim back</span><b class="is-in">' + esc(money(total)) + '</b></footer></section>';
+  }
+
+  /* Marks expenses as claimed, with Undo. */
+  function markClaimed(ids) {
+    const before = {};
+    store.commit((s) => {
+      for (const p of s.paperwork) {
+        if (!ids.includes(p.id) || p.claimed) continue;
+        before[p.id] = true;
+        p.claimed = true;
+        p.claimedDate = today();
+      }
+    });
+    const n = Object.keys(before).length;
+    if (!n) return;
+    toast(n === 1 ? 'Marked as claimed' : 'Marked ' + n + ' as claimed', { action: 'Undo', onAction: () => store.commit((s) => {
+      for (const p of s.paperwork) {
+        if (!before[p.id]) continue;
+        p.claimed = false;
+        delete p.claimedDate;
+      }
+    }) });
   }
 
   function render(root) {
@@ -117,6 +172,7 @@
     const owed = all.filter((p) => p.kind === 'invoice-out' && p.status !== 'paid');
     const warranties = all.filter((p) => p.warrantyUntil && p.warrantyUntil >= t);
     const claims = all.filter((p) => p.claim && !p.claimed);
+    if (ui.filter === 'claim' && !claims.length) ui.filter = 'all';
     const thisMonth = all.filter((p) => (p.created || p.date || '').slice(0, 7) === t.slice(0, 7));
     const counts = {
       all: all.length, receipt: all.filter((p) => p.kind === 'receipt').length, 'to-pay': toPay.length, owed: owed.length,
@@ -144,6 +200,7 @@
       '<div class="ledger">' +
       '<div><span>Invoices to pay</span><b>' + esc(money(sum(toPay, (p) => p.amount || 0))) + '</b><em>' + esc(plural(toPay.length, 'invoice')) + (toPay.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + toPay.filter((p) => p.dueDate && p.dueDate < t).length + ' overdue' : '') + '</em></div>' +
       '<div><span>Owed to you</span><b class="' + (owed.length ? 'is-in' : '') + '">' + esc(money(sum(owed, (p) => F.outstanding(p)))) + '</b><em>' + esc(plural(owed.length, 'invoice')) + (owed.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + owed.filter((p) => p.dueDate && p.dueDate < t).length + ' late' : ' sent') + '</em></div>' +
+      '<div><span>To claim back</span><b class="' + (claims.length ? 'is-in' : '') + '">' + esc(money(sum(claims, (p) => Math.abs(Number(p.amount) || 0)))) + '</b><em>' + esc(claims.length ? plural(claims.length, 'item') + ' not claimed yet' : 'nothing to claim') + '</em></div>' +
       '<div><span>Under warranty</span><b>' + warranties.length + '</b><em>' + (warranties.length ? 'next ends ' + esc(fmtDate(warranties.map((p) => p.warrantyUntil).sort()[0], { short: true })) : 'items covered') + '</em></div>' +
       '<div><span>Filed this month</span><b>' + thisMonth.length + '</b><em>' + esc(plural(all.length, 'item')) + ' in total</em></div>' +
       '</div>' +
@@ -151,6 +208,7 @@
       chips('context', [{ value: 'all', label: 'Home & work' }, { value: 'home', label: 'Home' }, { value: 'work', label: 'Work' }], ui.context) +
       '<label class="search">' + icon('search') + '<input type="search" id="rc-search" placeholder="Search" value="' + esc(ui.q) + '" aria-label="Search receipts and invoices"></label></div>' +
       (ui.filter === 'all' || ui.filter === 'owed' ? owedHTML(s, t) : '') +
+      (ui.filter === 'all' || ui.filter === 'claim' ? claimsHTML(s, t) : '') +
       '<section class="panel"><ul class="doc-rows" id="rc-list"></ul></section>';
 
     const draw = () => {
@@ -174,6 +232,9 @@
       }
       if (e.target.closest('[data-upload]')) return create({ pick: true });
       if (e.target.closest('[data-import-orders]')) return importOrders();
+      const cl = e.target.closest('[data-claimed]');
+      if (cl) return markClaimed([cl.dataset.claimed]);
+      if (e.target.closest('[data-claimed-all]')) return markClaimed(F.toClaim(store.state).filter((x) => ui.context === 'all' || (x.p.context || 'home') === ui.context).map((x) => x.p.id));
       if (e.target.closest('[data-new-owed]')) return create({ values: { kind: 'invoice-out', context: ui.context === 'home' ? 'home' : 'work', date: today(), status: 'unpaid' } });
       const m = e.target.closest('[data-match]');
       if (m) {
@@ -232,6 +293,8 @@
       rec.status = '';
       rec.dueDate = '';
     } else if (rec.status === 'paid' && !rec.paidDate) rec.paidDate = today();
+    if (rec.claim && rec.claimed && !rec.claimedDate) rec.claimedDate = today();
+    if (!rec.claim || !rec.claimed) delete rec.claimedDate;
     // Set back to not paid: start the running total for it again from the full amount.
     if (existing && existing.status === 'paid' && rec.status !== 'paid') {
       rec.payments = [];
@@ -361,9 +424,13 @@
     });
   }
 
-  /* Opens Receipts & invoices on what's owed to you. */
+  /* Opens Receipts & invoices on what's owed to you, or on what's to claim back. */
   function showOwed() {
     ui.filter = 'owed';
+    GU.view.go('receipts');
+  }
+  function showClaims() {
+    ui.filter = 'claim';
     GU.view.go('receipts');
   }
 
@@ -489,5 +556,5 @@
     });
   }
 
-  GU.tabs.receipts = { label: 'Receipts & invoices', short: 'Receipts', icon: 'receipt', render, create, edit, markPaid, showOwed, importOrders, KINDS };
+  GU.tabs.receipts = { label: 'Receipts & invoices', short: 'Receipts', icon: 'receipt', render, create, edit, markPaid, showOwed, showClaims, markClaimed, importOrders, KINDS };
 })();
