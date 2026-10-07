@@ -360,6 +360,7 @@
         if (!ok) return;
         await GU.files.clear();
         store.replaceAll(store.blank());
+        if (GU.assistant) GU.assistant.clear();
         toast('Everything erased');
         GU.view.go('today');
       }
@@ -371,6 +372,7 @@
       if (!ok) return;
       try {
         await GU.backup.restore(await imp.files[0].text());
+        if (GU.assistant) GU.assistant.clear();
         toast('Backup restored');
       } catch (err) {
         toast(err.message || 'That file could not be restored.');
