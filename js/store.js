@@ -27,6 +27,7 @@
         ocr: true,
         // employer is left out on purpose: {name, short, match, wageSource, payInto, repayDays, nudgeDays, chaseDays, since}
         // once set. A blank key here would count as a local edit and wipe the synced one on your other devices.
+        // ucDay (1 to 31, the day your Universal Credit assessment period starts, set on Home › Tax year) is left out the same way.
       },
       accounts: [{ id: 'acc-main', name: 'Current account' }],
       transactions: [],
@@ -47,6 +48,8 @@
       workFolders: [],
       workNotes: [],
       costIdeas: [],
+      // Things the business has asked you to get (Work › To buy): {id, title, note, link, estimate, qty, askedDate, needBy, payer, status, orderedDate, boughtDate, paperId, created}.
+      requests: [],
       sections: [],
       sectionItems: [],
       inbox: [],
@@ -143,7 +146,7 @@
   /* ---------- Recently deleted ---------- */
   const KEEP_DAYS = 30;
   const KIND = { bills: 'Bill', debts: 'Debt', paperwork: 'Receipt or invoice', documents: 'Document', visas: 'Visa application', incomeSources: 'Income', tasks: 'Task',
-    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea', sortRules: 'Sorting rule' };
+    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea', sortRules: 'Sorting rule', requests: 'Thing to get' };
   const trash = {
     KIND,
     /* Adds a deleted record (and anything deleted along with it, in `extra`) to the bin. Call inside a commit. */

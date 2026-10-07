@@ -209,8 +209,9 @@
         { name: 'overdraftLimit', label: 'Arranged overdraft', type: 'money', optional: true, half: true, showIf: (v) => v.type !== 'credit' && v.type !== 'savings' },
         { name: 'anchorAmount', label: 'Balance now', type: 'text', optional: true, half: true, placeholder: info ? money(info.balance) : 'e.g. 1250.00 or -85.40', help: 'Only if it’s different. Put a minus for overdrawn.' },
         { name: 'anchorDate', label: 'On', type: 'date', half: true },
+        { name: 'noImports', type: 'checkbox', checkLabel: 'I don’t import statements for this one', help: 'I won’t ask you to import a statement for it.' },
       ],
-      values: { name: a.name, bank: a.bank || '', type: a.type || 'current', overdraftLimit: a.overdraftLimit || null, anchorDate: today() },
+      values: { name: a.name, bank: a.bank || '', type: a.type || 'current', overdraftLimit: a.overdraftLimit || null, anchorDate: today(), noImports: !!a.noImports },
       onSubmit: (v) => {
         const amt = v.anchorAmount ? parseAmount(v.anchorAmount) : null;
         if (v.anchorAmount && isNaN(amt)) {
@@ -220,6 +221,8 @@
         store.commit((st) => {
           const x = st.accounts.find((y) => y.id === id);
           Object.assign(x, { name: v.name, bank: v.bank, type: v.type, overdraftLimit: v.overdraftLimit || 0 });
+          if (v.noImports) x.noImports = true;
+          else delete x.noImports;
           if (amt != null) x.balanceAnchor = { date: anchorDate(st, id, v.anchorDate), amount: amt };
         });
       },
@@ -301,7 +304,7 @@
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add transaction</button>',
     }) +
       GU.ui.dropbar('Drop bank statements here, or a whole folder of them', 'PDF statements from Monzo, Santander, HSBC and most banks, or CSV, Excel, .txt, Quicken and Money files.') +
-      fixesHTML(s) + accountsStrip(s) + balanceChart(s) +
+      (GU.gaps ? GU.gaps.cardHTML(s) : '') + fixesHTML(s) + accountsStrip(s) + balanceChart(s) +
       '<div class="toolbar">' +
       '<label class="search">' + icon('search') + '<input type="search" id="tx-search" placeholder="Search descriptions" value="' + esc(ui.q) + '" aria-label="Search transactions"></label>' +
       '<select id="tx-month" aria-label="Month">' + selectOptions(months.map((m) => ({ value: m, label: monthLabel(m, true) })), ui.month, 'All months') + '</select>' +

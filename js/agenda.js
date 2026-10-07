@@ -31,8 +31,11 @@
     visa: { label: 'Visa', tab: 'visas' },
     document: { label: 'Document', tab: 'documents' },
     warranty: { label: 'Warranty', tab: 'receipts' },
+    return: { label: 'Return', tab: 'receipts' },
     debt: { label: 'Debt', tab: 'debts' },
     project: { label: 'Work project', tab: 'work-projects' },
+    // Something you've been asked to get, on the date it's needed (Work › To buy).
+    request: { label: 'To get', tab: 'work-requests' },
     // A work invoice the business pays, and money it should pay you back. Named after your employer.
     ktk: { get label() { const c = employerShort(); return c ? c + ' to pay' : 'Company to pay'; }, tab: 'work-ktk' },
     reclaim: { get label() { return 'Back from ' + coLabel(); }, tab: 'work-back' },
@@ -91,6 +94,11 @@
         push(Object.assign({ kind: 'warranty', date: p.warrantyUntil, title: 'Warranty ends: ' + p.title, meta: 'Make any claims before this date', ref },
           lane === 'home' ? null : work(lane === 'back' ? 'work-back' : 'work-ktk')));
       }
+      // The last day to take something back: it stays for a few days after, for you to say what happened.
+      if (p.returnBy && !p.returned && p.returnBy <= to && p.returnBy >= addDays(t, GU.returns ? -GU.returns.NAG_PAST : -7)) {
+        push(Object.assign({ kind: 'return', date: p.returnBy, title: 'Last day to return ' + (p.title || p.party || 'this'), meta: [p.party, p.amount != null && p.amount !== '' ? money(Math.abs(p.amount)) : ''].filter(Boolean).join(' · '), ref, action: 'return' },
+          lane === 'home' ? null : work(lane === 'back' ? 'work-back' : 'work-ktk')));
+      }
     }
     for (const s of state.incomeSources) {
       if (!s.nextDate) continue;
@@ -120,6 +128,7 @@
       }
     }
     if (GU.work && GU.work.dates) for (const p of GU.work.dates(state, to)) push(Object.assign({ kind: 'project' }, p, { part: 'work' }));
+    if (GU.requests && GU.requests.dates) for (const p of GU.requests.dates(state, to)) push(Object.assign({ kind: 'request' }, p, { part: 'work' }));
     for (const d of state.documents) {
       if (d.expiryDate && d.expiryDate >= t && d.expiryDate <= to)
         push(Object.assign({ kind: 'document', date: d.expiryDate, title: d.title + ' expires', meta: d.holder || d.type, ref: { c: 'documents', id: d.id } }, isWorkDoc(d) ? work('work-docs') : null));
@@ -163,6 +172,8 @@
         if (b.staleDays >= 14 && x.count) out.push(Object.assign({ level: 'info', tab: 'transactions', title: 'Import your latest ' + (x.account.bank || name) + ' statement', detail: 'I only know your balance up to ' + fmtDate(b.asOf, { short: true }) }, go));
       }
     }
+    // Statements that stopped coming, or a month missing from the middle (GU.gaps leaves out what the line above already says).
+    if (GU.gaps) for (const g of GU.gaps.attention(state)) out.push(g);
     if (GU.debts) {
       for (const d of state.debts || []) {
         if (d.closed) continue;
@@ -220,7 +231,7 @@
   }
 
   /* Which Work page each area of the work checks belongs to. */
-  const WORK_TABS = { tasks: 'work-tasks', invoices: 'work-ktk', back: 'work-back', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', costs: 'work-costs' };
+  const WORK_TABS = { tasks: 'work-tasks', invoices: 'work-ktk', back: 'work-back', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', costs: 'work-costs', requests: 'work-requests' };
 
   /* Red/amber counts shown on each tab in the rail. Home pages count Home things only; Work pages count the
      work checks. __home and __work are the totals for each half of the Home | Work switch. */

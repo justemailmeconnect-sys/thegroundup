@@ -223,6 +223,8 @@
       '<section class="panel"><header class="panel__head"><h2>Reminders</h2></header><form class="panel__body form-grid" data-form="reminders">' +
       '<div class="field field--half"><label class="field__label" for="set-doc">Warn me before documents expire</label><select id="set-doc" name="docWarnDays">' + selectOptions([30, 60, 90, 120, 180].map((n) => ({ value: n, label: n + ' days before' })), st.docWarnDays) + '</select></div>' +
       '<div class="field field--half"><label class="field__label" for="set-visa">Warn me before a visa runs out</label><select id="set-visa" name="visaWarnDays">' + selectOptions([60, 90, 120, 180, 240].map((n) => ({ value: n, label: n + ' days before' })), st.visaWarnDays) + '</select></div>' +
+      (GU.returns ? '<div class="field field--half"><label class="field__label" for="set-ret">Usual time to return something</label><select id="set-ret" name="returnDays">' +
+        selectOptions([{ value: 0, label: 'Don’t offer a return reminder' }].concat([14, 28, 30, 60, 90].map((n) => ({ value: n, label: n + ' days' }))), GU.returns.windowDays(s)) + '</select><p class="field__help">Offered as a reminder when you file a new receipt. You can set any date by hand.</p></div>' : '') +
       '<div class="field"><button type="submit" class="btn btn--primary">Save</button></div></form></section>' +
 
       '<section class="panel"><header class="panel__head"><h2>Bank accounts</h2><button type="button" class="btn btn--sm btn--ghost" data-add-account>' + icon('plus') + 'Add</button></header><ul class="rows rows--tight">' +
@@ -244,6 +246,8 @@
       ((s.sections || []).length ? '<ul class="rows rows--tight">' + s.sections.map((x) => '<li class="row-item"><span class="row-item__icon">' + icon(x.icon || 'star') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' + esc((x.part === 'work' ? 'Work · ' : 'Home · ') + plural(s.sectionItems.filter((i) => i.sectionId === x.id).length, 'item')) + (x.byAssistant ? ' · started by your assistant' : '') + '</em></span><span class="row-item__act"><button type="button" class="btn btn--sm btn--ghost" data-move-section="' + esc(x.id) + '">Rename or move</button><a class="btn btn--sm btn--ghost" href="#s-' + esc(x.id) + '">Open</a></span></li>').join('') + '</ul>'
         : '<div class="panel__body"><p class="muted">No extra sections yet. I’ll suggest one when something you send me doesn’t fit the other tabs.</p></div>') + '</section>' +
 
+      (GU.lock ? GU.lock.panel() : '') +
+
       '<section class="panel"><header class="panel__head"><h2>Backup and restore</h2><span class="muted" data-usage></span></header><div class="panel__body stack">' +
       '<p class="tip">' + icon('lock') + '<span>Your data lives only in this browser on this device. Nothing is sent to a server. Export a backup regularly (it includes your uploaded files) and keep it somewhere safe, so you can restore it on another device or if this browser is cleared.</span></p>' +
       '<div class="field--row"><button type="button" class="btn btn--primary" data-export>' + icon('download') + 'Export backup</button>' +
@@ -254,6 +258,7 @@
       '<button type="button" class="btn btn--danger" data-erase>' + icon('trash') + 'Erase everything</button></div></section>' +
       '</div>';
 
+    if (GU.lock) GU.lock.wirePanel(root);
     GU.brain.mode().then((m) => {
       const el = root.querySelector('[data-mode]');
       if (el) el.textContent = 'Now using: ' + GU.brain.modeLabel(m);
@@ -284,6 +289,7 @@
         } else if (kind === 'reminders') {
           set.docWarnDays = +f.elements.docWarnDays.value;
           set.visaWarnDays = +f.elements.visaWarnDays.value;
+          if (f.elements.returnDays) set.returnDays = +f.elements.returnDays.value;
         } else if (kind === 'employer') {
           saveEmployer(set, f);
         }

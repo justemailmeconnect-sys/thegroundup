@@ -64,6 +64,7 @@
     if (it.action === 'done') action = '<button type="button" class="btn btn--sm btn--soft" data-act="done" data-ref="' + esc(ref) + '">' + icon('check') + 'Done</button>';
     if (it.action === 'paid') action = '<button type="button" class="btn btn--sm btn--soft" data-act="paid" data-ref="' + esc(ref) + '">' + icon('check') + (it.kind === 'owed' ? 'Got paid' : 'Paid') + '</button>';
     if (it.action === 'ktkpaid') action = '<button type="button" class="btn btn--sm btn--soft" data-act="ktkpaid" data-ref="' + esc(ref) + '">' + icon('check') + 'Paid by ' + esc(co(store.state)) + '</button>';
+    if (it.action === 'return' && GU.returns) action = GU.returns.actionsHTML(it.ref.id);
     const amount = it.amount != null ? '<span class="tl-item__amt' + (it.amount > 0 ? ' is-in' : '') + '">' + esc(money(it.amount, { sign: true })) + '</span>' : '';
     const late = it.overdue ? '<span class="tl-item__late">' + (it.kind === 'task' ? 'Was due ' : 'Due ') + esc(fmtDate(it.date, { short: true })) + '</span>' : '';
     return '<li class="tl-item' + (it.overdue ? ' is-overdue' : '') + (it.priority === 'high' ? ' is-high' : '') + '">' +
@@ -259,7 +260,8 @@
     return '<section class="side-card"><h2>' + esc(title) + '</h2><ul class="side-list">' + items.slice(0, 6).map((a, i) =>
       '<li><button type="button" data-side="' + esc(title) + ':' + i + '">' +
       (a.level ? '<span class="dot dot--' + a.level + '">' + icon(a.level === 'info' ? 'info' : 'alert') + '</span>' : '<span class="dot">' + icon('clock') + '</span>') +
-      '<span><b>' + esc(a.title) + '</b><em>' + esc(a.detail || '') + '</em></span></button></li>').join('') + '</ul></section>';
+      '<span><b>' + esc(a.title) + '</b><em>' + esc(a.detail || '') + '</em></span></button>' +
+      (a.dismiss ? '<button type="button" class="icon-btn icon-btn--sm side-x" data-gaps-dismiss="' + esc(a.dismiss.join('|')) + '" aria-label="Not now" data-tip="Not now">' + icon('x') + '</button>' : '') + '</li>').join('') + '</ul></section>';
   }
 
   /* Klarna, PayPal and the like without a payment schedule yet. */

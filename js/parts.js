@@ -11,13 +11,13 @@
     home: {
       label: 'Home',
       start: 'today',
-      groups: [['today', 'hub'], ['bills', 'debts', 'incomings', 'plans'], ['transactions', 'outgoings'], ['receipts', 'documents', 'visas'], ['todos']],
+      groups: [['today', 'hub'], ['bills', 'debts', 'incomings', 'plans'], ['transactions', 'outgoings', 'taxyear'], ['receipts', 'documents', 'visas'], ['todos']],
       titles: ['', 'Money ahead', 'Money so far', 'Paperwork', 'Life'],
     },
     work: {
       label: 'Work',
       start: 'work',
-      groups: [['work', 'hub'], ['work-back', 'work-ktk', 'work-bills'], ['work-tasks', 'work-projects', 'work-costs', 'work-docs']],
+      groups: [['work', 'hub'], ['work-requests', 'work-back', 'work-ktk', 'work-bills'], ['work-tasks', 'work-projects', 'work-costs', 'work-docs']],
       titles: ['', 'Money', 'Running it'],
     },
   };
@@ -316,6 +316,7 @@
       const c = co(s);
       return [
         { icon: 'upload', label: 'Upload anything for ' + c, hint: 'I’ll read it and file it under Work', onClick: () => upload({ kind: 'work', area: null, name: 'Work' }) },
+        { icon: 'bag', label: 'Something ' + c + ' wants me to get', hint: 'Note it down, then order it and claim it back', onClick: () => use(() => tabs()['work-requests'].create, [], 'work-requests') },
         { icon: 'coin', label: 'I paid for something (get it back)', hint: 'With your own card, cash or account', onClick: () => use(() => tabs().receipts.create, [{ values: { context: 'work', payer: 'me', kind: 'receipt' } }], 'work-back') },
         { icon: 'receipt', label: 'Something ' + c + ' is paying', hint: 'Or has already paid: an order, invoice or receipt', onClick: () => use(() => tabs().receipts.create, [{ values: { kind: 'invoice-in', context: 'work', payer: 'company', status: 'unpaid' } }], 'work-ktk') },
         { icon: 'bills', label: 'Regular work cost', hint: 'A bill that comes round again', onClick: () => use(() => tabs().bills.create, [{ category: WORK_OUT(), context: 'work' }, { onSaved: (r) => r && tagWork('bills', r.id) }], 'work-bills') },
@@ -376,6 +377,7 @@
     const to = (tab, label) => '<button type="button" class="link link--btn" data-where-go="' + esc(tab) + '">' + esc(label) + '</button>';
     const row = (q, dest, more) => '<li><b>' + esc(q) + '</b> <span class="where__to">→ ' + dest + '</span>' + (more ? '<em>' + esc(more) + '</em>' : '') + '</li>';
     const work = [
+      row(C + ' asked me to get something', to('work-requests', 'Work › To buy'), 'Note it there first. When you’ve bought it, add the receipt and it goes to Get paid back.'),
       row('I bought something for ' + c + ' with my own card or cash', to('work-back', 'Work › Get paid back'), 'Snap the receipt, or open the payment in Bank and choose ‘Paid for ' + c + ', get it back’. Then tap ‘Send to ' + c + '’.'),
       row('I set up an order or quote and ' + c + ' pays at the end', to('work-ktk', 'Work › ' + pays), 'It waits there for ' + c + '. Tap ‘Send to ' + c + '’, then ‘Paid by ' + c + '’ once it’s paid.'),
       row('It went on ' + c + '’s card or account', to('work-ktk', 'Work › ' + pays), 'It’s filed as paid by ' + c + '.'),

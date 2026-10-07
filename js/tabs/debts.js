@@ -129,6 +129,7 @@
         '<li class="spot"><span class="row-item__icon">' + icon('bank') + '</span><span class="spot__text"><b>' + esc(o.account.name) + '</b><em>' +
         esc((o.limit ? money(o.used) + ' of your ' + money(o.limit, { whole: true }) + ' overdraft used' : money(o.used) + ' overdrawn') + (o.fees90 ? ' · ' + money(o.fees90) + ' in overdraft fees over 3 months' : '') + ' · ' + fmtDate(o.asOf, { short: true })) + '</em></span>' +
         (o.limit ? '<span class="od-meter" role="img" aria-label="' + esc(pct(Math.min(1, o.used / o.limit)) + ' of the overdraft used') + '"><i style="width:' + Math.min(100, (o.used / o.limit) * 100) + '%"></i></span>' : '') + '</li>').join('') + '</ul></section>' : '') +
+      (GU.payoff ? GU.payoff.card(s) : '') +
       (active.length ? active.map(debtCard).join('')
         : '<section class="panel">' + emptyState({ icon: 'card', title: 'No debts added yet', text: spotted.length ? 'Start with the payments I found above, or add a card, loan or finance agreement yourself.' : 'Add a credit card, loan, Klarna, car finance or money you owe someone. Your bank statements fill in the payments.', action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>' }) + '</section>') +
       (closed.length ? '<details class="panel panel--details"><summary class="panel__head"><h2>Paid off</h2><span class="muted">' + closed.length + '</span></summary><ul class="rows">' + closed.map((d) =>
@@ -140,6 +141,7 @@
       '</aside></div>';
 
     GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'debts', name: 'Debts' } }));
+    if (GU.payoff) GU.payoff.wire(root);
     root.querySelectorAll('[data-pays]').forEach((el) => el.addEventListener('toggle', () => (open[el.dataset.pays] = el.open)));
     root.addEventListener('click', async (e) => {
       const b = (sel) => e.target.closest(sel);

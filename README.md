@@ -244,3 +244,13 @@ No frameworks and no build step: plain HTML, CSS and JavaScript. PDF text is rea
 - Encrypt everything stored in the browser with a passcode.
 - Live bank feeds through an Open Banking provider.
 - Forward emails (receipts, letters) straight into the Sorting hub.
+
+## More pages and tools
+
+- **Work › To buy**: things the business has asked you to get. Mark one bought and the receipt form opens ready to fill, then it goes to Get paid back.
+- **Home › Tax year**: what came in for each tax year or Universal Credit month, from your statements, with CSV and printable downloads. Work money is shown apart. From here, or from a visa card, build an **evidence pack**: a zip of statements, payslips and a wages summary.
+- **Bank › Statements to import**: a nudge when an account you import into has a missing month or has gone quiet.
+- **Return-by dates** on receipts, with a reminder on the day list and a way to take a returned item out of Get paid back.
+- **Debts › Debt-free date**: when your debts clear at what you pay now, and what paying extra changes.
+- **Search** (`/` or the magnifier) looks across every page, Home and Work.
+- **Privacy screen** (Settings): an optional passcode that hides the dashboard on one device. It is a screen cover, not encryption.

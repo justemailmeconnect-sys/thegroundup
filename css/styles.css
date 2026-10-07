@@ -1587,3 +1587,317 @@ button.hub-card__part:hover { color: var(--ink); }
   html.chat-open .toasts { left: calc(50% + var(--rail-w) / 2 - 220px); max-width: calc(100vw - var(--rail-w) - 472px); }
 }
 @media (max-height: 480px) { .chat__head p { display: none; } } /* room for the conversation in a short window */
+
+/* ---------- Home/Work re-sort changes ---------- */
+/* ---------- 'What the Home/Work re-sort changed' (GU.refile.changesHTML), on Work › Overview ---------- */
+.rf-changes > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 14.5px; list-style: none; }
+.rf-changes > summary::-webkit-details-marker { display: none; }
+.rf-changes > summary .ico { color: var(--work-accent); flex: none; }
+.rf-changes > summary > span:first-of-type { min-width: 0; }
+.rf-changes > summary .muted { margin-left: auto; font-weight: 400; font-size: 13px; white-space: nowrap; }
+.rf-changes[open] > summary { border-bottom: 1px solid var(--line); }
+.rf-changes__list { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+.rf-changes__sub { margin: 4px 0 6px; font-size: 13.5px; color: var(--ink-2); }
+.rf-changes__moved { list-style: none; margin: 0 0 12px; padding: 0; border-top: 1px solid var(--line); }
+.rf-changes__moved li { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.rf-changes__moved li > span { min-width: 0; overflow-wrap: anywhere; }
+.rf-changes__foot { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; margin: 0; font-size: 13px; color: var(--ink-2); }
+.rf-changes__foot .link--btn { margin-left: auto; }
+
+
+/* ---------- To buy ---------- */
+/* ---------- Work › To buy (js/tabs/requests.js) ---------- */
+.rq .stack { gap: 16px; }
+.rq-quick { display: grid; gap: 6px; }
+.rq-hint { margin: 0; padding: 0 4px; font-size: 12.5px; color: var(--ink-3); }
+
+/* The three lanes */
+.rq-lane .panel__head h2 { flex: none; }
+.rq-lane .panel__head .muted { margin-right: auto; font-size: 12.5px; }
+.rq-lane__empty { margin: 0; padding: 18px; font-size: 13.5px; color: var(--ink-2); }
+.rq-lane__foot { margin: 0; padding: 10px 18px 14px; font-size: 12.5px; color: var(--ink-3); border-top: 1px solid var(--line); }
+.rq-fold > summary { cursor: pointer; list-style: none; }
+.rq-fold > summary::-webkit-details-marker { display: none; }
+.rq-fold:not([open]) > summary { border-bottom: 0; }
+.rq-fold__chev { width: 16px; height: 16px; color: var(--ink-3); transition: transform 0.15s; }
+.rq-fold[open] .rq-fold__chev { transform: rotate(90deg); }
+
+/* A row: the thing, what it costs, and what to do next */
+.rq-row.is-gone .wk-row__main b { color: var(--ink-3); text-decoration: line-through; }
+.rq-row .wk-row__end em { margin-top: 1px; }
+.rq-row .wk-row__act .btn { white-space: nowrap; }
+.rq-tally .tally__sum b.is-warn { color: var(--warn); }
+
+/* The dialogs: the count under 'add several' and the receipt we found */
+.rq-count { font-size: 12.5px; color: var(--ink-2); }
+.rq-found { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.rq-found li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.rq-found li > span { flex: 1 1 200px; display: grid; min-width: 0; }
+.rq-found b { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.rq-found em { font-style: normal; font-size: 12.5px; color: var(--ink-3); }
+
+/* The little tag on the Work timeline */
+.kind--request { background: color-mix(in srgb, var(--work-accent, var(--accent)) 12%, transparent); color: var(--work-accent, var(--accent)); }
+
+@media (min-width: 561px) {
+  .rq-row .wk-row__act { min-width: 236px; }
+}
+@media (max-width: 560px) {
+  .rq-row .wk-row__act { gap: 6px; }
+  .rq-row .wk-row__act .btn { flex: 0 1 auto; }
+}
+
+
+/* ---------- Tax year and evidence pack ---------- */
+/* ---------- Home › Tax year (js/tabs/taxyear.js) and the evidence pack (js/evidence.js) ---------- */
+.ty-toolbar { margin-bottom: 12px; }
+.view--taxyear .ledger { margin-top: 2px; }
+.view--taxyear .tbl tfoot td { border-top: 2px solid var(--line-strong); border-bottom: 0; background: var(--surface-2); padding-top: 11px; padding-bottom: 11px; }
+.view--taxyear .tbl .wrap { overflow-wrap: anywhere; }
+.view--taxyear .tbl td .pill { margin-left: 4px; }
+.ty-months th:first-child, .ty-months td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.ty-months tfoot td:first-child { background: var(--surface-2); }
+.ty-sources .barlist { margin: 0; }
+
+/* One source: a row you open to see each payment */
+.ty-lists > .panel__head .muted, .ty-work .panel__head .pill { font-size: 12.5px; }
+.ty-src { border-bottom: 1px solid var(--line); }
+.ty-src:last-child { border-bottom: 0; border-radius: 0 0 var(--radius) var(--radius); }
+.ty-src > summary { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; padding: 12px 18px; cursor: pointer; list-style: none; }
+.ty-src > summary::-webkit-details-marker { display: none; }
+.ty-src > summary::before { content: ""; width: 7px; height: 7px; border-right: 1.8px solid var(--ink-3); border-bottom: 1.8px solid var(--ink-3); transform: rotate(-45deg); transition: transform 0.15s; flex: none; margin-right: 2px; }
+.ty-src[open] > summary::before { transform: rotate(45deg); }
+.ty-src > summary:hover { background: var(--surface-2); }
+.ty-src__name { font-weight: 600; flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.ty-src > summary .muted { font-size: 12.5px; }
+.ty-src > summary b { font: 600 14px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; margin-left: auto; }
+.ty-src .table-wrap { border-top: 1px solid var(--line); max-height: 420px; overflow: auto; }
+
+/* Work money, kept apart */
+.ty-work { border-color: color-mix(in srgb, var(--info) 28%, var(--line)); background: color-mix(in srgb, var(--info-soft) 35%, var(--surface)); }
+.ty-work .panel__head h2 .ico { color: var(--info); }
+.ty-work__lede { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
+.ty-work__row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.ty-work__row span em { display: block; font-style: normal; font-size: 12px; color: var(--ink-3); }
+.ty-work__row b { font: 600 15px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* What the figures can't see */
+.ty-bits { margin: 0; padding: 0 0 0 18px; display: grid; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.ty-bits__links { margin: 12px 0 0; }
+
+/* Universal Credit months */
+.ty-uc-line { margin: 0 0 8px; font-size: 14px; color: var(--ink); }
+.ty-uc-line--help { color: var(--ink-2); font-size: 13.5px; margin-bottom: 16px; }
+.ty-uc-set { max-width: 640px; margin-bottom: 18px; }
+.ty-uc-set__row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 10px; }
+.ty-uc-set__row input { width: 120px; }
+.ty-period > summary { cursor: pointer; list-style: none; }
+.ty-period > summary h2 { font-size: 15px; }
+.ty-period > summary b { font: 600 15px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+.ty-period__pays { margin: 0; padding: 10px 18px 0; font-size: 13.5px; color: var(--ink-2); }
+.ty-period .table-wrap { margin-top: 8px; }
+.ty-first td { border-top: 1px solid var(--line-strong); }
+
+/* The evidence pack dialog */
+.ev-preview { margin-top: 4px; }
+.ev-sum { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.ev-row { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr); gap: 2px 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.ev-row:last-child { border-bottom: 0; }
+.ev-row b { font-weight: 600; }
+.ev-row span { color: var(--ink-2); overflow-wrap: anywhere; }
+.ev-row.is-off { opacity: 0.55; }
+.ev-gaps { grid-column: 1 / -1; list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.ev-gaps li { display: flex; gap: 7px; align-items: flex-start; color: var(--warn); font-size: 13px; }
+.ev-gaps li .ico { width: 14px; height: 14px; margin-top: 3px; }
+.ev-gaps li span { color: var(--warn); }
+.ev-foot { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-3); }
+
+@media (max-width: 560px) {
+  .view--taxyear .ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .view--taxyear .ledger > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .ty-src > summary { padding: 11px 14px; }
+  .ev-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+
+/* ---------- Statement gaps and return-by dates ---------- */
+/* ---------- Statement gaps and return-by dates (js/gaps.js, js/returns.js) ---------- */
+
+/* The card at the top of the Bank page: it uses the same rows as 'Tidy up your accounts' */
+.stmt-gaps { margin: 0 0 18px; }
+
+/* Get paid back › From your bank: the statements stop before the things you paid for */
+.gaps-note { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 10px 18px; background: var(--warn-soft); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.gaps-note > .ico { color: var(--warn); flex: none; }
+.gaps-note > span { flex: 1 1 220px; min-width: 0; }
+
+/* Home › Needs attention: the small 'Not now' cross on a line */
+.side-list li { position: relative; }
+.side-list .side-x { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; display: grid; grid-template-columns: none; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); }
+.side-list .side-x:hover { background: var(--surface-2); color: var(--ink); border: 0; }
+.side-list li:has(.side-x) > button:first-child { padding-right: 38px; }
+
+/* Home › Also coming up: 'Last day to return' */
+.kind--return { background: var(--k-doc-bg); color: var(--k-doc); }
+@media (max-width: 560px) {
+  /* Keep it / Returned sit side by side under the title, not stacked beside it */
+  .tl-item:has([data-ret]) .tl-item__end { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; align-items: center; }
+}
+
+
+/* ---------- Debt-free date ---------- */
+/* payoff: the "Debt-free date" card on the Debts page (js/payoff.js). Tokens and existing classes only. */
+.payoff { overflow: hidden; }
+
+/* the headline figures */
+.payoff__sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; background: var(--surface); border-bottom: 1px solid var(--line); overflow: hidden; }
+.payoff__sum > div { background: var(--surface); box-shadow: 0 0 0 1px var(--line); padding: 13px 18px; display: grid; gap: 2px; min-width: 0; align-content: start; }
+.payoff__sum span { font-size: 12.5px; color: var(--ink-2); }
+.payoff__sum b { font: 600 22px/1.25 var(--font-body); letter-spacing: -0.01em; }
+.payoff__sum b.is-crit { color: var(--crit); }
+.payoff__sum em { font-style: normal; font-size: 12px; color: var(--ink-3); }
+
+/* the debts */
+.payoff__tbl th, .payoff__tbl td { vertical-align: top; }
+.payoff__tbl em { display: block; font: 400 12px/1.4 var(--font-body); font-style: normal; color: var(--ink-3); white-space: normal; }
+.payoff__tbl .num em { margin-left: auto; max-width: 24ch; }
+.payoff__name { min-width: 150px; }
+.payoff__name .link { font-weight: 600; text-align: left; font-size: 14px; }
+.payoff__bar { display: block; height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: 7px; max-width: 220px; overflow: hidden; }
+.payoff__bar i { display: block; height: 100%; background: var(--accent-2); border-radius: 2px; }
+.payoff__tbl .payoff__paysub { display: none; }
+.payoff__tbl th .payoff__long { display: inline; }
+.payoff__when { min-width: 118px; }
+.payoff__when b { font-weight: 600; }
+.payoff__when .pill { white-space: normal; text-align: left; }
+.payoff__better { color: var(--good); }
+.payoff__tbl tfoot th, .payoff__tbl tfoot td { background: var(--surface-2); border-top: 1px solid var(--line-strong); border-bottom: 0; font-weight: 600; }
+.payoff__tbl tfoot th { text-transform: none; letter-spacing: 0; font: 600 14px/1.4 var(--font-body); color: var(--ink); }
+.payoff__tbl tfoot em { font-weight: 400; }
+.payoff__note { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--ink-2); padding: 10px 18px 0; }
+.payoff__note .ico { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--ink-3); }
+.payoff__note:last-of-type { padding-bottom: 14px; }
+
+/* what if I pay extra? */
+.payoff__if { border-top: 1px solid var(--line); padding: 16px 18px; display: grid; gap: 10px; }
+.payoff__if h3, .payoff__chart h3 { font-size: 14px; font-weight: 700; }
+.payoff__help { font-size: 13px; color: var(--ink-2); }
+.payoff__ctl { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: end; }
+.payoff__ctl .money-input { width: 150px; }
+.payoff__result { font-size: 14px; line-height: 1.5; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); }
+
+/* the chart: the end dot and hover dot in the line's own colour */
+.payoff__chart .linechart__hits span:hover::after, .payoff__chart .linechart__hits span.is-last::after { background: var(--series-out); }
+.payoff__chart { border-top: 1px solid var(--line); padding: 16px 18px 14px; display: grid; gap: 10px; }
+.payoff__chart:empty { display: none; }
+.payoff__cap { font-size: 12px; color: var(--ink-3); }
+
+@media (max-width: 560px) {
+  .payoff__sum > div { padding: 12px 14px; }
+  .payoff__sum > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .payoff__if, .payoff__chart { padding-left: 14px; padding-right: 14px; }
+  .payoff__note { padding-left: 14px; padding-right: 14px; }
+  .payoff__tbl .payoff__paysub { display: block; }
+  .payoff__tbl th .payoff__long { display: none; }
+  .payoff__tbl th, .payoff__tbl td { padding-left: 8px; padding-right: 8px; }
+  .payoff__tbl th:first-child, .payoff__tbl td:first-child { padding-left: 14px; }
+  .payoff__tbl th:last-child, .payoff__tbl td:last-child { padding-right: 14px; }
+  .payoff__tbl .num { font-size: 13px; }
+  .payoff__name { min-width: 0; }
+  .payoff__when { min-width: 0; }
+  .payoff__ctl .money-input { width: 130px; }
+}
+
+
+/* ---------- Privacy screen and search ---------- */
+/* ---------- Privacy screen and search everywhere (js/lock.js, js/search.js) ---------- */
+
+/* ----- Settings › Privacy screen ----- */
+.lock-after select { width: auto; min-width: 240px; max-width: 100%; justify-self: start; }
+
+/* ----- the privacy screen: a full-screen cover with no data on it ----- */
+html.is-locked { overflow: hidden; }
+html.is-locked .toasts, html.is-locked .tooltip, html.is-locked .popover { visibility: hidden; }
+dialog.lockscreen { color: var(--ink); background: var(--bg); }
+dialog.lockscreen::backdrop { background: var(--bg); }
+dialog.lockscreen[open] { display: grid; place-items: center; overflow-y: auto; padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.lockscreen__box { display: grid; justify-items: center; gap: 8px; width: min(320px, 100%); margin: auto; text-align: center; outline: none; }
+.lockscreen__logo { width: 54px; height: 54px; border-radius: 15px; display: grid; place-items: center; background: var(--rail-active); color: var(--rail-ink-active); font: 800 27px/1 var(--font-display); }
+.lockscreen__title { font-size: 28px; font-weight: 800; line-height: 1.1; margin-top: 8px; }
+.lockscreen__sub { color: var(--ink-2); }
+.lockscreen__dots { display: flex; justify-content: center; gap: 14px; margin: 14px 0 2px; min-height: 16px; }
+.lockscreen__dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink-3); transition: background 0.12s, border-color 0.12s, transform 0.12s; }
+.lockscreen__dots i.is-on { background: var(--accent); border-color: var(--accent); transform: scale(1.1); }
+.lockscreen__msg { min-height: 3em; max-width: 26ch; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.lockscreen__msg.is-bad { color: var(--crit); }
+.lockscreen__box.is-shaking .lockscreen__dots { animation: lock-shake 0.38s ease-in-out; }
+@keyframes lock-shake { 20% { transform: translateX(-9px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(4px); } }
+.lockpad { display: grid; grid-template-columns: repeat(3, 72px); gap: 12px; margin-top: 2px; }
+.lockpad__key { width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: 600 26px/1 var(--font-display); cursor: pointer; display: grid; place-items: center; transition: background 0.1s, transform 0.1s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.lockpad__key:hover { background: var(--surface-2); }
+.lockpad__key:active { background: var(--accent-soft); transform: scale(0.95); }
+.lockpad__key:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.lockpad__key--act { border-color: transparent; background: transparent; font: 500 14px/1.2 var(--font-body); color: var(--ink-2); }
+.lockpad__key--act:hover { background: var(--surface-2); }
+@media (max-height: 700px) {
+  .lockscreen__logo { width: 44px; height: 44px; font-size: 22px; }
+  .lockscreen__title { font-size: 24px; margin-top: 2px; }
+  .lockscreen__dots { margin-top: 6px; }
+  .lockscreen__msg { min-height: 2.6em; }
+  .lockpad { grid-template-columns: repeat(3, 60px); gap: 9px; }
+  .lockpad__key { width: 60px; height: 60px; font-size: 23px; }
+}
+
+/* ----- Search and Lock buttons in the rail and the phone bar ----- */
+.partbar__tool { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
+.partbar__tool:hover { background: var(--surface-2); color: var(--ink); }
+.partbar__tool .ico { width: 19px; height: 19px; }
+.partbar__tool[hidden] { display: none; }
+@media (max-width: 860px) {
+  .rail__search, .rail__lock { display: none; }
+  .partbar { gap: 6px; }
+  .partbar__brand { margin-right: 2px; }
+}
+@media (max-width: 359px) {
+  .partbar { gap: 4px; padding-left: 10px; padding-right: 10px; }
+  .partbar__tool { width: 32px; height: 32px; }
+  .partswitch--bar .partswitch__ico { display: none; }
+}
+
+/* ----- the search box ----- */
+dialog.search-ov { padding: 0; border: 1px solid var(--line); border-radius: 16px; width: min(680px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: min(640px, calc(100dvh - 24px)); margin: 9vh auto auto; background: var(--surface); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3); overflow: hidden; }
+dialog.search-ov[open] { display: flex; flex-direction: column; }
+dialog.search-ov::backdrop { background: var(--backdrop); }
+.search-ov__bar { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--line); flex: none; }
+.search-ov__bar > .ico { width: 20px; height: 20px; color: var(--ink-3); }
+.search-ov__bar input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; box-shadow: none; font-size: 17px; padding: 8px 0; min-height: 0; }
+.search-ov__bar input::-webkit-search-cancel-button { display: none; }
+.search-ov__body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 10px; }
+.gs-empty { display: grid; gap: 8px; padding: 22px 14px 12px; color: var(--ink-2); }
+.gs-empty p b { color: var(--ink); }
+.gs-group__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 10px 4px; font: 500 11px/1.3 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.gs-group__head .link { font: 500 12px/1.3 var(--font-body); letter-spacing: 0; text-transform: none; }
+.gs-group__n { font-variant-numeric: tabular-nums; }
+.gs-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; cursor: pointer; }
+.gs-row[aria-selected="true"] { background: var(--accent-soft); }
+.gs-row__ico { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--surface-2); color: var(--accent-2); }
+.gs-row__ico .ico { width: 17px; height: 17px; }
+.gs-row[aria-selected="true"] .gs-row__ico { background: var(--surface); }
+.gs-row__text { min-width: 0; display: grid; }
+.gs-row__text b { font-weight: 500; font-size: 14.5px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-row__text em { font-style: normal; font-size: 12.5px; line-height: 1.4; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-row mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.gs-row--more { grid-template-columns: minmax(0, 1fr) auto; color: var(--accent); }
+.gs-row--more .gs-row__text b { color: var(--accent); font-size: 13.5px; }
+.gs-row--more .ico { width: 15px; height: 15px; }
+.gs-row--recent { grid-template-columns: 32px minmax(0, 1fr); }
+.gs-cap { font-size: 12.5px; padding: 6px 10px; }
+.search-ov__foot { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 16px; border-top: 1px solid var(--line); background: var(--bg-2); font-size: 12px; color: var(--ink-3); flex: none; }
+.search-ov__foot kbd { font: 500 11px/1 var(--font-mono); padding: 2px 5px; border-radius: 5px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); }
+@media (max-width: 560px) {
+  dialog.search-ov { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .search-ov__bar { padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+  .search-ov__bar input { font-size: 16px; }
+  .search-ov__foot { display: none; }
+  .search-ov__body { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+}

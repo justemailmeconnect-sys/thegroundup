@@ -70,7 +70,8 @@
       '<footer class="visa__foot"><div class="thumb-row">' + (v.files || []).map((f, i) => '<button type="button" class="thumb-btn" data-vfile="' + esc(v.id) + ':' + i + '" data-tip="' + esc(f.name) + '" aria-label="View ' + esc(f.name) + '">' + thumbHTML([f]) + '</button>').join('') +
       ((v.files || []).length ? '<button type="button" class="btn btn--sm btn--ghost" data-dl="' + esc(v.files.map((f) => f.id).join(',')) + '" data-dl-name="' + esc(v.visaType || 'Visa files') + '">' + icon('download') + (v.files.length > 1 ? 'Download all ' + v.files.length : 'Download') + '</button>' : '') +
       '<button type="button" class="btn btn--sm" data-vupload="' + esc(v.id) + '">' + icon('clip') + 'Add files</button>' +
-      '<button type="button" class="btn btn--sm" data-vfolder="' + esc(v.id) + '">' + icon('folder') + 'Add a folder</button><span class="muted visa__drop-hint">or drop files on this card</span></div>' +
+      '<button type="button" class="btn btn--sm" data-vfolder="' + esc(v.id) + '">' + icon('folder') + 'Add a folder</button>' +
+      '<button type="button" class="btn btn--sm" data-evidence="' + esc(v.id) + '">' + icon('file') + 'Evidence pack</button><span class="muted visa__drop-hint">or drop files on this card</span></div>' +
       (v.portalUrl ? '<a class="link" href="' + esc(/^https?:\/\//.test(v.portalUrl) ? v.portalUrl : 'https://' + v.portalUrl) + '" target="_blank" rel="noopener">Open application website ' + icon('chevron') + '</a>' : '') + '</footer>' +
       '</article>';
   }
@@ -163,6 +164,8 @@
         const v = store.find('visas', vid);
         return viewFiles(v.files, +i, v.visaType);
       }
+      const pack = e.target.closest('[data-evidence]');
+      if (pack) return GU.evidence && GU.evidence.open({ visaId: pack.dataset.evidence });
       const vf2 = e.target.closest('[data-vfolder]');
       if (vf2) {
         const files = await GU.ui.pickFolder();

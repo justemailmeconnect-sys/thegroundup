@@ -91,7 +91,8 @@
       push(at(3), 'SPOTIFY UK', -11.99, 'Subscriptions');
       push(at(5), 'PUREGYM LTD', -24.99, 'Health & fitness');
       push(at(26), 'TRANSFER TO SAVINGS', -300, 'Transfers');
-      push(at(26), 'TRANSFER FROM CURRENT', 300, 'Transfers', sav);
+      // One month of the savings statement is missing, so the Bank page has a gap to point out.
+      if (k !== -3) push(at(26), 'TRANSFER FROM CURRENT', 300, 'Transfers', sav);
       for (const dd of [2, 9, 16, 23]) push(at(dd), pick(['TESCO STORES 2041', "SAINSBURY'S S/MKTS", 'LIDL GB LONDON', 'TESCO EXPRESS']), -amt(32, 92), 'Groceries');
       for (const dd of [4, 11, 17, 22, 27]) push(at(dd), pick(['PRET A MANGER', "NANDO'S BRIXTON", 'COSTA COFFEE', 'DELIVEROO', 'WAGAMAMA']), -amt(4.5, 38), 'Eating out');
       for (const dd of [6, 13, 20, 27]) push(at(dd), 'TFL TRAVEL CHARGE', -amt(22, 34), 'Transport');
@@ -99,6 +100,7 @@
       push(at(19), 'AMZN MKTP UK', -amt(9, 40), 'Shopping');
       push(at(15), 'BOOTS 1123', -amt(6, 22), 'Health & fitness');
       if (k % 2 === 0) push(at(15), pick(['BLOOM BAKERY LTD', 'KITE CYCLES LTD']), amt(380, 650), 'Freelance & side work');
+      push(at(14), 'HMRC CHILD BENEFIT', 104.2, 'Benefits'); // so Home › Tax year has a benefit to show
       if (k === -4) push(at(10), 'HOME OFFICE UKVI VISA FEE', -827, 'Visa & immigration');
       if (k === -1) push(at(21), 'TRAINLINE.COM', -amt(48, 96), 'Transport');
       push(at(7), 'BARCLAYCARD PAYMENT', -120, 'Debt repayments');
@@ -113,6 +115,8 @@
     const debts = [
       Object.assign({ id: 'debt-' + uid(), name: 'Barclaycard', lender: 'Barclaycard', type: 'Credit card', balance: 2860, balanceDate: addDays(first, -1), startBalance: 3400, apr: 24.9, monthlyPayment: 120, paymentDay: 7,
         notes: '0% on balance transfers ended in January.', history: [] }, D),
+      // A second card, so the debt-free plan can show which one an extra payment should go to first.
+      Object.assign({ id: 'debt-' + uid(), name: 'Tesco Bank card', lender: 'Tesco Bank', type: 'Credit card', balance: 640, balanceDate: t, startBalance: 900, apr: 19.9, monthlyPayment: 45, paymentDay: 20, history: [] }, D),
       Object.assign({ id: 'debt-' + uid(), name: 'Klarna (ASOS order)', lender: 'Klarna', type: 'Buy now pay later', balance: 99.99, balanceDate: addMonths(t.slice(0, 8) + '01', -1).slice(0, 8) + '14', monthlyPayment: 33.33, paymentDay: 15, history: [],
         schedule: [{ id: 'in-demo-1', date: next15, amount: 33.33, merchant: 'ASOS', n: 2, of: 3 }, { id: 'in-demo-2', date: addMonths(next15, 1), amount: 33.34, merchant: 'ASOS', n: 3, of: 3 }] }, D),
     ];
@@ -140,6 +144,7 @@
     const incomeSources = [
       Object.assign({ id: salaryId, name: 'Salary', from: 'Acme Care Ltd', amount: 2850, frequency: 'monthly', nextDate: nextDay(25), anchorDay: 25, account: cur }, D),
       Object.assign({ id: 'i-' + uid(), name: 'Freelance retainer', from: 'Kite Cycles', amount: 300, frequency: 'monthly', nextDate: nextDay(15), anchorDay: 15, account: cur }, D),
+      Object.assign({ id: 'i-' + uid(), name: 'Child Benefit', from: 'HMRC', amount: 104.2, frequency: 'monthly', nextDate: nextDay(14), anchorDay: 14, account: cur }, D),
     ];
 
     /* Work money with Acme. A monthly rota app comes out of your account and Acme pays it back: last month's is
@@ -160,6 +165,10 @@
         files: await attach('currys-tv-receipt.svg', { shop: 'CURRYS', sub: 'Croydon Megastore', date: GU.util.fmtDate(d(-240)), lines: [['SAMSUNG 55" QLED', '549.00'], ['2 YR GUARANTEE', 'INCL']], total: '£549.00', foot: 'Keep this receipt for your guarantee' }) }),
       P({ kind: 'receipt', context: 'home', title: 'Weekly shop', party: 'Tesco', amount: 64.2, date: d(-4), category: 'Groceries',
         files: await attach('tesco-receipt.svg', { shop: 'TESCO', sub: 'Brixton Superstore', date: GU.util.fmtDate(d(-4)), lines: [['SEMI SKIMMED MILK', '1.45'], ['SOURDOUGH LOAF', '1.90'], ['CHICKEN THIGHS', '4.75'], ['MIXED VEG', '6.10'], ['OTHER ITEMS x23', '50.00']], total: '£64.20' }) }),
+      // Things you might send back: the last day to return each is on the receipt (Work's is waiting to go to Acme).
+      P({ kind: 'receipt', context: 'home', title: 'Bluetooth speaker', party: 'Argos', amount: 59.99, date: d(-24), category: 'Shopping', returnBy: d(6) }),
+      P({ kind: 'receipt', context: 'home', title: 'Running shoes', party: 'JD Sports', amount: 84, date: d(-11), category: 'Shopping', returnBy: d(19) }),
+      claim({ title: 'Desk fan for the office', party: 'Argos', amount: 24.99, date: d(-4), claimStatus: 'to-send', returnBy: d(5) }),
       claim({ title: 'Lunch for the training day', party: 'Pret A Manger', amount: 18.45, date: d(-2), claimStatus: 'to-send', purchaseTx: lunchOut && lunchOut.id, purchaseWas: 'Eating out',
         files: await attach('pret-receipt.svg', { shop: 'PRET A MANGER', sub: 'Kings Cross', date: GU.util.fmtDate(d(-2)), lines: [['CHICKEN CAESAR', '6.95'], ['FLAT WHITE x2', '7.30'], ['CROISSANT', '4.20']], total: '£18.45' }) }),
       claim({ title: 'Train to the Leeds office', party: 'Trainline', amount: 48.6, date: d(-16), claimStatus: 'sent', claimedDate: d(-12), packId: pack, purchaseTx: trainOut && trainOut.id, purchaseWas: 'Transport',
@@ -198,6 +207,20 @@
       DOC({ title: 'Employers’ liability insurance', type: 'Insurance policy', holder: 'Acme Care Ltd', reference: 'EL-2209184', expiryDate: d(48), location: 'Office filing cabinet', context: 'work' }),
       DOC({ title: 'Lease for the new office', type: 'Contract or agreement', holder: 'Acme Care Ltd', issueDate: d(-20), expiryDate: d(1075), location: 'Scanned', context: 'work', notes: 'Three months’ notice. Rent reviewed every year.' }),
     ];
+    // The last three months' statements and payslips, so the evidence pack (Visas › Evidence pack) has something to gather.
+    // Earlier months are left out on purpose, so its preview shows what a gap looks like.
+    for (let k = -3; k <= -1; k++) {
+      const first = addMonths(t.slice(0, 8) + '01', k);
+      const last = addDays(addMonths(first, 1), -1);
+      const shortD = (x) => GU.util.fmtDate(x, { short: true });
+      const label = monthLabel(first.slice(0, 7), true);
+      documents.push(
+        DOC({ title: 'Monzo statement ' + shortD(first) + ' to ' + shortD(last), type: 'Bank, savings and pension', location: 'Uploaded', issueDate: last, statementBatch: 'imp-demo-' + first.slice(0, 7),
+          files: await attach('monzo-statement-' + first.slice(0, 7) + '.svg', { kind: 'STATEMENT', shop: 'MONZO', sub: 'Current account', date: shortD(first) + ' to ' + shortD(last), lines: [['Statement period', shortD(first) + ' to ' + shortD(last)]], total: 'Example statement', foot: 'Made up for the examples' }) }),
+        DOC({ title: 'Payslip ' + label, type: 'Employment and payslips', holder: 'Me', issueDate: first.slice(0, 8) + '25', location: 'Scanned',
+          files: await attach('payslip-' + first.slice(0, 7) + '.svg', { kind: 'PAYSLIP', shop: 'ACME CARE LTD', sub: label, date: GU.util.fmtDate(first.slice(0, 8) + '25'), lines: [['Employer', 'Acme Care Ltd'], ['Net pay', '2,850.00']], total: '£2,850.00', foot: 'Made up for the examples' }) }),
+      );
+    }
     const officeFolder = { id: 'wf-demo-office', area: 'projects', name: 'Office move', created: d(-20), demo: true };
     const projects = [
       { id: 'pj-' + uid(), name: 'Move to the new office', client: 'Acme Care', status: 'Booked', start: d(12), deadline: d(55), workFolder: officeFolder.id, notes: 'Book the van, and tell suppliers and the bank the new address.', files: [], created: d(-14), demo: true },
@@ -267,6 +290,15 @@
           new_section_name: 'Kids & school', task_title: 'Pay £35 and sign consent slip for school trip', task_due: d(16), notes: null, via: 'offline' } }, D),
     ];
     const byTitle = (title) => (paperwork.find((p) => p.title === title) || {}).id;
+    // Things the business has asked you to get (Work › To buy): two to order, one on its way, and one bought (its receipt is the lunch claim above).
+    const ask = (o) => Object.assign({ id: 'rq-' + uid(), note: '', link: '', estimate: null, qty: 1, askedDate: t, needBy: '', payer: 'me', status: 'asked', orderedDate: '', boughtDate: '', paperId: '' }, D, o);
+    const requests = [
+      ask({ title: 'Printer toner', note: 'The black XL one for the office printer.', estimate: 35, askedDate: d(-2), needBy: d(2) }),
+      ask({ title: 'Nitrile gloves', note: 'Medium, two boxes.', estimate: 24, qty: 2, askedDate: d(-1), needBy: d(8), link: 'https://www.example.com/products/nitrile-gloves-medium-100-pack' }),
+      ask({ title: 'Fire exit signs', note: 'Going on the company card.', estimate: 28, askedDate: d(-1), needBy: d(15), payer: 'company' }),
+      ask({ title: 'Cleaning supplies for the new office', estimate: 64, askedDate: d(-6), needBy: d(5), status: 'ordered', orderedDate: d(-3) }),
+      ask({ title: 'Lunch for the training day', estimate: 20, askedDate: d(-5), needBy: d(-2), status: 'bought', boughtDate: d(-2), paperId: byTitle('Lunch for the training day') }),
+    ];
     const filedLog = [
       Object.assign({ id: 'log-' + uid(), date: d(-2), summary: 'Receipt from Pret A Manger for lunch on the training day, £18.45. You paid, so it’s in Get paid back.', title: 'Lunch for the training day', label: 'Work › Get paid back', tab: 'work-back', ref: { c: 'paperwork', id: byTitle('Lunch for the training day') }, via: 'offline' }, D),
       Object.assign({ id: 'log-' + uid(), date: d(-4), summary: 'Receipt from Tesco for your weekly shop, £64.20.', title: 'Weekly shop', label: 'Home › Receipts', tab: 'receipts', ref: { c: 'paperwork', id: byTitle('Weekly shop') }, via: 'offline' }, D),
@@ -289,6 +321,7 @@
       s.workFolders.push(officeFolder);
       s.workNotes.push(...workNotes);
       s.costIdeas.push(...costIdeas);
+      s.requests = (s.requests || []).concat(requests);
       s.sections.push(...sections);
       s.sectionItems.push(...sectionItems);
       s.inbox.push(...inbox);
@@ -309,7 +342,7 @@
     });
   }
 
-  const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog', 'projects', 'workFolders', 'workNotes', 'costIdeas'];
+  const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog', 'projects', 'workFolders', 'workNotes', 'costIdeas', 'requests'];
   function clear(silent) {
     const s = store.state;
     const files = [];

@@ -46,7 +46,7 @@
     /* Opens the right editor for any record, wherever it lives. */
     open(ref) {
       if (ref.c === 'sectionItems') return GU.sections.editItem(ref.id);
-      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts', projects: 'work', workNotes: 'work', costIdeas: 'work' };
+      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts', projects: 'work', workNotes: 'work', costIdeas: 'work', requests: 'work-requests' };
       const tab = GU.tabs[map[ref.c]];
       if (tab && tab.edit) tab.edit(ref.id, ref.c);
     },
@@ -79,6 +79,7 @@
       '<header class="partbar">' +
       '<a class="partbar__brand" href="#' + start + '" aria-label="The Ground Up, overview"><span>G</span></a>' +
       switchHTML('bar') +
+      (GU.search ? GU.search.barHTML() : '') + (GU.lock ? GU.lock.barHTML() : '') +
       '<button type="button" class="partbar__add" data-quick-add aria-label="Add something">' + icon('plus') + '</button>' +
       '</header>' +
       '<nav class="rail" aria-label="Sections">' +
@@ -130,7 +131,7 @@
       return t ? t.short || t.label : id;
     };
     const ids = groups.flat().concat(custom);
-    const key = part + '|' + ids.map((id) => id + ':' + label(id)).join('|');
+    const key = part + '|' + ids.map((id) => id + ':' + label(id)).join('|') + (GU.lock && GU.lock.enabled() ? '|lock' : '');
     const host = document.querySelector('.rail__items');
     if (key === railKey && host.children.length) return;
     railKey = key;
@@ -144,6 +145,7 @@
     const chatOpen = document.documentElement.classList.contains('chat-open');
     host.innerHTML =
       '<button type="button" class="rail__item rail__add" data-quick-add aria-label="Add something"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">Add</span></button>' +
+      (GU.search ? GU.search.railHTML() : '') + (GU.lock ? GU.lock.railHTML() : '') +
       '<button type="button" class="rail__item rail__claude" data-chat-toggle aria-pressed="' + chatOpen + '" aria-label="Ask Claude (Ctrl or Cmd + K)"><span class="rail__ico">' + icon('spark') + '</span><span class="rail__label">Claude</span></button>' +
       groups.map((g, i) => {
         // The heading of the group in the full menu (groups with no pages yet are left out).
@@ -318,6 +320,7 @@
 
   async function start() {
     store.init();
+    if (GU.lock) GU.lock.start(); // the privacy screen, if it's on, covers everything before anything is drawn
     await GU.files.open();
     const fresh = store.isFirstRun;
     const sync = GU.sync.possible();

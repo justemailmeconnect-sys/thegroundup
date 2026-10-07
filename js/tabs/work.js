@@ -81,6 +81,7 @@
      usual name, because the area means something new now. */
   function labelOf(area) {
     if (area === 'back') return 'Get paid back';
+    if (area === 'requests') return 'To buy';
     if (area === 'general' || area === 'overview') return 'Overview';
     if (area === 'invoices') return paysLabel();
     return ((store.state.settings.workLabels || {})[area]) || (AREAS.find((a) => a.id === area) || {}).label || 'General';
@@ -248,6 +249,20 @@
       asks = 0;
     }
     if (asks) add('info', 'overview', plural(asks, 'thing') + ' to check from the re-sort', 'One tap each, in Check these', null, { scroll: true });
+
+    // Things you've been asked to get and haven't ordered (Work › To buy, js/tabs/requests.js).
+    try {
+      if (GU.requests && GU.requests.checks) out.push(...GU.requests.checks(s));
+    } catch (err) {
+      console.error(err);
+    }
+
+    // The last day to return something you bought for work.
+    try {
+      if (GU.returns) out.push(...GU.returns.checks(s));
+    } catch (err) {
+      console.error(err);
+    }
 
     const rank = { crit: 0, warn: 1, info: 2 };
     return out.sort((a, b) => rank[a.level] - rank[b.level]);
@@ -452,7 +467,7 @@
       }
       return '<li class="wk-row' + (act ? ' wk-row--acts' : '') + '"><button type="button" class="wk-row__lead doc-row__thumb" data-files="' + esc(c + ':' + r.id) + '" aria-label="' + ((r.files || []).length ? 'View files for ' : 'Add a file to ') + esc(r.title) + '">' + thumbHTML(r.files) + '</button>' +
         '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.title) + '</b><em>' + esc([r.party, short(r.date), r.reference].filter(Boolean).join(' · ')) + '</em>' +
-        '<span class="wk-row__chips">' + pill(kind, 'kind-' + r.kind) + status + chipF + '</span></button>' +
+        '<span class="wk-row__chips">' + pill(kind, 'kind-' + r.kind) + status + (GU.returns ? GU.returns.pill(r) : '') + chipF + '</span></button>' +
         '<span class="wk-row__end">' + (r.amount != null && r.amount !== '' ? '<b>' + esc(money(r.amount)) + '</b>' : '') + '</span>' +
         '<span class="wk-row__act">' + act + GU.ui.dlButton(r.files, r.title) + moreBtn(c, r) + '</span></li>';
     }
@@ -557,7 +572,7 @@
     }
     const checkLi = (x, i) => '<li class="is-' + x.level + (x.acts ? ' has-acts' : '') + '"><button type="button" data-check="' + i + '"><span class="dot dot--' + x.level + '">' + icon(x.level === 'info' ? 'info' : 'alert') + '</span>' +
       '<span><b>' + esc(x.title) + '</b><em>' + esc((x.area === 'overview' ? '' : labelOf(x.area) + ' · ') + x.detail) + '</em></span>' + icon('chevron') + '</button>' +
-      (x.acts ? '<div class="wk-check__acts">' + x.acts.map((a, k) => actBtn(a.attr, a.label, k ? 'coin' : 'briefcase', k ? '' : 'btn--soft')).join('') + '</div>' : '') + '</li>';
+      (x.acts ? '<div class="wk-check__acts">' + x.acts.map((a, k) => actBtn(a.attr, a.label, a.icon !== undefined ? a.icon : k ? 'coin' : 'briefcase', k ? '' : 'btn--soft')).join('') + '</div>' : '') + '</li>';
     const wages = wm() && wm().wageSource ? wm().wageSource(s) : null;
     return '<form class="capture wk-tell" data-tell>' +
       '<label class="capture__field">' + icon('briefcase') + '<input type="text" name="note" id="wk-tell" autocomplete="off" placeholder="' + esc('Tell me anything for ' + c + ', e.g. Paid £18 for printer paper') + '" aria-label="' + esc('Tell me anything for ' + c) + '"></label>' +
@@ -568,7 +583,7 @@
       (list.length ? '<ul class="wk-check__list">' + list.map(checkLi).join('') + '</ul>'
         : '<div class="panel__body"><p class="wk-allgood">' + icon('check') + '<span>Everything at work is managed. Nothing is late, overdue or about to end.</span></p></div>') + '</section>' +
       ask +
-      '<div class="wk-cards">' + CARDS.map((a) => {
+      '<div class="wk-cards">' + (GU.requests && GU.requests.cardHTML ? GU.requests.cardHTML(s) : '') + CARDS.map((a) => {
         const f = figures(s, a);
         const n = a === 'back' ? ((dueBack(s) || {}).count || 0) : itemsOf(s, a).length;
         const nf = a === 'back' ? 0 : foldersOf(s, a).length;

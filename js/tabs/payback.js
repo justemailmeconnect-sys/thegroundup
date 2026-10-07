@@ -81,6 +81,7 @@
     else if (lane !== 'paid' && !offer) out.push('<button type="button" class="btn btn--sm btn--ghost" data-find="' + esc(p.id) + '">' + icon('search') + 'Find the payment</button>');
     if (p.originalAmount) out.push(pill('Receipt says ' + W().clean(p.originalAmount), 'muted'));
     if (p.billId) out.push(pill('From your bill', 'muted', 'repeat'));
+    if (GU.returns && lane !== 'paid') out.push(GU.returns.pill(p));
     if (lane === 'paid') {
       const back = txOf(s, p.repaidTx);
       out.unshift(pill('Paid back ' + short(p.repaidDate) + (back ? ' to ' + acct(s, back.account) : ''), 'good', 'check'));
@@ -262,7 +263,7 @@
         pr.noClaimCredits.length > 1 ? '<button type="button" class="link link--btn" data-credits-ok>They’re all fine</button>' : ''));
     }
     if (pr.fromBills.length) groups.push(group('bills', 'Added from your bills', 'Monthly work costs you pay add themselves here when they leave your account.', pr.fromBills.map((x) => billRow(s, x))));
-    return '<section class="panel pb-bank"><header class="panel__head"><h2>' + icon('bank') + 'From your bank</h2></header>' +
+    return '<section class="panel pb-bank"><header class="panel__head"><h2>' + icon('bank') + 'From your bank</h2></header>' + (GU.gaps ? GU.gaps.claimsNoteHTML(s) : '') +
       (groups.join('') || '<div class="panel__body"><p class="muted">' + esc('Nothing to check. After you import a statement, I’ll list work spending you haven’t claimed and any money from ' + e.label + ' I can’t match.') + '</p></div>') + '</section>';
   }
 

@@ -90,7 +90,7 @@
       '<button type="button" class="doc-row__main" data-edit="' + esc(p.id) + '">' +
       '<b>' + esc(p.title) + '</b>' +
       '<em>' + esc([p.party, fmtDate(p.date, { short: true }), p.reference, p.folder ? 'Folder: ' + p.folder : ''].filter(Boolean).join(' · ')) + '</em>' +
-      '<span class="doc-row__chips">' + pill(KIND_SHORT[p.kind] || 'Item', 'kind-' + p.kind) + statusPill(p) + '</span></button>' +
+      '<span class="doc-row__chips">' + pill(KIND_SHORT[p.kind] || 'Item', 'kind-' + p.kind) + statusPill(p) + (GU.returns ? GU.returns.pill(p) : '') + '</span></button>' +
       '<span class="doc-row__end">' + (p.amount != null ? '<b class="' + (p.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(p.amount)) + '</b>' : '') +
       (p.kind === 'invoice-out' && p.status !== 'paid' && (p.payments || []).length ? '<small class="muted">' + esc(money(F.outstanding(p)) + ' still to come') + '</small>' : '') + '<span class="doc-row__btns">' + GU.ui.dlButton(p.files, p.title) + act + '</span></span></li>';
   }
@@ -291,11 +291,12 @@
       { name: 'dueDate', label: 'Due date', type: 'date', half: true, optional: true, showIf: (v) => v.kind === 'invoice-in' || v.kind === 'invoice-out' },
       { name: 'status', label: 'Paid yet?', type: 'segmented', options: [{ value: 'unpaid', label: 'Not paid' }, { value: 'paid', label: 'Paid' }], half: true, showIf: (v) => v.kind === 'invoice-in' || v.kind === 'invoice-out' },
       { name: 'paidDate', label: 'Date paid', type: 'date', half: true, showIf: (v) => (v.kind === 'invoice-in' || v.kind === 'invoice-out') && v.status === 'paid' },
-      { name: 'warrantyUntil', label: 'Warranty or returns until', type: 'date', half: true, optional: true, help: 'I’ll remind you before it ends.' },
+      { name: 'warrantyUntil', label: 'Warranty until', type: 'date', half: true, optional: true, help: 'I’ll remind you before it ends.' },
+    ].concat(GU.returns ? GU.returns.fields(values) : []).concat([
       { name: 'reference', label: 'Invoice, order or policy number', half: true, optional: true },
       { name: 'category', label: 'Spending category', type: 'select', options: cats, placeholder: 'Choose a category', half: true, showIf: (v) => v.context !== 'work' && v.kind !== 'invoice-out' },
       { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, optional: true },
-    ];
+    ]);
   }
   /* The paid question names who paid, for the business's own invoices. */
   function relabel(v, form) {
@@ -306,6 +307,7 @@
     const theirs = v.context === 'work' && v.payer === 'company';
     set('status', theirs ? 'Paid by ' + co() + ' yet?' : 'Paid yet?');
     set('paidDate', theirs ? 'Date ' + co() + ' paid' : 'Date paid');
+    if (GU.returns) GU.returns.syncForm(v, form);
   }
   /* What the form opens with for a saved record: who paid and the stage read through their defaults. */
   function formValues(p) {
@@ -327,6 +329,7 @@
     const prev = existing ? JSON.parse(JSON.stringify(existing)) : null;
     const rec = Object.assign(existing ? Object.assign({}, existing) : { id: 'p-' + uid(), created: today() }, v);
     delete rec.outNote;
+    if (GU.returns) GU.returns.tidy(rec, v);
     // An invoice you've sent the business for your own spending is a claim, sent to them (paid back once they've
     // paid it), as the Inbox files one: otherwise it would show on no page at all.
     let outClaim = false;
@@ -432,6 +435,7 @@
     const values = Object.assign({ kind, context: inWork ? 'work' : 'home', date: today(), status: 'unpaid' }, opts.values || {});
     if (values.context === 'work' && values.payer !== 'me' && values.payer !== 'company') values.payer = (wm() && wm().payerOf(values, 'paperwork')) || '';
     if (values.payer === 'me' && !values.claimStatus) values.claimStatus = 'to-send';
+    if (values.returnOn === undefined && GU.returns) values.returnOn = GU.returns.defaultOn(values);
     const c = co();
     const d = formDialog({
       title: values.context !== 'work' ? 'File a receipt or invoice' : values.payer === 'me' ? 'Something you paid for ' + c : values.payer === 'company' ? 'Something ' + c + ' is paying' : 'File something for ' + c,
