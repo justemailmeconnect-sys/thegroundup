@@ -1,12 +1,33 @@
 /* The Ground Up: what's coming. Starting from what's in your accounts now, adds the income you expect and
-   takes off bills, debt payments, instalments and invoices as they fall due, so you can see where you'll be. */
+   takes off bills, debt payments, instalments and invoices as they fall due, so you can see where you'll be.
+   Work money runs in two lanes: what the business pays itself is left out, and what you pay for it goes out
+   with a soft 'Back from …' coming in later, once it's on its way to being paid back. */
 (function () {
   'use strict';
   const GU = window.GU;
-  const { today, addDays, addMonths, round2, sum } = GU.util;
+  const { today, addDays, addMonths, round2, sum, fmtDate, plural } = GU.util;
   const F = GU.finance;
 
   const monthEnd = (iso) => addDays(addMonths(iso.slice(0, 8) + '01', 1), -1);
+
+  /* ---------- work money, read through GU.workMoney when it's there ---------- */
+  const WM = () => GU.workMoney || null;
+  const employerOf = (state) => (WM() ? WM().employer(state) : { set: false, label: 'the company', Label: 'The company', repayDays: 14, payInto: '' });
+  const isWorkBill = (b) => (GU.parts && GU.parts.isWorkBill ? GU.parts.isWorkBill(b) : b.context === 'work' || (!b.context && b.category === (F.WORK_OUT || 'Work expenses')));
+  const billPayer = (b) => (WM() ? WM().payerOf(b, 'bills') : b.payer === 'company' ? 'company' : 'me');
+  /* 'home', 'ktk' (the business pays), 'back' (you pay, get it back) or 'unsorted'. */
+  const laneOf = (p) => (WM() ? WM().lane(p, 'paperwork') : p.context === 'work' ? 'unsorted' : 'home');
+  const stageOf = (p) => (WM() ? WM().stage(p) : p.claimed ? 'sent' : 'to-send');
+  const leftOf = (p) => (WM() ? WM().left(p) : Math.abs(Number(p.amount) || 0));
+
+  /* Sent claims grouped as they went, each with the day the money should be back. Not counted when that day
+     has passed (late) or there's no sent date to go on. */
+  function sentPacks(state) {
+    const W = WM();
+    if (!W) return [];
+    const e = employerOf(state);
+    return W.packs(state).filter((pk) => pk.left > 0).map((pk) => Object.assign({}, pk, { due: pk.date ? addDays(pk.date, e.repayDays) : '' }));
+  }
 
   /* Everything expected to come in or go out from `from` to `to`, oldest first. */
   function events(state, from, to) {
@@ -17,14 +38,30 @@
         out.push({ date: d, amount: Math.abs(Number(s.amount) || 0), label: s.name, sub: s.from || 'Income', kind: 'income', ref: { c: 'incomeSources', id: s.id }, account: s.account });
       }
     }
+    const emp = employerOf(state);
+    /* A soft 'Back from …' when the business should pay you back, if it falls in the period. */
+    const reclaim = (date, amount, sub, ref, account, extra) => {
+      if (!(amount > 0) || !date || date < from || date > to) return;
+      out.push(Object.assign({ date, amount: round2(amount), label: 'Back from ' + emp.label, sub, soft: true, kind: 'reclaim', ref, account: emp.payInto || account }, extra));
+    };
     for (const b of state.bills || []) {
       if (b.active === false || !b.nextDue) continue;
+      // A work bill the business pays isn't your money. One you pay comes back after its usual wait.
+      const work = isWorkBill(b);
+      if (work && billPayer(b) !== 'me') continue;
+      const ref = { c: 'bills', id: b.id };
+      const back = work ? 'Work · ' + emp.Label + ' pays you back' : '';
+      const soon = b.name + ', if you send it straight away';
       if (b.nextDue < from) {
-        if (!b.autopay) out.push({ date: from, overdue: true, amount: -b.amount, label: b.name, sub: 'Overdue, pay by hand', kind: 'bill', ref: { c: 'bills', id: b.id }, account: b.account });
+        if (!b.autopay) {
+          out.push({ date: from, overdue: true, amount: -b.amount, label: b.name, sub: back || 'Pay by hand', kind: 'bill', ref, account: b.account });
+          if (work) reclaim(addDays(from, emp.repayDays), b.amount, soon, ref, b.account);
+        }
         continue;
       }
       for (const d of F.occurrences(b.nextDue, b.frequency, b.anchorDay, from, to)) {
-        out.push({ date: d, amount: -b.amount, label: b.name, sub: b.review ? 'Found in your statements, not checked yet' : b.autopay ? b.method || 'Automatic' : 'Pay by hand', review: !!b.review, kind: 'bill', ref: { c: 'bills', id: b.id }, account: b.account });
+        out.push({ date: d, amount: -b.amount, label: b.name, sub: back || (b.review ? 'Found in your statements, not checked yet' : b.autopay ? b.method || 'Automatic' : 'Pay by hand'), review: !!b.review, kind: 'bill', ref, account: b.account });
+        if (work) reclaim(addDays(d, emp.repayDays), b.amount, soon, ref, b.account);
       }
     }
     for (const d of state.debts || []) {
@@ -62,9 +99,39 @@
     for (const p of state.paperwork || []) {
       if (p.kind !== 'invoice-in' || p.status === 'paid' || !p.dueDate || !(p.amount > 0)) continue;
       if (p.dueDate > to) continue;
-      out.push({ date: p.dueDate < from ? from : p.dueDate, overdue: p.dueDate < from, amount: -p.amount, label: p.title, sub: 'Invoice to pay' + (p.party ? ' · ' + p.party : ''), kind: 'invoice', ref: { c: 'paperwork', id: p.id } });
+      // Work invoices the business pays (or not sorted yet) are left out. One you pay yourself goes out,
+      // and comes back later if you send it straight away.
+      const lane = laneOf(p);
+      if (lane === 'ktk' || lane === 'unsorted') continue;
+      const when = p.dueDate < from ? from : p.dueDate;
+      const ref = { c: 'paperwork', id: p.id };
+      const back = lane === 'back';
+      out.push({ date: when, overdue: p.dueDate < from, amount: -p.amount, label: p.title, sub: back ? 'Work · ' + emp.Label + ' pays you back' + (p.party ? ' · ' + p.party : '') : 'Invoice to pay' + (p.party ? ' · ' + p.party : ''), kind: 'invoice', ref });
+      if (back && stageOf(p) === 'to-send') reclaim(addDays(when, emp.repayDays), leftOf(p), (p.title || p.party || 'Invoice') + ', if you send it straight away', ref, null, { tab: 'work-back' });
+    }
+    // Things you've sent to the business: back after its usual wait, if it pays as usual.
+    for (const pk of sentPacks(state)) {
+      if (!pk.due) continue;
+      const one = pk.items.length === 1 ? pk.items[0].p : null;
+      const what = one ? one.title || one.party || 'Your claim' : plural(pk.items.length, 'thing');
+      reclaim(pk.due, pk.left, what + ' sent ' + fmtDate(pk.date, { short: true }) + ', if ' + emp.label + ' pays as usual', { c: 'paperwork', id: pk.items[0].p.id }, null, { tab: 'work-back', pack: pk.key });
     }
     return out.sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
+  }
+
+  /* What the business owes you that the plan leaves out: things not sent yet, and sent ones that should have
+     been paid back before `from`. Counting them would flatter the lowest point. */
+  function reclaimNotCounted(state, from) {
+    const W = WM();
+    const none = { toSend: [], late: [], toSendTotal: 0, lateTotal: 0, total: 0, count: 0, oldest: null };
+    if (!W) return none;
+    const d = W.dueBack(state);
+    const late = [];
+    for (const pk of sentPacks(state)) if (!pk.due || pk.due < from) for (const x of pk.items) if (x.left > 0) late.push(x);
+    const toSend = d.toSend.filter((x) => x.left > 0 || x.noAmount);
+    const toSendTotal = round2(sum(toSend, (x) => x.left));
+    const lateTotal = round2(sum(late, (x) => x.left));
+    return { toSend, late, toSendTotal, lateTotal, total: round2(toSendTotal + lateTotal), count: toSend.length + late.length, oldest: d.oldest };
   }
 
   /* Where you'll be: running totals overall and for each account, the lowest point and the end figure. */
@@ -108,8 +175,9 @@
       accounts: Object.values(per),
       known: accts.length,
       owedNotCounted: F.owedToMe(state).filter((x) => x.left > 0 && (!x.p.dueDate || x.p.dueDate < from)),
+      reclaimNotCounted: reclaimNotCounted(state, from),
     };
   }
 
-  GU.forecast = { events, plan, monthEnd };
+  GU.forecast = { events, plan, monthEnd, reclaimNotCounted };
 })();

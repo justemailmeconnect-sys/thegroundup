@@ -1,5 +1,6 @@
-/* The Ground Up: Home. Where you stand and where you're heading: your balances now, the money coming in
-   and going out from today with the lowest point and the month-end figure, then the other things coming up. */
+/* The Ground Up: Home › Overview. The two doors (Home and Work), then where you stand and where you're heading:
+   your balances now, the money coming in and going out from today with the lowest point and the month-end
+   figure, then the other things coming up. Only your own things: work has its own Overview. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -9,6 +10,9 @@
   const store = GU.store;
 
   let horizon = 14;
+
+  /* The employer's short name for sentences ('KTK'), or 'the company' when none is set. */
+  const co = (s, cap) => (GU.parts && GU.parts.co ? GU.parts.co(s, cap) : cap ? 'The company' : 'the company');
 
   const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   /* "Call the council tomorrow" -> {title: 'Call the council', due: <tomorrow>} */
@@ -59,6 +63,7 @@
     let action = '';
     if (it.action === 'done') action = '<button type="button" class="btn btn--sm btn--soft" data-act="done" data-ref="' + esc(ref) + '">' + icon('check') + 'Done</button>';
     if (it.action === 'paid') action = '<button type="button" class="btn btn--sm btn--soft" data-act="paid" data-ref="' + esc(ref) + '">' + icon('check') + (it.kind === 'owed' ? 'Got paid' : 'Paid') + '</button>';
+    if (it.action === 'ktkpaid') action = '<button type="button" class="btn btn--sm btn--soft" data-act="ktkpaid" data-ref="' + esc(ref) + '">' + icon('check') + 'Paid by ' + esc(co(store.state)) + '</button>';
     const amount = it.amount != null ? '<span class="tl-item__amt' + (it.amount > 0 ? ' is-in' : '') + '">' + esc(money(it.amount, { sign: true })) + '</span>' : '';
     const late = it.overdue ? '<span class="tl-item__late">' + (it.kind === 'task' ? 'Was due ' : 'Due ') + esc(fmtDate(it.date, { short: true })) + '</span>' : '';
     return '<li class="tl-item' + (it.overdue ? ' is-overdue' : '') + (it.priority === 'high' ? ' is-high' : '') + '">' +
@@ -103,7 +108,11 @@
     }
     return { from: t, to: end, label: 'Rest of ' + shortMonth(t), endLabel: 'By ' + fmtDate(end, { short: true }) };
   }
-  const KIND_LABEL = { income: 'In', bill: 'Bill', debt: 'Debt', invoice: 'Invoice', owed: 'Invoice' };
+  const KIND_LABEL = {
+    income: 'In', bill: 'Bill', debt: 'Debt', invoice: 'Invoice', owed: 'Invoice',
+    // Money your employer should pay you back. The row itself says 'Back from <employer>', so the pill stays short.
+    reclaim: 'Back',
+  };
 
   /* The running total of what people owe you on invoices you've sent. */
   function owedCard(s) {
@@ -116,13 +125,17 @@
       esc(plural(list.length, 'invoice') + (late.length ? ' · ' + money(sum(late, (x) => x.left)) + ' late' : next ? ' · next due ' + fmtDate(next.p.dueDate, { short: true }) : '')) + '</em></button>';
   }
 
-  /* Work expenses you still have to claim back. */
-  function claimCard(s) {
-    const list = GU.finance.toClaim(s);
-    if (!list.length) return '';
-    const oldest = list.find((x) => x.p.date);
-    return '<button type="button" class="now-card now-card--owed" data-claims><span>To claim back</span><b>' + esc(money(sum(list, (x) => x.amount))) + '</b><em>' +
-      esc(plural(list.length, 'item') + (oldest ? ' · oldest ' + fmtDate(oldest.p.date, { short: true }) : '')) + '</em></button>';
+  /* What your employer owes you for things you paid for at work: not sent yet, and sent but not paid back.
+     Amber once the oldest thing not sent is a week old. Opens Work › Get paid back. */
+  function backCard(s) {
+    const W = GU.workMoney;
+    if (!W || !W.dueBack) return '';
+    const d = W.dueBack(s);
+    if (!(d.total > 0) && !d.count) return '';
+    const late = d.amber && d.oldest;
+    return '<button type="button" class="now-card now-card--owed now-card--back' + (late ? ' is-warn' : '') + '" data-claims><span>Due back from ' + esc(co(s)) + '</span><b>' + esc(money(d.total)) + '</b><em>' +
+      esc(money(d.toSendTotal) + ' not sent · ' + money(d.sentTotal) + ' waiting') +
+      (late ? '<i>' + icon('clock') + esc('Oldest not sent ' + plural(d.oldest.days, 'day') + ' ago') + '</i>' : '') + '</em></button>';
   }
 
   function nowHTML(s) {
@@ -130,7 +143,7 @@
     if (!list.length) {
       return '<section class="now"><header class="sec-head"><h2>Right now</h2></header><div class="now-empty">' + icon('bank') +
         '<p>Tell me what’s in your accounts and I’ll plan the rest of the month from there.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div>' +
-        (owedCard(s) + claimCard(s) ? '<div class="now-cards">' + owedCard(s) + claimCard(s) + '</div>' : '') + '</section>';
+        (owedCard(s) + backCard(s) ? '<div class="now-cards">' + owedCard(s) + backCard(s) + '</div>' : '') + '</section>';
     }
     const known = list.filter((x) => x.info);
     const total = sum(known, (x) => x.info.balance);
@@ -147,7 +160,7 @@
         return '<button type="button" class="now-card' + (neg ? ' is-neg' : '') + '" data-account="' + esc(x.account.id) + '"><span>' + esc(x.account.name) + '</span><b>' + (b ? esc(money(b.balance)) : '–') + '</b><em>' + esc(od || (b ? 'in credit' : 'no balance yet')) + '</em></button>';
       }).join('') +
       (known.length > 1 ? '<div class="now-card now-card--total' + (total < 0 ? ' is-neg' : '') + '"><span>Together</span><b>' + esc(money(total)) + '</b><em>' + esc(spare ? money(total + spare) + ' available with overdrafts' : 'across your accounts') + '</em></div>' : '') +
-      owedCard(s) + claimCard(s) +
+      owedCard(s) + backCard(s) +
       '</div></section>';
   }
 
@@ -189,10 +202,11 @@
       (plan.owedNotCounted.length ? '<p class="note-line">' + icon('clock') + '<span>' + esc(money(sum(plan.owedNotCounted, (x) => x.left)) + ' owed to you on ' +
         plural(plan.owedNotCounted.length, 'invoice') + (plan.owedNotCounted.every((x) => x.late) ? ' that ' + (plan.owedNotCounted.length > 1 ? 'are' : 'is') + ' late' : ' that ' + (plan.owedNotCounted.length > 1 ? 'are' : 'is') + ' late or ' + (plan.owedNotCounted.length > 1 ? 'have' : 'has') + ' no due date') +
         ' isn’t counted here until it’s paid.') + ' <button type="button" class="link link--btn" data-owed>See them</button></span></p>' : '') +
+      reclaimNote(plan) +
       (days.length > 2 && ev.length ? '<div class="panel__body ahead__chart">' + GU.charts.line(days.map((d) => ({ value: d.value, tip: fmtDate(d.date, { weekday: true }) + ': ' + money(d.value) })), { height: 150, labels, color: '--series-in' }) + '</div>' : '') +
       (ev.length ? '<ol class="flow">' + Array.from(groups).map(([d, items]) => '<li class="flow-day' + (d === t ? ' is-today' : '') + '"><h3>' + esc(d === t ? 'Today' : fmtDate(d, { weekday: true })) + '</h3><ul>' +
-        items.map((e) => '<li class="flow-row' + (e.amount > 0 ? ' is-in' : '') + (e.review || e.rough || e.soft ? ' is-soft' : '') + '"><span class="kind kind--' + (e.kind === 'income' || e.kind === 'owed' ? 'income' : e.kind === 'debt' ? 'debt' : 'bill') + '">' + esc(KIND_LABEL[e.kind] || '') + '</span>' +
-          '<button type="button" class="flow-row__main" data-open="' + esc(e.ref.c + ':' + e.ref.id) + '"><b>' + esc(e.label) + '</b><em>' + esc((e.overdue ? 'Overdue · ' : '') + (e.sub || '')) + '</em></button>' +
+        items.map((e) => '<li class="flow-row' + (e.amount > 0 ? ' is-in' : '') + (e.review || e.rough || e.soft ? ' is-soft' : '') + '"><span class="kind kind--' + (e.kind === 'income' || e.kind === 'owed' || e.kind === 'reclaim' ? 'income' : e.kind === 'debt' ? 'debt' : 'bill') + '">' + esc(KIND_LABEL[e.kind] || '') + '</span>' +
+          '<button type="button" class="flow-row__main" ' + (e.kind === 'reclaim' && e.tab ? 'data-go="' + esc(e.tab) + '"' : 'data-open="' + esc(e.ref.c + ':' + e.ref.id) + '"') + '><b>' + esc(e.label) + '</b><em>' + esc((e.overdue ? 'Overdue · ' : '') + (e.sub || '')) + '</em></button>' +
           '<span class="flow-row__amt">' + esc(money(e.amount, { sign: true })) + '</span><span class="flow-row__after' + (e.after < 0 ? ' is-neg' : '') + '">' + esc(money(e.after)) + '</span></li>').join('') + '</ul></li>').join('') + '</ol>'
         : '<div class="panel__body"><p class="muted">Nothing expected in this period yet. Add your income, bills and payment schedules and I’ll plan around them.</p></div>') +
       '<footer class="panel__foot ahead__add"><button type="button" class="btn btn--sm btn--ghost" data-add-income>' + icon('in') + 'Expected income</button>' +
@@ -201,19 +215,40 @@
       '</section>';
   }
 
+  /* Money your employer owes you that the plan leaves out: things not sent yet, and things sent that are
+     taking longer than usual to come back. One tap to send them. */
+  function reclaimNote(plan) {
+    const rc = plan.reclaimNotCounted;
+    if (!rc || !(rc.total > 0)) return '';
+    const c = co(store.state);
+    let text;
+    if (rc.toSendTotal > 0 && rc.lateTotal > 0) text = money(rc.total) + ' ' + c + ' owes you isn’t counted here: ' + money(rc.toSendTotal) + ' you haven’t sent yet, and ' + money(rc.lateTotal) + ' that’s taking longer than usual to come back.';
+    else if (rc.toSendTotal > 0) text = money(rc.toSendTotal) + ' ' + c + ' owes you isn’t counted until you send it.';
+    else text = money(rc.lateTotal) + ' you sent ' + c + ' isn’t counted here, because it’s taking longer than usual to come back.';
+    const btn = rc.toSendTotal > 0
+      ? '<button type="button" class="btn btn--sm btn--soft" data-send-back>' + icon('send') + esc('Send to ' + c) + '</button>'
+      : '<button type="button" class="btn btn--sm btn--ghost" data-go="work-back">Get paid back' + icon('chevron') + '</button>';
+    return '<p class="note-line note-line--back">' + icon('coin') + '<span>' + esc(text) + '</span>' + btn + '</p>';
+  }
+
+  /* The opening line, as HTML: each figure kept on one line so a sign never wraps away from its amount. */
   function summaryLine(s, t) {
     const plan = GU.forecast.plan(s, { to: GU.forecast.monthEnd(t) });
-    if (!plan.known) return 'Add your balances, income and bills and I’ll show you where you’re heading.';
+    if (!plan.known) return esc('Add your balances, income and bills and I’ll show you where you’re heading.');
+    const m = (n) => '<span class="nowrap">' + esc(money(n)) + '</span>';
     const incomes = plan.events.filter((e) => e.kind === 'income').map((e) => e.label);
     const owedIn = sum(plan.events.filter((e) => e.kind === 'owed'), (e) => e.amount);
     const names = Array.from(new Set(incomes));
     const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
     const lowAcct = plan.accounts.filter((a) => a.low < -a.limit)[0];
-    return (plan.start < 0 ? 'You’re ' + money(-plan.start) + ' overdrawn across your accounts' : 'You have ' + money(plan.start) + ' across your accounts') +
-      (list ? ', with ' + list + ' still to come this month' : '') +
-      (owedIn ? (list ? ', plus ' : ', with ') + money(owedIn) + ' due to you on invoices' : '') + '. ' +
-      'By ' + fmtDate(plan.to, { short: true }) + ' you should have about ' + money(plan.end) + '.' +
-      (lowAcct ? ' Watch ' + lowAcct.name + ': it would go past its overdraft on ' + fmtDate(lowAcct.lowDate, { short: true }) + '.' : '');
+    const back = GU.workMoney && GU.workMoney.dueBack ? GU.workMoney.dueBack(s).total : 0;
+    const backText = back > 0 ? m(back) + esc(' due back from ' + co(s)) : '';
+    return (plan.start < 0 ? 'You’re ' + m(-plan.start) + ' overdrawn across your accounts' : 'You have ' + m(plan.start) + ' across your accounts') +
+      (list ? ', with ' + esc(list) + ' still to come this month' : '') +
+      (owedIn ? (list ? ', plus ' : ', with ') + m(owedIn) + ' due to you on invoices' : '') +
+      (backText ? (owedIn ? ' and ' : list ? ', plus ' : ', with ') + backText : '') + '. ' +
+      'By ' + esc(fmtDate(plan.to, { short: true })) + ' you should have about ' + m(plan.end) + '.' +
+      (lowAcct ? ' Watch ' + esc(lowAcct.name) + ': it would go past its overdraft on ' + esc(fmtDate(lowAcct.lowDate, { short: true })) + '.' : '');
   }
 
   function listCard(title, items, emptyText) {
@@ -237,16 +272,19 @@
   function render(root) {
     const s = store.state;
     const t = today();
-    const items = GU.agenda.timeline(s, horizon).filter((i) => !['bill', 'income', 'invoice', 'owed', 'debt'].includes(i.kind));
-    const attention = GU.agenda.attention(s).filter((a) => !/need a category/.test(a.title));
-    const waiting = GU.agenda.waiting(s);
+    // Home things only: work has its own checks on Work › Overview.
+    const mine = (i) => i.part !== 'work';
+    const items = GU.agenda.timeline(s, horizon, 'home').filter((i) => mine(i) && !['bill', 'income', 'invoice', 'owed', 'debt', 'ktk', 'reclaim'].includes(i.kind));
+    const attention = GU.agenda.attention(s).filter((a) => mine(a) && !/need a category/.test(a.title));
+    const waiting = GU.agenda.waiting(s).filter(mine);
 
     root.innerHTML =
+      (GU.parts && GU.parts.doorsHTML ? GU.parts.doorsHTML(s, 'home') : '') +
       '<div class="brief">' +
       '<div class="brief__feed">' +
-      '<p class="eyebrow">' + esc(fmtLongDate(t)) + '</p>' +
+      '<p class="eyebrow">Home · ' + esc(fmtLongDate(t)) + '</p>' +
       '<h1 class="brief__title">' + esc(greeting() + (s.settings.name ? ', ' + s.settings.name : '')) + '. Here’s where you stand.</h1>' +
-      '<p class="brief__summary">' + esc(summaryLine(s, t)) + '</p>' +
+      '<p class="brief__summary">' + summaryLine(s, t) + '</p>' +
       '<form class="capture" data-capture>' +
       '<label class="capture__field">' + icon('plus') + '<input type="text" name="task" id="quick-task" autocomplete="off" placeholder="Tell me anything, e.g. Renew car tax on Friday" aria-label="Tell your assistant anything"></label>' +
       '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
@@ -304,7 +342,9 @@
       if (act) {
         const [c, id] = act.dataset.ref.split(':');
         if (act.dataset.act === 'done') GU.tabs.todos.complete(id);
-        else if (c === 'bills') GU.tabs.bills.markPaid(id);
+        else if (act.dataset.act === 'ktkpaid') {
+          if (GU.workMoney && GU.workMoney.markKtkPaid) GU.workMoney.markKtkPaid(id);
+        } else if (c === 'bills') GU.tabs.bills.markPaid(id);
         else if (c === 'paperwork') GU.tabs.receipts.markPaid(id);
         return;
       }
@@ -318,8 +358,14 @@
         return;
       }
       if (e.target.closest('[data-balances]')) return GU.tabs.transactions.updateBalances();
-      if (e.target.closest('[data-owed]')) return GU.tabs.receipts.showOwed();
-      if (e.target.closest('[data-claims]')) return GU.tabs.receipts.showClaims();
+      if (e.target.closest('[data-owed]')) return GU.tabs.receipts.showOwed ? GU.tabs.receipts.showOwed() : GU.view.go('receipts');
+      if (e.target.closest('[data-claims]')) return GU.view.go(GU.tabs['work-back'] ? 'work-back' : 'work');
+      if (e.target.closest('[data-send-back]')) {
+        if (GU.payback && GU.payback.sendDialog) return GU.payback.sendDialog();
+        return GU.view.go(GU.tabs['work-back'] ? 'work-back' : 'work');
+      }
+      const go = e.target.closest('[data-go]');
+      if (go) return GU.view.go(GU.tabs[go.dataset.go] ? go.dataset.go : 'work');
       if (e.target.closest('[data-add-income]')) return GU.tabs.incomings.createSource();
       if (e.target.closest('[data-add-bill]')) return GU.tabs.bills.create();
       if (e.target.closest('[data-add-schedule]')) return GU.tabs.debts.scheduleDialog('');
@@ -358,5 +404,5 @@
     });
   }
 
-  GU.tabs.today = { label: 'Home', short: 'Home', icon: 'today', render, parseQuickTask };
+  GU.tabs.today = { label: 'Home overview', short: 'Overview', icon: 'today', part: 'home', render, parseQuickTask };
 })();

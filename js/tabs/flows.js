@@ -10,6 +10,26 @@
 
   const period = { in: 'this-month', out: 'this-month' };
 
+  /* ---------- work money ---------- */
+  /* Your employer's short name for sentences ('the company' when none is set). */
+  const co = (s, cap) => (GU.parts && GU.parts.co ? GU.parts.co(s, cap) : cap ? 'The company' : 'the company');
+  const wm = () => GU.workMoney || null;
+  const isWorkBill = (b) => (GU.parts && GU.parts.isWorkBill ? GU.parts.isWorkBill(b) : b.context === 'work' || (!b.context && b.category === F.WORK_OUT));
+  /* Your wages from the employer: the line names them, or it says wages and is about your usual pay. */
+  function isWages(s, t) {
+    const T = GU.tabs.transactions;
+    return !!(T && T.isWages && T.isWages(s, t));
+  }
+  /* The regular income your wages from the employer come in as. */
+  function isWageSource(s, x) {
+    const w = wm();
+    if (!w || !w.employer(s).set) return false;
+    const src = w.wageSource(s);
+    return !!src && src.id === x.id;
+  }
+  const wagePill = (s) => ' ' + pill('Wages from ' + co(s), '', 'briefcase');
+  const PERIOD_WORDS = { 'this-month': 'this month', 'last-month': 'last month', '3m': 'in the last 3 months', '12m': 'in the last 12 months', all: 'so far' };
+
   function monthsBack(list, dir, n) {
     const series = F.monthSeries(list, n);
     return series.map((m) => ({ key: m.key, value: dir === 'in' ? m.in : m.out }));
@@ -26,12 +46,15 @@
     });
   }
 
+  /* Your own money in or out: transfers between your accounts and work money are left out. */
   function txList(list, dir, limit) {
-    const rows = list.filter((t) => (dir === 'in' ? t.amount > 0 : t.amount < 0) && !F.isTransfer(t))
+    const s = store.state;
+    const rows = list.filter((t) => (dir === 'in' ? t.amount > 0 : t.amount < 0) && F.counts(t))
       .sort((a, b) => (dir === 'out' ? a.amount - b.amount : b.date.localeCompare(a.date))).slice(0, limit);
     if (!rows.length) return emptyState({ icon: dir === 'in' ? 'in' : 'out', title: dir === 'in' ? 'No money in for this period' : 'No spending in this period', text: 'Import a bank statement or add entries by hand.' });
     return '<ul class="rows rows--tight">' + rows.map((t) =>
-      '<li class="row-item"><button type="button" class="row-item__main" data-tx="' + esc(t.id) + '"><span class="row-item__text"><b>' + esc(t.description) + '</b><em>' + esc(fmtDate(t.date, { short: true }) + ' · ' + (t.category || 'Needs a category')) + '</em></span></button>' +
+      '<li class="row-item"><button type="button" class="row-item__main" data-tx="' + esc(t.id) + '"><span class="row-item__text"><b>' + esc(t.description) + '</b><em>' +
+      esc(fmtDate(t.date, { short: true }) + ' · ' + (dir === 'in' && isWages(s, t) ? 'Wages from ' + co(s) : t.category || 'Needs a category')) + '</em></span></button>' +
       '<span class="row-item__amt ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</span></li>').join('') + '</ul>';
   }
 
@@ -74,7 +97,7 @@
       '<div class="stack">' +
       '<section class="panel"><header class="panel__head"><h2>Coming in</h2><span class="muted">next 2 months</span></header>' +
       (upcoming.length ? '<ul class="rows rows--tight">' + upcoming.map(({ d, x }) =>
-        '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__icon">' + icon('in') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' + esc([x.from, F.freqLabel(x.frequency)].filter(Boolean).join(' · ')) + '</em></span></button>' +
+        '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__icon">' + icon('in') + '</span><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' + esc([x.from, F.freqLabel(x.frequency)].filter(Boolean).join(' · ')) + '</em></span></button>' +
         '<span class="row-item__date"><b>' + esc(fmtDate(d, { weekday: true })) + '</b><em>' + esc(relDays(d)) + '</em></span><span></span><span class="row-item__amt is-in">' + esc(money(x.amount, { sign: true })) + '</span><span></span></li>').join('') + '</ul>'
         : '<div class="panel__body"><p class="muted">Add your salary, benefits or any income you get on a schedule and I’ll plan around it.</p></div>') + '</section>' +
       '<details class="panel panel--details"><summary class="panel__head"><h2>Past income</h2><span class="muted">from your statements</span></summary>' +
@@ -83,11 +106,12 @@
       '</div><aside class="stack">' +
       '<section class="panel"><header class="panel__head"><h2>Regular income</h2><button type="button" class="btn btn--sm btn--ghost" data-add-source>' + icon('plus') + 'Add</button></header>' +
       (sources.length ? '<ul class="rows rows--tight">' + sources.map((x) =>
-        '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' +
+        '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' +
         esc([F.freqLabel(x.frequency), x.nextDate ? 'next ' + fmtDate(x.nextDate, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></span></button>' +
         '<span class="row-item__amt is-in">' + esc(money(x.amount)) + '</span></li>').join('') + '</ul>'
         : '<div class="panel__body"><p class="muted">Nothing yet.</p></div>') + '</section>' +
       '<section class="panel"><div class="panel__body"><p><b>' + esc(money(next30)) + '</b> <span class="muted">expected in the next 30 days</span></p></div></section>' +
+      paidBackNote(s) +
       '</aside></div>';
 
     root.addEventListener('click', (e) => {
@@ -104,6 +128,19 @@
       const tx = e.target.closest('[data-tx]');
       if (tx) GU.tabs.transactions.edit(tx.dataset.tx);
     });
+  }
+
+  /* Money your employer paid you back isn't income: it's your own money coming home. Says how much this
+     tax year, with the way to Get paid back. */
+  function paidBackNote(s) {
+    const w = wm();
+    if (!w || !w.paidBackSince) return '';
+    const from = w.taxYearStart(today());
+    const total = w.paidBackSince(s, from);
+    if (!(total > 0)) return '';
+    return '<p class="note-line note-line--back flows-note">' + icon('coin') + '<span>' +
+      esc(money(total) + ' paid back by ' + co(s) + ' since ' + fmtDate(from, { short: true }) + ' isn’t income, so it’s left out here.') + '</span>' +
+      '<a class="btn btn--sm btn--ghost" href="#work-back">Get paid back' + icon('chevron') + '</a></p>';
   }
 
   function sourceFields() {
@@ -153,17 +190,18 @@
     const list = s.transactions;
     const filt = list.filter(F.periodFilter(period.out));
     const single = period.out === 'this-month' || period.out === 'last-month';
-    const budgets = s.settings.budgets || {};
+    // Work money never has a budget: it isn't your spending.
+    const budgets = Object.fromEntries(Object.entries(s.settings.budgets || {}).filter(([c]) => !F.WORK.includes(c)));
     const cats = F.byCategory(filt, 'out').map((c) => ({ label: c.category, value: c.total, budget: single ? budgets[c.category] : null }));
     if (single) for (const [c, b] of Object.entries(budgets)) if (b && !cats.some((x) => x.label === c)) cats.push({ label: c, value: 0, budget: b });
     const cur = monthKey(today());
     const spentByCat = new Map(F.byCategory(F.inMonth(list, cur), 'out').map((c) => [c.category, c.total]));
     const budgetTotal = sum(Object.values(budgets).filter(Boolean));
     const budgetUsed = sum(Object.entries(budgets).filter(([, b]) => b), ([c]) => spentByCat.get(c) || 0);
-    const billsMonthly = sum(s.bills.filter((b) => b.active !== false), (b) => F.monthlyEquivalent(b.amount, b.frequency));
+    const billsMonthly = sum(s.bills.filter((b) => b.active !== false && !isWorkBill(b)), (b) => F.monthlyEquivalent(b.amount, b.frequency));
 
     root.innerHTML = GU.view.head({
-      eyebrow: 'History',
+      eyebrow: 'Money so far',
       title: 'Spending',
       text: 'Where your money goes, by category. Set a monthly budget for any category and I’ll warn you when you go over.',
       actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button><button type="button" class="btn" data-budgets>' + icon('flag') + 'Set budgets</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add spending</button>',
@@ -171,6 +209,7 @@
       ledger(list, 'out', budgetTotal
         ? '<div><span>Budget left this month</span><b class="' + (budgetUsed > budgetTotal ? 'is-crit' : '') + '">' + esc(money(budgetTotal - budgetUsed)) + '</b><em>of ' + esc(money(budgetTotal, { whole: true })) + ' budgeted</em></div>'
         : '<div><span>Regular bills</span><b>' + esc(money(billsMonthly)) + '</b><em>per month · <a class="link" href="#bills">see bills</a></em></div>') +
+      workStripHTML(s, filt) +
       '<div class="cols cols--main-side">' +
       '<div class="stack">' +
       '<section class="panel"><header class="panel__head"><h2>Spending by category</h2>' + chips('period', F.PERIODS, period.out) + '</header><div class="panel__body">' +
@@ -196,9 +235,29 @@
     });
   }
 
+  /* Work money left out of Spending: what you paid for your employer in this period, what they paid back,
+     and what's still to come back, with the way to Get paid back. */
+  function workStripHTML(s, filt) {
+    const out = sum(filt.filter((t) => t.amount < 0 && t.category === F.WORK_OUT), (t) => -t.amount);
+    const back = sum(filt.filter((t) => t.amount > 0 && t.category === F.WORK_IN), (t) => t.amount);
+    const w = wm();
+    const due = w && w.dueBack ? w.dueBack(s).total : 0;
+    if (!(out > 0) && !(back > 0) && !(due > 0)) return '';
+    const c = co(s);
+    let text;
+    if (out > 0 || back > 0) {
+      const bits = [money(out) + ' you paid for ' + c + ' ' + (PERIOD_WORDS[period.out] || ''), money(back) + ' paid back'];
+      if (due > 0) bits.push(money(due) + ' still due back');
+      text = '<b>Not counted here:</b> ' + esc(bits.join(' · '));
+    } else text = esc(co(s, true) + ' owes you ' + money(due) + '. Work money is kept out of your spending.');
+    return '<p class="note-line note-line--back flows-note">' + icon('briefcase') + '<span>' + text + '</span>' +
+      '<a class="btn btn--sm btn--ghost" href="#work-back">Get paid back' + icon('chevron') + '</a></p>';
+  }
+
   function editBudgets() {
     const b = store.state.settings.budgets || {};
-    const cats = F.EXPENSE.filter((c) => c !== 'Savings & investments');
+    // Work money is kept out of your spending, so it can't have a budget.
+    const cats = F.EXPENSE.filter((c) => c !== 'Savings & investments' && !F.WORK.includes(c));
     formDialog({
       title: 'Monthly budgets',
       intro: 'Set a monthly limit for the categories you want to keep an eye on. Leave the rest empty.',
@@ -217,6 +276,6 @@
     });
   }
 
-  GU.tabs.incomings = { label: 'Income', short: 'Income', icon: 'in', render: renderIn, edit: editSource, createSource };
-  GU.tabs.outgoings = { label: 'Spending', short: 'Spending', icon: 'out', render: renderOut, editBudgets };
+  GU.tabs.incomings = { label: 'Income', short: 'Income', icon: 'in', part: 'home', render: renderIn, edit: editSource, createSource };
+  GU.tabs.outgoings = { label: 'Spending', short: 'Spending', icon: 'out', part: 'home', render: renderOut, editBudgets };
 })();

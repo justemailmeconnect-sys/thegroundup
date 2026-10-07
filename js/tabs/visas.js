@@ -80,7 +80,7 @@
     const order = (v) => (['Refused', 'Withdrawn'].includes(v.status) ? 2 : v.status === 'Approved' ? 1 : 0);
     const visas = s.visas.slice().sort((a, b) => order(a) - order(b) || (a.created || '').localeCompare(b.created || ''));
     root.innerHTML = GU.view.head({
-      eyebrow: 'Life admin',
+      eyebrow: 'Paperwork',
       title: 'Visa applications',
       text: 'Track each application from planning to decision: the documents you still need, appointments, and when each visa runs out.',
       actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'New application</button>',

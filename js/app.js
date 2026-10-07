@@ -1,4 +1,5 @@
-/* The Ground Up: app shell. Builds the icon rail, routes between tabs and redraws on every change. */
+/* The Ground Up: app shell. Builds the Home | Work switch and the icon rail for the part you're in, routes
+   between tabs and redraws on every change. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -6,18 +7,29 @@
   const { icon } = GU.ui;
   const store = GU.store;
 
-  /* The menu, in groups: home, inbox and work; money ahead; paperwork; history. */
-  const GROUPS = [['today', 'inbox', 'work'], ['bills', 'debts', 'incomings', 'todos'], ['receipts', 'documents', 'visas'], ['transactions', 'outgoings']];
-  const ORDER = GROUPS.flat();
+  /* The two parts and their menus live in GU.parts (js/parts.js). */
+  const parts = GU.parts;
+  const PARTS = parts.PARTS;
+  const isPart = (p) => p === 'home' || p === 'work';
   GU.tabs = GU.tabs || {};
   const intents = {};
   let current = null;
 
+  /* The part a page belongs to, or '' for the shared pages (Inbox, Settings). */
+  const pagePart = (tabId) => {
+    const p = parts.partOf(tabId);
+    return isPart(p) ? p : '';
+  };
+
   const view = {
-    /* Standard page heading for a tab. */
+    /* Standard page heading for a tab. The eyebrow starts with the page's part: 'Home · Money ahead'. */
     head(o) {
+      const p = o.part || pagePart(current);
+      const label = isPart(p) ? PARTS[p].label : '';
+      let eyebrow = o.eyebrow || '';
+      if (label && o.part !== false && !new RegExp('^' + label + '\\b', 'i').test(eyebrow)) eyebrow = eyebrow ? label + ' · ' + eyebrow : label;
       return '<header class="page-head"><div class="page-head__text">' +
-        (o.eyebrow ? '<p class="eyebrow">' + esc(o.eyebrow) + '</p>' : '') +
+        (eyebrow ? '<p class="eyebrow">' + esc(eyebrow) + '</p>' : '') +
         '<h1>' + esc(o.title) + '</h1>' + (o.text ? '<p class="page-head__sub">' + o.text + '</p>' : '') + '</div>' +
         (o.actions ? '<div class="page-head__actions">' + o.actions + '</div>' : '') + '</header>';
     },
@@ -38,28 +50,9 @@
       const tab = GU.tabs[map[ref.c]];
       if (tab && tab.edit) tab.edit(ref.id, ref.c);
     },
+    /* The + Add menu for the part you're in. */
     quickAdd(anchor) {
-      GU.ui.menu(anchor, [
-        { icon: 'inbox', label: 'Anything', hint: 'Upload it and let me sort it', onClick: async () => {
-          const files = await GU.ui.pickFiles();
-          if (files.length) GU.inbox.add({ files });
-        } },
-        { icon: 'folder', label: 'A whole folder', hint: 'Every file inside gets sorted', onClick: async () => {
-          const files = await GU.ui.pickFolder();
-          if (files.length) GU.inbox.add({ files });
-          else GU.ui.toast('That folder has no files I can read.');
-        } },
-        { icon: 'receipt', label: 'Receipt or invoice', hint: 'Upload a photo or PDF', onClick: () => GU.tabs.receipts.create({ pick: true }) },
-        { icon: 'todo', label: 'Task', hint: 'Something to do', onClick: () => GU.tabs.todos.create() },
-        { icon: 'briefcase', label: 'Work project', hint: 'Coming up at work', onClick: () => GU.tabs.work.editProject(null, {}) },
-        { icon: 'bills', label: 'Bill', hint: 'A regular payment', onClick: () => GU.tabs.bills.create() },
-        { icon: 'coin', label: 'Transaction', hint: 'Money in or out', onClick: () => GU.tabs.transactions.create() },
-        { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance…', onClick: () => GU.tabs.debts.create() },
-        { icon: 'upload', label: 'Bank statement', hint: 'Import a CSV file', onClick: () => GU.tabs.transactions.importCSV() },
-        { icon: 'folder', label: 'Document', hint: 'Passport, contract, certificate…', onClick: () => GU.tabs.documents.create() },
-        { icon: 'globe', label: 'Visa application', hint: 'Track a new application', onClick: () => GU.tabs.visas.create() },
-        { icon: 'star', label: 'New section', hint: 'Car, Pets, Wedding…', onClick: () => GU.sections.newSection() },
-      ]);
+      GU.ui.menu(anchor, parts.addMenu(parts.get()));
     },
   };
   GU.view = view;
@@ -68,36 +61,96 @@
     return ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks'].some((k) => (s[k] || []).some((x) => x.demo));
   }
 
+  /* ---------- the Home | Work switch ---------- */
+  /* Two buttons, the same in the rail (computer) and the top bar (phone). The other part's button shows a
+     count when something there is late or needs doing. */
+  function switchHTML(where) {
+    const btn = (p, ico) => '<button type="button" class="partswitch__btn partswitch__btn--' + p + '" data-part-go="' + p + '" aria-pressed="false">' +
+      '<span class="partswitch__ico">' + icon(ico) + '</span><span class="partswitch__label">' + esc(PARTS[p].label) + '</span>' +
+      '<b class="partswitch__count" hidden></b></button>';
+    return '<div class="partswitch partswitch--' + where + '" role="group" aria-label="Home or Work">' + btn('home', 'home') + btn('work', 'briefcase') + '</div>';
+  }
+
   function shell() {
     const app = document.getElementById('app');
+    const start = PARTS[parts.get()].start;
     app.innerHTML =
       '<div class="app">' +
+      '<header class="partbar">' +
+      '<a class="partbar__brand" href="#' + start + '" aria-label="The Ground Up, overview"><span>G</span></a>' +
+      switchHTML('bar') +
+      '<button type="button" class="partbar__add" data-quick-add aria-label="Add something">' + icon('plus') + '</button>' +
+      '</header>' +
       '<nav class="rail" aria-label="Sections">' +
-      '<a class="rail__brand" href="#today" aria-label="The Ground Up, today"><span>G</span></a>' +
+      '<a class="rail__brand" href="#' + start + '" aria-label="The Ground Up, overview"><span>G</span></a>' +
+      switchHTML('rail') +
       '<div class="rail__items"></div></nav>' +
       '<main class="main" id="main"><div class="banner-slot"></div><div class="view" id="view"></div></main>' +
       '</div>';
-    app.querySelector('.rail__items').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-quick-add]');
-      if (b) view.quickAdd(b);
+    app.addEventListener('click', (e) => {
+      const add = e.target.closest('[data-quick-add]');
+      if (add) return view.quickAdd(add);
+      const sw = e.target.closest('[data-part-go]');
+      if (sw) {
+        const p = sw.getAttribute('data-part-go');
+        // Already there: back to that part's Overview.
+        if (p === parts.get() && pagePart(current) === p) view.go(PARTS[p].start);
+        else parts.go(p);
+      }
     });
   }
 
+  /* The switch's state: which part is pressed, its tooltip, and the other part's count. */
+  function renderSwitch(part, counts) {
+    const e = GU.workMoney ? GU.workMoney.employer(store.state) : null;
+    const workTip = 'Work: ' + (e && e.set ? e.fullName || e.short : 'your job or business');
+    document.querySelectorAll('[data-part-go]').forEach((b) => {
+      const p = b.getAttribute('data-part-go');
+      const on = p === part;
+      b.setAttribute('aria-pressed', String(on));
+      const n = on ? 0 : counts['__' + p] || 0;
+      const badge = b.querySelector('.partswitch__count');
+      badge.hidden = !n;
+      badge.textContent = n > 9 ? '9+' : n;
+      const tip = p === 'work' ? workTip : 'Home: your life and money';
+      b.title = tip;
+      b.setAttribute('aria-label', tip + (n ? ', ' + n + ' need attention' : ''));
+    });
+    document.querySelectorAll('.rail__brand, .partbar__brand').forEach((a) => a.setAttribute('href', '#' + PARTS[part].start));
+  }
+
+  /* ---------- the rail: + Add, Ask Claude, the part's pages, its sections, Settings ---------- */
   let railKey = '';
-  function buildRail() {
-    const custom = GU.sections.sync();
-    const key = custom.map((id) => id + GU.tabs[id].label).join('|');
-    if (key === railKey && document.querySelector('.rail__items').children.length) return;
+  function buildRail(part) {
+    const custom = GU.sections.sync().filter((id) => parts.partOf(id) === part);
+    const groups = parts.groups(part);
+    const titles = PARTS[part].titles || [];
+    const label = (id) => {
+      const t = GU.tabs[id];
+      return t ? t.short || t.label : id;
+    };
+    const ids = groups.flat().concat(custom);
+    const key = part + '|' + ids.map((id) => id + ':' + label(id)).join('|');
+    const host = document.querySelector('.rail__items');
+    if (key === railKey && host.children.length) return;
     railKey = key;
     const item = (id) => {
       const t = GU.tabs[id];
-      return '<a class="rail__item' + (t.custom ? ' rail__item--custom' : '') + '" href="#' + id + '" data-tab="' + id + '"><span class="rail__ico">' + icon(t.icon) + '<b class="rail__badge" hidden></b></span><span class="rail__label">' + esc(t.short || t.label) + '</span></a>';
+      return '<a class="rail__item' + (t.custom ? ' rail__item--custom' : '') + '" href="#' + id + '" data-tab="' + id + '"><span class="rail__ico">' + icon(t.icon) + '<b class="rail__badge" hidden></b></span><span class="rail__label">' + esc(label(id)) + '</span></a>';
     };
-    document.querySelector('.rail__items').innerHTML =
+    // A thin line between groups; on a tall screen it also names the group ('Money ahead').
+    const sep = (title) => '<span class="rail__sep' + (title ? ' rail__sep--titled' : '') + '" aria-hidden="true">' + (title ? '<em>' + esc(title) + '</em>' : '') + '</span>';
+    const all = PARTS[part].groups;
+    const chatOpen = document.documentElement.classList.contains('chat-open');
+    host.innerHTML =
       '<button type="button" class="rail__item rail__add" data-quick-add aria-label="Add something"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">Add</span></button>' +
-      '<button type="button" class="rail__item rail__claude" data-chat-toggle aria-pressed="false" aria-label="Ask Claude (Ctrl or Cmd + K)"><span class="rail__ico">' + icon('spark') + '</span><span class="rail__label">Claude</span></button>' +
-      GROUPS.map((g) => g.map(item).join('')).join('<span class="rail__sep" aria-hidden="true"></span>') +
-      (custom.length ? '<span class="rail__sep" aria-hidden="true"></span>' + custom.map(item).join('') : '') +
+      '<button type="button" class="rail__item rail__claude" data-chat-toggle aria-pressed="' + chatOpen + '" aria-label="Ask Claude (Ctrl or Cmd + K)"><span class="rail__ico">' + icon('spark') + '</span><span class="rail__label">Claude</span></button>' +
+      groups.map((g, i) => {
+        // The heading of the group in the full menu (groups with no pages yet are left out).
+        const at = all.findIndex((full) => full.includes(g[0]));
+        return (i ? sep(titles[at]) : '') + g.map(item).join('');
+      }).join('') +
+      (custom.length ? sep(part === 'work' ? 'Sections' : 'Your sections') + custom.map(item).join('') : '') +
       '<a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>';
   }
 
@@ -123,9 +176,15 @@
     if (b) b.addEventListener('click', () => GU.sample.clear());
   }
 
-  function renderRail(tabId) {
-    buildRail();
-    const counts = GU.agenda.badges(store.state);
+  function renderRail(tabId, part) {
+    buildRail(part);
+    let counts = {};
+    try {
+      counts = GU.agenda.badges(store.state) || {};
+    } catch (e) {
+      console.error(e);
+    }
+    renderSwitch(part, counts);
     document.querySelectorAll('.rail__item[data-tab]').forEach((a) => {
       const id = a.getAttribute('data-tab');
       if (id === tabId) a.setAttribute('aria-current', 'page');
@@ -140,15 +199,38 @@
     });
   }
 
+  /* The page to show for a hash: the page itself, or its part's Overview when it isn't there (an old link, a
+     deleted section). No hash: the last page you used in the part you were in. */
+  function resolve(id, part) {
+    if (!id) {
+      const to = parts.lastTab(part) || PARTS[part].start;
+      const tab = GU.tabs[to] ? to : 'today';
+      try {
+        history.replaceState(null, '', '#' + tab);
+      } catch (e) {
+        /* the address bar just stays as it is */
+      }
+      return tab;
+    }
+    if (GU.tabs[id]) return id;
+    const start = PARTS[parts.partOf(id) === 'work' ? 'work' : part].start;
+    return GU.tabs[start] ? start : 'today';
+  }
+
   function render() {
-    const id = (location.hash || '#today').slice(1);
     GU.sections.sync();
-    const tabId = GU.tabs[id] ? id : 'today';
+    let part = parts.get();
+    const tabId = resolve((location.hash || '').slice(1), part);
+    // A page from the other part (a card, a toast, an Inbox 'Open', an old link) flips the switch to match.
+    const p = pagePart(tabId);
+    if (p && p !== part) part = parts.set(p);
+    document.documentElement.dataset.part = part;
+    parts.remember(tabId);
     const tab = GU.tabs[tabId];
     const changedTab = current !== tabId;
     current = tabId;
     applyTheme();
-    renderRail(tabId);
+    renderRail(tabId, part);
     renderBanner();
     const host = document.getElementById('view');
     const fresh = document.createElement('div');
@@ -156,7 +238,8 @@
     host.replaceChildren(fresh);
     tab.render(fresh);
     GU.ui.hydrate(fresh);
-    document.title = (tabId === 'today' ? '' : tab.label + ' · ') + 'The Ground Up';
+    const label = tab.label || '';
+    document.title = (pagePart(tabId) === 'work' && !/^work\b/i.test(label) ? 'Work · ' : '') + (label ? label + ' · ' : '') + 'The Ground Up';
     if (changedTab) {
       window.scrollTo(0, 0);
       const active = document.querySelector('.rail__item[aria-current="page"]');
@@ -174,6 +257,32 @@
     GU.recurring.scan({ quiet: true });
   }
 
+  /* Moves bill dates on, and adds this month's claims for the work bills you pay and get back. */
+  function rollForward() {
+    store.commit((s) => {
+      GU.finance.rollForward(s);
+      try {
+        if (GU.workMoney && GU.workMoney.billClaims) GU.workMoney.billClaims(s);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  }
+  /* Once the data is in: the one-off Home/Work re-sort, then matching work payments to your bank, then bills. */
+  function settle() {
+    try {
+      if (GU.refile && GU.refile.run) GU.refile.run();
+    } catch (e) {
+      console.error(e);
+    }
+    try {
+      if (GU.workMoney && GU.workMoney.reconcile) GU.workMoney.reconcile({ quiet: true });
+    } catch (e) {
+      console.error(e);
+    }
+    firstBillScan();
+  }
+
   async function start() {
     store.init();
     await GU.files.open();
@@ -181,7 +290,7 @@
     const sync = GU.sync.possible();
     // With sync, wait for your other devices' data before showing examples or moving bill dates on.
     if (fresh && !sync) await GU.sample.load();
-    if (!sync) store.commit((s) => GU.finance.rollForward(s));
+    if (!sync) rollForward();
     shell();
     store.subscribe(render);
     window.addEventListener('hashchange', render);
@@ -190,10 +299,10 @@
       GU.sync.start({ fresh }).then(async (r) => {
         const empty = !['transactions', 'bills', 'paperwork', 'documents', 'visas', 'tasks', 'debts'].some((k) => (store.state[k] || []).length);
         if (fresh && !r.remote && empty) await GU.sample.load();
-        store.commit((s) => GU.finance.rollForward(s));
-        firstBillScan();
+        rollForward();
+        settle();
       });
-    } else firstBillScan();
+    } else settle();
     GU.inbox.resume();
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);

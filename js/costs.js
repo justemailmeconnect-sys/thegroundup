@@ -1,16 +1,33 @@
 /* The Ground Up: cost forecast. Takes the ideas you want to spend on, and works out from your money ahead
    (income, bills, debts and instalments, plus your usual everyday spending) when each one could be done
-   without your accounts dropping below the amount you want to keep, and which account it could come from. */
+   without your accounts dropping below the amount you want to keep, and which account it could come from.
+   Work ideas the business pays for aren't planned on your money (see ktkFund). Ones you pay for and get
+   back are a dip that comes back after the business's usual wait. */
 (function () {
   'use strict';
   const GU = window.GU;
-  const { today, addDays, addMonths, shiftMonth, round2, sum, toDays } = GU.util;
+  const { today, addDays, addMonths, shiftMonth, round2, sum, toDays, money } = GU.util;
   const F = GU.finance;
 
   const DEFAULTS = { buffer: 0, overdraft: false, months: 12, everyday: null };
   const PRIORITY = { must: 0, should: 1, could: 2 };
   const settings = (s) => Object.assign({}, DEFAULTS, s.settings.costForecast || {});
   const isOpen = (i) => i.status !== 'done' && i.status !== 'dropped';
+
+  /* ---------- whose money ---------- */
+  /* Ideas were first made in Work, so one with no context is a work idea. */
+  const ideaPart = (i) => (GU.parts && GU.parts.ideaPart ? GU.parts.ideaPart(i) : i && i.context === 'home' ? 'home' : 'work');
+  /* For a work idea: 'company' (the business pays), 'me' (you pay, it pays you back) or null (not sorted yet).
+     Your own ideas are always your money, so null. */
+  function ideaPayer(i) {
+    if (!i || ideaPart(i) !== 'work') return null;
+    const p = GU.workMoney ? GU.workMoney.payerOf(i, 'costIdeas') : i.payer;
+    return p === 'company' || p === 'me' ? p : null;
+  }
+  const companyPays = (i) => ideaPayer(i) === 'company';
+  /* Paid with your money and paid back: the cost only dips your balance until it comes back. */
+  const fronted = (i) => ideaPayer(i) === 'me';
+  const repayDays = (s) => Math.max(1, Math.round(GU.workMoney ? GU.workMoney.employer(s).repayDays : 14));
 
   /* What everyday spending (food, fuel, shopping…) comes to in a usual month: money out over the last 3 full
      months of statements, leaving out bills, debt and instalment payments, savings and moves between your accounts. */
@@ -32,6 +49,7 @@
     let total = 0;
     for (const t of s.transactions) {
       if (!(t.amount < 0) || !months.includes(t.date.slice(0, 7)) || F.isTransfer(t) || skip.has(t.id)) continue;
+      if (F.isWork && F.isWork(t)) continue; // bought for work and paid back: not your everyday spending
       if (t.category === 'Debt repayments' || t.category === 'Savings & investments') continue;
       if (isBill(t)) continue;
       total += -t.amount;
@@ -85,7 +103,9 @@
     return i >= 0 ? i : date > dates[dates.length - 1] ? dates.length : 0;
   };
 
-  /* Places each idea, most important first, on the earliest day it fits. Ideas with a fixed date go where they're booked. */
+  /* Places each idea, most important first, on the earliest day it fits. Ideas with a fixed date go where they're booked.
+     Ideas the business pays for are left out. One you pay for and get back only counts from its day until it's
+     back (its monthly cost belongs in a work bill instead). */
   let cache = null;
   function schedule(s) {
     const key = (GU.store.rev || 0) + '|' + today();
@@ -99,21 +119,25 @@
     const n = b.total.length;
     const ser = b.total.slice();
     const acc = b.accounts.map((a) => ({ id: a.id, name: a.name, vals: a.vals.slice() }));
-    const ideas = (s.costIdeas || []).filter(isOpen).slice().sort((x, y) =>
+    const back = repayDays(s);
+    const ideas = (s.costIdeas || []).filter((i) => isOpen(i) && !companyPays(i)).sort((x, y) =>
       (y.plannedDate ? 1 : 0) - (x.plannedDate ? 1 : 0) ||
       (PRIORITY[x.priority] ?? 1) - (PRIORITY[y.priority] ?? 1) ||
       (x.wantBy || '9999').localeCompare(y.wantBy || '9999') ||
       (x.created || '').localeCompare(y.created || ''));
     const results = [];
-    const lowestFrom = (vals, d, cost, perDay) => {
+    // The last day (not included) an idea placed on day d still costs you: the end, or when a dip is paid back.
+    const until = (d, dip) => (dip ? Math.min(n, d + back) : n);
+    const lowestFrom = (vals, d, cost, perDay, dip) => {
       let m = Infinity;
-      for (let t = d; t < n; t++) m = Math.min(m, vals[t] - cost - perDay * (t - d));
+      for (let t = d, end = until(d, dip); t < end; t++) m = Math.min(m, vals[t] - cost - perDay * (t - d));
       return m;
     };
     for (const idea of ideas) {
+      const dip = fronted(idea);
       const cost = Math.abs(Number(idea.cost) || 0);
       const monthly = Math.abs(Number(idea.monthly) || 0);
-      const perDay = (monthly * 12) / 365;
+      const perDay = dip ? 0 : (monthly * 12) / 365;
       const lo = Math.min(n - 1, indexOf(b.dates, idea.notBefore));
       let d = -1;
       let short = 0;
@@ -121,7 +145,12 @@
       if (idea.plannedDate) {
         fixed = true;
         d = Math.min(n - 1, indexOf(b.dates, idea.plannedDate));
-        short = Math.max(0, round2(b.floor - lowestFrom(ser, d, cost, perDay)));
+        short = Math.max(0, round2(b.floor - lowestFrom(ser, d, cost, perDay, dip)));
+      } else if (dip) {
+        for (let t = lo; t < n; t++) if (lowestFrom(ser, t, cost, 0, true) >= b.floor) {
+          d = t;
+          break;
+        }
       } else if (!perDay) {
         const sm = suffixMin(ser);
         for (let t = lo; t < n; t++) if (sm[t] - cost >= b.floor) {
@@ -134,30 +163,38 @@
           break;
         }
       }
-      const r = { idea, cost, monthly, fixed, short, date: null, account: null, accountRoom: null, onTime: null, lateDays: 0, shortfall: 0 };
+      const part = ideaPart(idea);
+      const r = { idea, cost, monthly, fixed, short, date: null, account: null, accountRoom: null, onTime: null, lateDays: 0, shortfall: 0,
+        part, context: part, payer: ideaPayer(idea), dip, back: null, note: dip && monthly ? 'The ' + money(monthly) + ' a month isn’t planned here. Add it as a work bill.' : '' };
       if (d >= 0 && d < n) {
-        for (let t = d; t < n; t++) ser[t] = round2(ser[t] - cost - perDay * (t - d));
-        // Where from: the account with the most room from that day on.
+        const end = until(d, dip);
+        for (let t = d; t < end; t++) ser[t] = round2(ser[t] - cost - perDay * (t - d));
+        // Where from: the account with the most room from that day on (until it's back, for a dip).
         let best = null;
         for (const a of acc) {
-          const room = Math.min(...a.vals.slice(d));
+          const room = Math.min(...a.vals.slice(d, end));
           if (!best || room > best.room) best = { a, room };
         }
         if (best) {
-          for (let t = d; t < n; t++) best.a.vals[t] = round2(best.a.vals[t] - cost - perDay * (t - d));
+          for (let t = d; t < end; t++) best.a.vals[t] = round2(best.a.vals[t] - cost - perDay * (t - d));
           r.account = best.a.name;
           r.accountRoom = round2(best.room);
         }
         r.date = b.dates[d];
+        if (dip) r.back = addDays(r.date, back);
         if (idea.wantBy) {
           r.onTime = r.date <= idea.wantBy;
           r.lateDays = r.onTime ? 0 : toDays(r.date) - toDays(idea.wantBy);
         }
       } else {
         // Doesn't fit in the time ahead: how much more it would need.
-        const sm = suffixMin(ser);
         let best = -Infinity;
-        for (let t = lo; t < n; t++) best = Math.max(best, sm[t] - b.floor - (monthly ? perDay * (n - 1 - t) : 0));
+        if (dip) {
+          for (let t = lo; t < n; t++) best = Math.max(best, lowestFrom(ser, t, 0, 0, true) - b.floor);
+        } else {
+          const sm = suffixMin(ser);
+          for (let t = lo; t < n; t++) best = Math.max(best, sm[t] - b.floor - (monthly ? perDay * (n - 1 - t) : 0));
+        }
         r.shortfall = round2(Math.max(0, cost - Math.max(0, best)));
       }
       results.push(r);
@@ -176,11 +213,38 @@
       freeNow: round2(Math.max(0, baseSm[0] - b.floor)),
       freeNowAfter: round2(Math.max(0, sm[0] - b.floor)),
       spare,
-      outstanding: round2(sum((s.costIdeas || []).filter(isOpen), (i) => Math.abs(Number(i.cost) || 0))),
+      outstanding: round2(sum(ideas, (i) => Math.abs(Number(i.cost) || 0))),
+      fronting: results.filter((r) => r.dip),
+      repayDays: back,
       allBy: results.length && results.every((r) => r.date) ? results.reduce((m, r) => (r.date > m ? r.date : m), '') : null,
       notFitting: results.filter((r) => !r.date).length,
     };
   }
 
-  GU.costs = { settings, everydayEstimate, schedule, isOpen, PRIORITY };
+  /* Work ideas the business pays for: not tested against your money (its balance isn't known), just listed
+     with what they cost, soonest wanted first, and grouped by the month they're wanted ('' for no date). */
+  function ktkFund(s) {
+    s = s || GU.store.state;
+    const items = ((s && s.costIdeas) || []).filter((i) => isOpen(i) && companyPays(i)).map((i) => ({
+      idea: i,
+      cost: Math.abs(Number(i.cost) || 0),
+      monthly: Math.abs(Number(i.monthly) || 0),
+      date: i.plannedDate || i.wantBy || '',
+      booked: !!i.plannedDate,
+    })).sort((x, y) => (x.date || '9999').localeCompare(y.date || '9999') ||
+      (PRIORITY[x.idea.priority] ?? 1) - (PRIORITY[y.idea.priority] ?? 1) ||
+      (x.idea.created || '').localeCompare(y.idea.created || ''));
+    const months = [];
+    for (const x of items) {
+      const key = x.date.slice(0, 7);
+      let m = months.find((g) => g.key === key);
+      if (!m) months.push((m = { key, items: [], total: 0, monthly: 0 }));
+      m.items.push(x);
+      m.total = round2(m.total + x.cost);
+      m.monthly = round2(m.monthly + x.monthly);
+    }
+    return { items, count: items.length, total: round2(sum(items, (x) => x.cost)), monthly: round2(sum(items, (x) => x.monthly)), months };
+  }
+
+  GU.costs = { settings, everydayEstimate, schedule, isOpen, PRIORITY, ktkFund, ideaPart, ideaPayer, companyPays, fronted };
 })();

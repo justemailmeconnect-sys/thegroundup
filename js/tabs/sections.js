@@ -1,5 +1,6 @@
 /* The Ground Up: your own sections. Created by you or by the assistant when something doesn't fit
-   the built-in tabs (Car, Pets, Travel, Kids & school…). Each one is a simple filing drawer. */
+   the built-in tabs (Car, Pets, Travel, Kids & school…). Each one is a simple filing drawer.
+   A section belongs to Home unless it's marked as Work (section.part), and shows in that part's menu. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -16,6 +17,11 @@
     return hit ? hit[1] : 'star';
   }
   const queries = {};
+  /* The part a section shows in: 'work' only when marked so. */
+  const partOf = (sec) => (sec && sec.part === 'work' ? 'work' : 'home');
+  const startOf = (part) => (GU.parts && GU.parts.PARTS[part] ? GU.parts.PARTS[part].start : 'today');
+  const co = () => (GU.parts ? GU.parts.co(store.state) : 'work');
+  const PART_OPTIONS = () => [{ value: 'home', label: 'Home', icon: 'home' }, { value: 'work', label: 'Work', icon: 'briefcase' }];
 
   function itemRow(it) {
     const due = it.dueDate ? pill((daysUntil(it.dueDate) < 0 ? 'Was due ' : 'Due ') + fmtDate(it.dueDate, { short: true }), daysUntil(it.dueDate) < 0 ? 'crit' : daysUntil(it.dueDate) <= 7 ? 'warn' : 'muted', 'clock') : '';
@@ -47,11 +53,13 @@
       const all = s.sectionItems.filter((x) => x.sectionId === sec.id).sort((a, b) => (b.date || b.created || '').localeCompare(a.date || a.created || ''));
       const q = (queries[sec.id] || '').toLowerCase();
       const list = all.filter((x) => !q || [x.title, x.party, x.notes, x.reference].join(' ').toLowerCase().includes(q));
+      const work = partOf(live) === 'work';
       root.innerHTML = GU.view.head({
         eyebrow: live.byAssistant ? 'Section started by your assistant' : 'Your section',
         title: live.name,
-        text: live.byAssistant ? 'I started this section on ' + esc(fmtDate(live.created)) + ' because some things you sent me belong together. Rename it or add to it any time.' : 'Your own filing drawer. Drop anything related in here.',
-        actions: '<button type="button" class="btn" data-rename>' + icon('edit') + 'Rename</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add</button>',
+        text: live.byAssistant ? 'I started this section on ' + esc(fmtDate(live.created)) + ' because some things you sent me belong together. Rename it, move it or add to it any time.'
+          : work ? 'A filing drawer for ' + esc(co()) + '. Drop anything related in here.' : 'Your own filing drawer. Drop anything related in here.',
+        actions: '<button type="button" class="btn" data-rename>' + icon('edit') + 'Rename or move</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add</button>',
       }) +
         GU.ui.dropbar('Drop anything for ' + live.name + ' here, or a whole folder', 'It all stays in ' + live.name + '. Subfolders become groups, so your own organisation is kept.') +
         '<div class="toolbar"><label class="search">' + icon('search') + '<input type="search" id="sec-search" placeholder="Search ' + esc(live.name) + '" value="' + esc(queries[sec.id] || '') + '" aria-label="Search"></label>' +
@@ -85,7 +93,7 @@
             entry = GU.trash.put(st, 'sections', live, live.name + ' section', { sectionItems: items });
           });
           GU.trash.offerUndo(entry);
-          GU.view.go('today');
+          GU.view.go(startOf(partOf(live)));
           return;
         }
         const v = e.target.closest('[data-view]');
@@ -99,7 +107,7 @@
         if (ed) editItem(ed.dataset.edit);
       });
     }
-    return { label: sec.name, short: sec.name, icon: sec.icon || iconFor(sec.name), render, edit: editItem, custom: true, tabId };
+    return { label: sec.name, short: sec.name, icon: sec.icon || iconFor(sec.name), part: partOf(sec), render, edit: editItem, custom: true, tabId };
   }
 
   function fields() {
@@ -116,7 +124,7 @@
     ];
   }
 
-  /* sectionRef: an existing section id, or {name} for a new section. */
+  /* sectionRef: an existing section id, or {name} for a new section (opts.part 'work' makes it a Work section). */
   function createItem(sectionRef, prefill, opts) {
     opts = opts || {};
     const existing = typeof sectionRef === 'string' ? (store.state.sections || []).find((x) => x.id === sectionRef) : null;
@@ -134,7 +142,9 @@
             if (found) sid = found.id;
             else {
               sid = 's' + uid();
-              st.sections.push({ id: sid, name: v.sectionName, icon: iconFor(v.sectionName), created: today(), byAssistant: !!opts.byAssistant });
+              const sec = { id: sid, name: v.sectionName, icon: iconFor(v.sectionName), created: today(), byAssistant: !!opts.byAssistant };
+              if (opts.part === 'work') sec.part = 'work';
+              st.sections.push(sec);
             }
           }
           const rec = Object.assign({ id: 'si-' + uid(), created: today(), sectionId: sid }, v);
@@ -161,29 +171,46 @@
     });
   }
 
+  /* Rename a section, or move it between Home and Work. */
   function rename(id) {
     const sec = store.state.sections.find((x) => x.id === id);
+    if (!sec) return;
+    const was = partOf(sec);
     formDialog({
-      title: 'Rename section',
-      fields: [{ name: 'name', label: 'Name', required: true }],
-      values: { name: sec.name },
-      onSubmit: (v) => store.commit((st) => {
-        const x = st.sections.find((y) => y.id === id);
-        x.name = v.name;
-        x.icon = iconFor(v.name);
-      }),
+      title: 'Rename or move section',
+      fields: [
+        { name: 'name', label: 'Name', required: true },
+        { name: 'part', label: 'Show it in', type: 'segmented', options: PART_OPTIONS(), default: 'home', help: 'Work is for ' + esc(co()) + ' only. Everything else is Home.' },
+      ],
+      values: { name: sec.name, part: was },
+      onSubmit: (v) => {
+        const before = Object.assign({}, sec);
+        store.commit((st) => {
+          const x = st.sections.find((y) => y.id === id);
+          if (!x) return;
+          x.name = v.name;
+          x.icon = iconFor(v.name);
+          x.part = v.part === 'work' ? 'work' : 'home';
+        });
+        // The page you're on follows the section into its new part.
+        if (v.part !== was) toast('Moved ' + v.name + ' to ' + (v.part === 'work' ? 'Work' : 'Home'), { action: 'Undo', onAction: () => store.upsert('sections', before) });
+      },
     });
   }
 
-  function newSection() {
+  /* A new section, in the part you're in (opts.part to choose). */
+  function newSection(opts) {
+    opts = opts || {};
+    const part = opts.part === 'work' || opts.part === 'home' ? opts.part : GU.parts ? GU.parts.get() : 'home';
     formDialog({
-      title: 'New section',
-      intro: 'Make a drawer for anything that doesn’t fit the other tabs, for example Car, Pets, Wedding or Garden.',
+      title: part === 'work' ? 'New work section' : 'New section',
+      intro: part === 'work' ? 'Make a drawer for anything for ' + esc(co()) + ' that doesn’t fit the other Work pages, for example Vehicles, Premises or Training.'
+        : 'Make a drawer for anything that doesn’t fit the other tabs, for example Car, Pets, Wedding or Garden.',
       fields: [{ name: 'name', label: 'Section name', required: true }],
       submitLabel: 'Create section',
       onSubmit: (v) => {
         const id = 's' + uid();
-        store.commit((st) => st.sections.push({ id, name: v.name, icon: iconFor(v.name), created: today() }));
+        store.commit((st) => st.sections.push({ id, name: v.name, icon: iconFor(v.name), created: today(), part }));
         GU.view.go('s-' + id);
       },
     });
@@ -201,5 +228,5 @@
     return ids;
   }
 
-  GU.sections = { iconFor, sync, createItem, editItem, newSection };
+  GU.sections = { iconFor, sync, createItem, editItem, newSection, rename, partOf };
 })();

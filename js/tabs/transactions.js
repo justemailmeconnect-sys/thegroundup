@@ -4,11 +4,60 @@
   'use strict';
   const GU = window.GU;
   const { esc, uid, today, money, fmtDate, monthKey, monthLabel, plural, parseCSV, parseLooseDate, guessDateOrder, parseAmount, debounce, sum } = GU.util;
-  const { icon, pill, emptyState, selectOptions, formDialog, openDialog, toast } = GU.ui;
+  const { icon, pill, emptyState, selectOptions, formDialog, openDialog, toast, confirmBox } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
 
   const ui = { q: '', month: '', account: '', category: '', type: '', limit: 100 };
+
+  /* ---------- work money on a bank line ---------- */
+  /* A line is work money by its category alone: 'Work expenses' is your money spent for your employer,
+     'Work reimbursements' is them paying you back (or you sending money back to them). The links between
+     a line and the things in Get paid back live on those records (purchaseTx, repaidTx), never on the line. */
+  const wm = () => GU.workMoney || null;
+  const co = (s, cap) => (GU.parts && GU.parts.co ? GU.parts.co(s, cap) : cap ? 'The company' : 'the company');
+  const hasEmployer = (s) => !!(wm() && wm().employer(s || store.state).set);
+  const WAGE_WORDS = /\bwages?\b|salary|payroll/i;
+  /* Your wages from the employer: a 'Salary' line that names them, or one that says wages and is about
+     your usual pay from them (some banks leave the name off). */
+  function isWages(s, t) {
+    const w = wm();
+    if (!w || !t || !(t.amount > 0) || t.category !== 'Salary' || !w.employer(s).set) return false;
+    const text = (t.description || '') + ' ' + (t.notes || '');
+    if (w.isEmployerText(s, text)) return true;
+    const src = w.wageSource(s);
+    const pay = src ? Math.abs(Number(src.amount) || 0) : 0;
+    return pay > 0 && WAGE_WORDS.test(text) && Math.abs(t.amount - pay) <= 0.2 * pay;
+  }
+  /* The things in Get paid back a line is linked to: as your payment, or as the employer paying you back. */
+  function linksOf(s, id) {
+    const list = s.paperwork || [];
+    return {
+      purchase: list.find((p) => p.purchaseTx === id) || null,
+      repaid: list.filter((p) => p.repaidTx === id || (p.repayments || []).some((r) => r.tx === id)),
+    };
+  }
+  /* The pill that says whose money a line is. */
+  function workPill(s, t) {
+    const c = co(s);
+    if (t.category === F.WORK_OUT) {
+      const l = linksOf(s, t.id).purchase;
+      const st = l && wm() ? wm().stage(l) : '';
+      const tip = l ? (st === 'paid-back' ? 'Paid back' : st === 'sent' ? 'Sent to ' + c + ', waiting' : 'In Get paid back, not sent yet') : 'Not in Get paid back yet';
+      return '<span class="pill pill--mine" title="' + esc(tip) + '">' + esc('For ' + c) + '</span>';
+    }
+    if (t.category === F.WORK_IN) return pill(t.amount > 0 ? 'Back from ' + c : 'Back to ' + c, 'ktk');
+    if (isWages(s, t)) return pill('Wages from ' + c, '', 'briefcase');
+    return '';
+  }
+  /* A line's usual category if it weren't work money (its own rules and the built-in ones). */
+  function homeCategory(s, t) {
+    const l = t && t.amount < 0 ? linksOf(s, t.id).purchase : null;
+    if (l && l.purchaseWas && !F.WORK.includes(l.purchaseWas)) return l.purchaseWas;
+    if (t && t.category && !F.WORK.includes(t.category)) return t.category;
+    const c = t ? F.categorise(t.description || '', t.amount, s.rules) : '';
+    return c && !F.WORK.includes(c) && c !== 'Salary' ? c : '';
+  }
 
   function accountName(id) {
     const a = store.state.accounts.find((x) => x.id === id);
@@ -32,7 +81,8 @@
       if (ui.month && t.date.slice(0, 7) !== ui.month) return false;
       if (ui.account && t.account !== ui.account) return false;
       if (ui.category === '__none' && t.category) return false;
-      if (ui.category && ui.category !== '__none' && t.category !== ui.category) return false;
+      if (ui.category === '__work' && !F.isWork(t)) return false;
+      if (ui.category && ui.category !== '__none' && ui.category !== '__work' && t.category !== ui.category) return false;
       if (ui.type === 'in' && t.amount <= 0) return false;
       if (ui.type === 'out' && t.amount >= 0) return false;
       if (q && !(t.description + ' ' + (t.notes || '') + ' ' + (t.category || '')).toLowerCase().includes(q)) return false;
@@ -45,13 +95,17 @@
       return '<tr><td colspan="5">' + emptyState({ icon: 'search', title: store.state.transactions.length ? 'No transactions match' : 'No transactions yet',
         text: store.state.transactions.length ? 'Try clearing the search or filters.' : 'Import a CSV statement from your bank, or add a payment by hand.' }) + '</td></tr>';
     }
-    return list.slice(0, ui.limit).map((t) =>
-      '<tr class="clickable" data-id="' + esc(t.id) + '" tabindex="0">' +
-      '<td class="nowrap muted">' + esc(fmtDate(t.date, { short: true })) + '</td>' +
-      '<td class="wrap"><b class="cell-title">' + esc(t.description) + '</b>' + (t.notes ? '<small class="cell-sub">' + esc(t.notes) + '</small>' : '') + '</td>' +
-      '<td>' + (t.category ? pill(t.category, F.isTransfer(t) ? 'muted' : '') : pill('Needs a category', 'warn', 'alert')) + '</td>' +
-      '<td class="hide-sm muted">' + esc(accountName(t.account)) + '</td>' +
-      '<td class="num ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</td></tr>').join('');
+    const s = store.state;
+    return list.slice(0, ui.limit).map((t) => {
+      const work = workPill(s, t);
+      const cat = t.category ? pill(t.category, F.counts(t) ? '' : 'muted') : pill('Needs a category', 'warn', 'alert');
+      return '<tr class="clickable" data-id="' + esc(t.id) + '" tabindex="0">' +
+        '<td class="nowrap muted">' + esc(fmtDate(t.date, { short: true })) + '</td>' +
+        '<td class="wrap"><b class="cell-title">' + esc(t.description) + '</b>' + (t.notes ? '<small class="cell-sub">' + esc(t.notes) + '</small>' : '') + '</td>' +
+        '<td>' + (work ? '<span class="tx-pills">' + cat + work + '</span>' : cat) + '</td>' +
+        '<td class="hide-sm muted">' + esc(accountName(t.account)) + '</td>' +
+        '<td class="num ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</td></tr>';
+    }).join('');
   }
 
   /* ---------- account balances ---------- */
@@ -234,9 +288,12 @@
     }
     const months = Array.from(new Set(s.transactions.map((t) => t.date.slice(0, 7)))).sort().reverse();
     const cats = Array.from(new Set(s.transactions.map((t) => t.category).filter(Boolean))).sort();
+    const anyWork = hasEmployer(s) || s.transactions.some(F.isWork);
+    const catFilters = [{ value: '__none', label: 'Needs a category' }].concat(anyWork ? [{ value: '__work', label: 'Work money' }] : []);
+    if (ui.category === '__work' && !anyWork) ui.category = '';
 
     root.innerHTML = GU.view.head({
-      eyebrow: 'History',
+      eyebrow: 'Money so far',
       title: 'Bank transactions',
       text: 'Every payment in and out of your accounts, with each account’s balance worked out from your statements. Import statements from your bank and I’ll sort each line into a category.',
       actions: (s.transactions.length || s.accounts.length > 1 ? '<button type="button" class="btn" data-balances>' + icon('coin') + 'Update balances</button>' : '') +
@@ -249,7 +306,7 @@
       '<label class="search">' + icon('search') + '<input type="search" id="tx-search" placeholder="Search descriptions" value="' + esc(ui.q) + '" aria-label="Search transactions"></label>' +
       '<select id="tx-month" aria-label="Month">' + selectOptions(months.map((m) => ({ value: m, label: monthLabel(m, true) })), ui.month, 'All months') + '</select>' +
       '<select id="tx-account" aria-label="Account">' + selectOptions(s.accounts.map((a) => ({ value: a.id, label: a.name })), ui.account, 'All accounts') + '</select>' +
-      '<select id="tx-category" aria-label="Category">' + selectOptions([{ value: '__none', label: 'Needs a category' }].concat(cats), ui.category, 'All categories') + '</select>' +
+      '<select id="tx-category" aria-label="Category">' + selectOptions(catFilters.concat(cats), ui.category, 'All categories') + '</select>' +
       '<select id="tx-type" aria-label="Money in or out">' + selectOptions([{ value: 'in', label: 'Money in' }, { value: 'out', label: 'Money out' }], ui.type, 'In and out') + '</select>' +
       '</div>' +
       '<p class="summary-line" id="tx-summary"></p>' +
@@ -260,10 +317,7 @@
     const draw = () => {
       const list = filtered();
       root.querySelector('#tx-rows').innerHTML = rowsHTML(list);
-      root.querySelector('#tx-summary').innerHTML = list.length
-        ? esc(plural(list.length, 'transaction')) + ' · In <b>' + esc(money(F.moneyIn(list))) + '</b> · Out <b>' + esc(money(F.moneyOut(list))) + '</b>' +
-          ' · Net <b>' + esc(money(F.moneyIn(list) - F.moneyOut(list), { sign: true })) + '</b> <span class="muted">(transfers between your own accounts are left out)</span>'
-        : '';
+      root.querySelector('#tx-summary').innerHTML = summaryHTML(s, list);
       root.querySelector('#tx-more').innerHTML = list.length > ui.limit
         ? '<button type="button" class="btn" data-more>Show ' + Math.min(100, list.length - ui.limit) + ' more of ' + (list.length - ui.limit) + '</button>' : '';
     };
@@ -316,31 +370,93 @@
     });
   }
 
+  /* The line under the filters: totals of your own money in and out. Work money has its own totals when
+     it's all you're looking at. */
+  function summaryHTML(s, list) {
+    if (!list.length) return '';
+    const n = esc(plural(list.length, 'transaction'));
+    const work = list.filter(F.isWork);
+    if (work.length === list.length) {
+      const c = co(s);
+      // A shop's refund on something bought for work comes off what you paid; only the employer's own payments are 'paid back'.
+      const out = sum(work.filter((t) => t.category === F.WORK_OUT), (t) => -t.amount);
+      const back = sum(work.filter((t) => t.amount > 0 && t.category === F.WORK_IN), (t) => t.amount);
+      const sent = sum(work.filter((t) => t.amount < 0 && t.category === F.WORK_IN), (t) => -t.amount);
+      return n + ' · Paid for ' + esc(c) + ' <b>' + esc(money(out)) + '</b> · Paid back by ' + esc(c) + ' <b>' + esc(money(back)) + '</b>' +
+        (sent > 0 ? ' · Sent back to ' + esc(c) + ' <b>' + esc(money(sent)) + '</b>' : '') + ' <span class="muted">(work money, kept out of your own totals)</span>';
+    }
+    const left = work.length ? 'transfers and work money are left out' : 'transfers between your own accounts are left out';
+    return n + ' · In <b>' + esc(money(F.moneyIn(list))) + '</b> · Out <b>' + esc(money(F.moneyOut(list))) + '</b>' +
+      ' · Net <b>' + esc(money(F.moneyIn(list) - F.moneyOut(list), { sign: true })) + '</b> <span class="muted">(' + left + ')</span>';
+  }
+
   function suggestMatch(desc) {
     return String(desc || '').replace(/[*#\d]+/g, ' ').trim().split(/\s+/).slice(0, 2).join(' ');
   }
 
-  function fields(isNew, dir) {
+  /* The 'What is this?' choice on a line, once you've said who you work for. Money out: yours, or paid for
+     your employer (you get it back). Money in: yours, your employer paying you back, or your wages. */
+  function workFields(s, t) {
+    if (!hasEmployer(s)) return [];
+    const c = co(s);
+    const out = [{ value: 'mine', label: 'Mine' }, { value: 'work', label: 'Paid for ' + c + ', get it back' }];
+    // Money you sent back to your employer (an overpayment, say) is only offered on a line that's theirs.
+    if (t && t.amount < 0 && (t.category === F.WORK_IN || wm().isEmployerText(s, (t.description || '') + ' ' + (t.notes || '')))) out.push({ value: 'to', label: 'Money back to ' + c });
+    return [
+      { name: 'workOut', label: 'What is this?', type: 'segmented', options: out, default: 'mine', showIf: (v) => v.direction !== 'in' },
+      { name: 'workIn', label: 'What is this?', type: 'segmented', default: 'mine', showIf: (v) => v.direction === 'in',
+        options: [{ value: 'mine', label: 'Mine' }, { value: 'back', label: c + ' paying me back' }, { value: 'wages', label: 'Wages from ' + c }] },
+    ];
+  }
+  /* The choice for a line as it stands, from its category. */
+  function workValues(s, t) {
+    return {
+      workOut: t.category === F.WORK_OUT ? 'work' : t.category === F.WORK_IN && t.amount < 0 ? 'to' : 'mine',
+      workIn: t.category === F.WORK_IN && t.amount > 0 ? 'back' : isWages(s, t) ? 'wages' : 'mine',
+    };
+  }
+  const choiceOf = (v) => (v.direction === 'in' ? v.workIn : v.workOut) || 'mine';
+  /* Without the choice on the form, the category says it. */
+  const choiceFromCategory = (v) => (v.category === F.WORK_OUT && v.direction !== 'in' ? 'work' : v.category === F.WORK_IN ? (v.direction === 'in' ? 'back' : 'to') : 'mine');
+  const CATEGORY_FOR = { back: F.WORK_IN, to: F.WORK_IN, wages: 'Salary' };
+
+  function fields(isNew, dir, t) {
+    const work = workFields(store.state, t);
+    // With the choice on the form, it's the only way to say a line is work money.
+    const cats = work.length ? F.categoryOptions().filter((g) => !(g.options || []).some((o) => F.WORK.includes(typeof o === 'string' ? o : o.value))) : F.categoryOptions();
+    const mine = (v) => !work.length || choiceOf(v) === 'mine';
     return [
       { name: 'direction', label: 'Type', type: 'segmented', options: [{ value: 'out', label: 'Money out', icon: 'out' }, { value: 'in', label: 'Money in', icon: 'in' }], default: dir || 'out' },
       { name: 'description', label: 'Description', required: true, placeholder: 'e.g. Tesco Express' },
       { name: 'amount', label: 'Amount', type: 'money', required: true, half: true },
       { name: 'date', label: 'Date', type: 'date', required: true, half: true },
-      { name: 'category', label: 'Category', type: 'select', options: F.categoryOptions(), placeholder: 'Choose later', half: true },
+    ].concat(work, [
+      { name: 'category', label: 'Category', type: 'select', options: cats, placeholder: 'Choose later', half: true, showIf: mine },
       { name: 'account', label: 'Account', type: 'select', options: accountOptions(), half: true },
       { name: 'newAccount', label: 'New account name', placeholder: 'e.g. Monzo, Barclays savings', showIf: (v) => v.account === '__new' },
       { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, optional: true },
-      { name: 'remember', label: 'Remember', type: 'checkbox', checkLabel: 'Always use this category for similar payments', showIf: (v) => !!v.category },
-      { name: 'match', label: 'When the description contains', showIf: (v) => v.remember && !!v.category, help: 'Applies to future imports and to existing transactions that have no category yet.' },
-    ];
+      { name: 'remember', label: 'Remember', type: 'checkbox', checkLabel: 'Always use this category for similar payments', showIf: (v) => mine(v) && !!v.category },
+      { name: 'match', label: 'When the description contains', showIf: (v) => mine(v) && v.remember && !!v.category, help: 'Applies to future imports and to existing transactions that have no category yet.' },
+    ]);
+  }
+  /* Form values for a line: the work choice from its category, and the category it would have if it weren't
+     work money (shown if you switch it to Mine). */
+  function formValues(s, t, base) {
+    if (!hasEmployer(s)) return base;
+    const out = Object.assign(base, workValues(s, t));
+    if (F.WORK.includes(out.category)) out.category = t.id ? homeCategory(s, t) : '';
+    return out;
   }
 
-  function save(v, existing, extra) {
+  /* Saves the line. category: what to save instead of the form's (for work money). Returns the line's id. */
+  function save(v, existing, extra, category) {
+    const id = existing ? existing.id : 't-' + uid();
     store.commit((s) => {
       const account = ensureAccount(v);
-      const rec = Object.assign(existing ? Object.assign({}, existing) : { id: 't-' + uid(), source: 'manual', created: today() }, extra || {}, {
+      const cur = existing ? s.transactions.find((t) => t.id === existing.id) || existing : null;
+      const rec = Object.assign(cur ? Object.assign({}, cur) : { id, source: 'manual', created: today() }, extra || {}, {
         date: v.date, description: v.description, amount: (v.direction === 'in' ? 1 : -1) * Math.abs(v.amount || 0),
-        category: v.category, account, notes: v.notes,
+        category: category === undefined ? v.category : category, account, notes: v.notes,
       });
       const i = s.transactions.findIndex((t) => t.id === rec.id);
       if (i >= 0) s.transactions[i] = rec;
@@ -358,20 +474,136 @@
         if (n) setTimeout(() => toast('Also categorised ' + plural(n, 'other transaction')), 0);
       }
     });
+    return (extra && extra.id) || id;
+  }
+
+  /* Something in Get paid back made just from this line: no file, not sent, same day and amount. */
+  function madeFromLine(p, t) {
+    const w = wm();
+    return !!(p && t && !(p.files || []).length && !p.billId && w && w.stage(p) === 'to-send' && p.date === t.date &&
+      Math.abs(Math.abs(Number(p.amount) || 0) - Math.abs(t.amount)) < 0.005);
+  }
+  /* 'Mine' on a line that something in Get paid back was made from: that goes to Recently deleted and the
+     line goes back to its usual category, in one step with Undo. It isn't suggested as work again. */
+  function takeOut(claimId, txId) {
+    let was = null;
+    let entry = null;
+    store.commit((st) => {
+      const p = (st.paperwork || []).find((x) => x.id === claimId);
+      if (!p) return;
+      const t = st.transactions.find((x) => x.id === txId);
+      st.meta = st.meta || {};
+      was = { p, cat: t ? t.category : null, had: Object.prototype.hasOwnProperty.call(st.meta, 'notWorkTx'), notWork: st.meta.notWorkTx };
+      st.paperwork = st.paperwork.filter((x) => x !== p);
+      const rec = Object.assign({}, p);
+      delete rec.purchaseTx;
+      delete rec.purchaseWas;
+      entry = GU.trash ? GU.trash.put(st, 'paperwork', rec, rec.title || rec.party) : null;
+      if (t && t.category === F.WORK_OUT) t.category = p.purchaseWas || '';
+      st.meta.notWorkTx = Array.from(new Set((Array.isArray(st.meta.notWorkTx) ? st.meta.notWorkTx : []).concat(txId)));
+    });
+    if (!was) return;
+    toast('Took ' + (was.p.title || was.p.party || 'it') + ' out of Get paid back', {
+      action: 'Undo',
+      onAction: () => store.commit((st) => {
+        if (!st.paperwork.some((x) => x.id === claimId)) st.paperwork.push(was.p);
+        const t = st.transactions.find((x) => x.id === txId);
+        if (t && was.cat != null) t.category = was.cat;
+        if (entry) st.trash = (st.trash || []).filter((e) => e.id !== entry.id);
+        if (was.had) st.meta.notWorkTx = was.notWork;
+        else delete st.meta.notWorkTx;
+      }),
+    });
+  }
+
+  /* A payment you made for your employer goes into Get paid back: linked to the one thing already waiting
+     for a payment like it, or added as something new. When a few could be it, you pick. */
+  function addToClaims(id) {
+    const w = wm();
+    const s = store.state;
+    const tx = s.transactions.find((t) => t.id === id);
+    if (!w || !tx || !(tx.amount < 0)) return;
+    const fits = w.claims(s, 'open').filter((x) => !x.p.purchaseTx && w.purchaseFor(s, x.p).options.some((o) => o.id === id));
+    if (fits.length < 2) return w.claimFromTx([id]);
+    formDialog({
+      title: 'Which one was this for?',
+      intro: esc(money(Math.abs(tx.amount)) + ' on ' + fmtDate(tx.date, { short: true }) + ' could be any of these in Get paid back.'),
+      fields: [{ name: 'claim', label: 'This payment is for', type: 'segmented', default: fits[0].p.id,
+        options: fits.map((x) => ({ value: x.p.id, label: (x.p.title || x.p.party || 'Untitled') + (x.p.date ? ' · ' + fmtDate(x.p.date, { short: true }) : '') }))
+          .concat([{ value: '__new', label: 'Something new' }]) }],
+      submitLabel: 'Add to Get paid back',
+      onSubmit: (v) => {
+        if (v.claim === '__new') w.claimFromTx([id], { noLink: true });
+        else w.linkPurchase(v.claim, id);
+      },
+    });
+  }
+
+  /* Saves the form, then does what the work choice means: a payment for your employer goes into Get paid
+     back, and a repayment is matched to what it paid back. Taking a line out of Get paid back asks first.
+     Returns {id, choice}, or false to keep the form open. */
+  async function submit(v, existing, extra) {
+    const s = store.state;
+    const w = wm();
+    const shown = hasEmployer(s);
+    const choice = shown ? choiceOf(v) : choiceFromCategory(v);
+    const links = existing && w ? linksOf(s, existing.id) : { purchase: null, repaid: [] };
+    const dropPurchase = links.purchase && !(choice === 'work' && v.direction !== 'in') ? links.purchase : null;
+    const dropRepaid = choice === 'back' && v.direction === 'in' ? [] : links.repaid;
+    const c = co(s);
+    if (dropPurchase || dropRepaid.length) {
+      const name = (p) => '‘' + esc(p.title || p.party || 'Untitled') + '’';
+      const fromLine = dropPurchase && madeFromLine(dropPurchase, existing);
+      const bits = [];
+      if (dropPurchase) {
+        bits.push(fromLine ? 'This payment is ' + name(dropPurchase) + ' in Get paid back (' + esc(money(Math.abs(existing.amount))) + '). I’ll take it out, so it’s not counted as owed to you.'
+          : 'This payment is linked to ' + name(dropPurchase) + ' in Get paid back. I’ll unlink it, and ' + name(dropPurchase) + ' stays there without a bank payment.');
+      }
+      if (dropRepaid.length) {
+        bits.push('It’s counted as ' + esc(c) + ' paying you back for ' + (dropRepaid.length === 1 ? name(dropRepaid[0]) : esc(plural(dropRepaid.length, 'thing'))) + '. I’ll mark ' +
+          (dropRepaid.length === 1 ? 'it' : 'them') + ' as not paid back yet.');
+      }
+      const ok = await confirmBox({ title: 'Take this out of Get paid back?', message: bits.join(' '), confirmLabel: 'Take it out' });
+      if (!ok) return false;
+      if (dropRepaid.length && w) w.unrepay(dropRepaid.map((p) => p.id));
+      if (dropPurchase && w) {
+        if (fromLine) takeOut(dropPurchase.id, existing.id);
+        else w.unlinkPurchase(dropPurchase.id);
+      }
+    }
+    let category;
+    if (shown && CATEGORY_FOR[choice]) category = CATEGORY_FOR[choice];
+    else if (shown && choice === 'work') {
+      // Get paid back marks the line 'Work expenses' and keeps the category it had, for Undo.
+      const cur = existing && s.transactions.find((t) => t.id === existing.id);
+      category = !w || !w.claimFromTx ? F.WORK_OUT : (cur && cur.category) || '';
+    }
+    const id = save(v, existing, extra, category);
+    if (!shown || !w) return { id, choice };
+    const now = linksOf(store.state, id);
+    if (choice === 'work' && !now.purchase) setTimeout(() => addToClaims(id), 0);
+    else if (choice === 'back' && !now.repaid.length) {
+      setTimeout(() => (GU.payback && GU.payback.repaymentDialog ? GU.payback.repaymentDialog(id) : w.reconcile && w.reconcile()), 0);
+    } else if (choice === 'mine' && existing && existing.category === F.WORK_OUT && v.direction !== 'in' && !dropPurchase && w.notWork) w.notWork([id]);
+    return { id, choice };
   }
 
   function create(prefill, opts) {
     prefill = prefill || {};
     opts = opts || {};
+    const s = store.state;
     const dir = prefill.direction || (prefill.amount > 0 ? 'in' : 'out');
+    const pseudo = { id: '', amount: dir === 'in' ? 1 : -1, category: prefill.category || '', description: prefill.description || '', notes: prefill.notes || '' };
     formDialog({
       title: dir === 'in' ? 'Add money in' : 'Add a transaction',
       fields: fields(true, dir),
-      values: Object.assign({ date: today(), account: store.state.accounts[0] && store.state.accounts[0].id, direction: dir }, prefill, { amount: prefill.amount != null ? Math.abs(prefill.amount) : null }),
+      values: formValues(s, pseudo, Object.assign({ date: today(), account: s.accounts[0] && s.accounts[0].id, direction: dir }, prefill, { amount: prefill.amount != null ? Math.abs(prefill.amount) : null })),
       submitLabel: 'Add',
-      onSubmit: (v) => {
-        save(v, null, opts.extra);
-        toast('Transaction added');
+      onSubmit: async (v) => {
+        const r = await submit(v, null, opts.extra);
+        if (r === false) return false;
+        // Get paid back says where a payment for work went; a repayment opens its own question.
+        if (!['work', 'back'].includes(r.choice) || !hasEmployer(store.state)) toast('Transaction added');
         if (opts.onSaved) opts.onSaved();
       },
     });
@@ -380,13 +612,25 @@
   function edit(id) {
     const t = store.find('transactions', id);
     if (!t) return;
+    const s = store.state;
+    const linked = linksOf(s, id).purchase;
     formDialog({
       title: 'Edit transaction',
-      fields: fields(false),
-      values: Object.assign({}, t, { direction: t.amount > 0 ? 'in' : 'out', amount: Math.abs(t.amount), match: suggestMatch(t.description) }),
-      onSubmit: (v) => save(v, t),
+      fields: fields(false, null, t),
+      values: formValues(s, t, Object.assign({}, t, { direction: t.amount > 0 ? 'in' : 'out', amount: Math.abs(t.amount), match: suggestMatch(t.description) })),
+      onSubmit: async (v) => ((await submit(v, t)) === false ? false : undefined),
+      // The thing in Get paid back this paid for stays there, without a bank payment.
+      deleteMessage: linked ? 'It’s your payment for ‘' + esc(linked.title || linked.party || 'Untitled') + '’ in Get paid back, which stays there without a bank payment. You can undo it, and it stays in Settings → Recently deleted for 30 days.' : undefined,
       onDelete: () => {
         store.remove('transactions', id);
+        if (linked) {
+          store.commit((st) => {
+            const p = (st.paperwork || []).find((x) => x.id === linked.id);
+            if (!p || p.purchaseTx !== id) return;
+            delete p.purchaseTx;
+            delete p.purchaseWas;
+          });
+        }
       },
     });
   }
@@ -498,6 +742,20 @@
     if (res.bank && !a.bank) a.bank = res.bank;
     if (!a.type) a.type = /credit card/i.test(res.format || '') ? 'credit' : 'current';
     if (res.overdraftLimit && !a.overdraftLimit) a.overdraftLimit = res.overdraftLimit;
+  }
+
+  /* After an import: link your payments for work and tick off what your employer paid back (it says what it
+     matched, with Undo), then look for new regular bills. Returns what was matched, so undoing the import
+     can undo that too. */
+  function afterImport() {
+    let matched = null;
+    try {
+      if (GU.workMoney && GU.workMoney.reconcile) matched = GU.workMoney.reconcile();
+    } catch (e) {
+      console.warn('matching work money failed', e);
+    }
+    GU.recurring.scan({ quiet: true });
+    return matched;
   }
 
   /* Opens the importer. preset: one File, or several Files (a folder of statements). */
@@ -661,20 +919,27 @@
         }
       }
       d.close();
+      let matched = null;
       toast('Imported ' + plural(count, 'transaction') + ' from ' + plural(entries.length, 'statement') + (transfers.length ? '. ' + plural(transfers.length / 2, 'move') + ' between your own accounts marked as transfers' : ''), {
         action: 'Undo',
-        onAction: () => store.commit((st) => {
-          st.transactions = st.transactions.filter((t) => t.importBatch !== batch);
-          for (const c of transfers) {
-            const t = st.transactions.find((x) => x.id === c.id);
-            if (t) t.category = c.before;
-          }
-          st.documents.filter((x) => x.statementBatch === batch).forEach((doc) => (doc.files || []).forEach((f) => GU.files.remove(f.id)));
-          st.documents = st.documents.filter((x) => x.statementBatch !== batch);
-        }),
+        onAction: () => {
+          // What was matched to the new lines goes back first.
+          if (matched && matched.undo) matched.undo();
+          store.commit((st) => {
+            st.transactions = st.transactions.filter((t) => t.importBatch !== batch);
+            for (const c of transfers) {
+              const t = st.transactions.find((x) => x.id === c.id);
+              if (t) t.category = c.before;
+            }
+            st.documents.filter((x) => x.statementBatch === batch).forEach((doc) => (doc.files || []).forEach((f) => GU.files.remove(f.id)));
+            st.documents = st.documents.filter((x) => x.statementBatch !== batch);
+          });
+        },
       });
       if (location.hash !== '#transactions') GU.view.go('transactions');
-      setTimeout(() => GU.recurring.scan({ quiet: true }), 1500);
+      setTimeout(() => {
+        matched = afterImport();
+      }, 1500);
     }
 
     async function load(f) {
@@ -850,23 +1115,30 @@
       }
       const n = list.length;
       d.close();
+      let matched = null;
       toast('Imported ' + plural(n, 'transaction') + (res.bank ? ' from ' + res.bank : '') + (transfers.length ? '. ' + plural(transfers.length / 2, 'move') + ' between your own accounts marked as transfers' : ''), {
         action: 'Undo',
-        onAction: () => store.commit((st) => {
-          st.transactions = st.transactions.filter((t) => t.importBatch !== batch);
-          for (const c of transfers) {
-            const t = st.transactions.find((x) => x.id === c.id);
-            if (t) t.category = c.before;
-          }
-          const doc = st.documents.find((x) => x.statementBatch === batch);
-          if (doc) {
-            (doc.files || []).forEach((f) => GU.files.remove(f.id));
-            st.documents = st.documents.filter((x) => x !== doc);
-          }
-        }),
+        onAction: () => {
+          // What was matched to the new lines goes back first.
+          if (matched && matched.undo) matched.undo();
+          store.commit((st) => {
+            st.transactions = st.transactions.filter((t) => t.importBatch !== batch);
+            for (const c of transfers) {
+              const t = st.transactions.find((x) => x.id === c.id);
+              if (t) t.category = c.before;
+            }
+            const doc = st.documents.find((x) => x.statementBatch === batch);
+            if (doc) {
+              (doc.files || []).forEach((f) => GU.files.remove(f.id));
+              st.documents = st.documents.filter((x) => x !== doc);
+            }
+          });
+        },
       });
       if (location.hash !== '#transactions') GU.view.go('transactions');
-      setTimeout(() => GU.recurring.scan({ quiet: true }), 1500);
+      setTimeout(() => {
+        matched = afterImport();
+      }, 1500);
     }
 
     d.form.addEventListener('submit', (e) => {
@@ -882,5 +1154,5 @@
   }
   const importCSV = importStatement;
 
-  GU.tabs.transactions = { label: 'Bank transactions', short: 'Bank', icon: 'bank', render, create, edit, importCSV, importStatement, editAccount, showAccount, updateBalances, autoTidy };
+  GU.tabs.transactions = { label: 'Bank transactions', short: 'Bank', icon: 'bank', part: 'home', render, create, edit, importCSV, importStatement, editAccount, showAccount, updateBalances, autoTidy, isWages, workPill };
 })();

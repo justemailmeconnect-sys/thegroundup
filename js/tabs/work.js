@@ -1,35 +1,86 @@
-/* The Ground Up: Work. One portal for everything to do with work: tasks, invoices, upcoming projects,
-   bills and contracts. Each has its own folders and notes, and the overview shows what needs doing. */
+/* The Ground Up: Work. Everything for the business you work for, each area its own page in the Work part:
+   what the business pays for (its own money), Bills, Tasks, Projects, Cost forecast and Contracts & documents.
+   Get paid back (your own money) is in js/tabs/payback.js. Each page has its own folders, search and notes,
+   and the Overview shows what needs doing. The business's name comes from Settings, never from here. */
 (function () {
   'use strict';
   const GU = window.GU;
-  const { esc, uid, today, addDays, daysUntil, fmtDate, relDays, money, plural, sum, debounce } = GU.util;
+  const { esc, uid, today, daysUntil, fmtDate, relDays, money, plural, sum, round2, debounce, monthLabel } = GU.util;
   const { icon, pill, emptyState, formDialog, toast, menu, thumbHTML, viewFiles } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
 
+  /* The internal area ids are kept from before, so folders and notes stay where they are. */
   const AREAS = [
-    { id: 'tasks', label: 'Tasks', icon: 'todo', one: 'task' },
-    { id: 'invoices', label: 'Invoices', icon: 'receipt', one: 'invoice' },
-    { id: 'projects', label: 'Upcoming projects', icon: 'star', one: 'project' },
+    { id: 'invoices', get label() { return paysLabel(); }, icon: 'receipt', one: 'item' },
     { id: 'bills', label: 'Bills', icon: 'bills', one: 'bill' },
-    { id: 'contracts', label: 'Contracts', icon: 'file', one: 'contract' },
+    { id: 'tasks', label: 'Tasks', icon: 'todo', one: 'task' },
+    { id: 'projects', label: 'Projects', icon: 'star', one: 'project' },
     { id: 'costs', label: 'Cost forecast', icon: 'trend', one: 'idea' },
+    { id: 'contracts', label: 'Contracts & documents', icon: 'file', one: 'document' },
   ];
+  /* The page each area lives on. 'back' is Get paid back (js/tabs/payback.js). */
+  const TAB_OF = { tasks: 'work-tasks', invoices: 'work-ktk', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', costs: 'work-costs', back: 'work-back' };
   const COLL = { tasks: 'tasks', invoices: 'paperwork', projects: 'projects', bills: 'bills', contracts: 'documents', costs: 'costIdeas' };
   const AREA_OF = { tasks: 'tasks', paperwork: 'invoices', projects: 'projects', bills: 'bills', documents: 'contracts', costIdeas: 'costs' };
   const PRIORITIES = [{ value: 'must', label: 'Must have' }, { value: 'should', label: 'Should have' }, { value: 'could', label: 'Nice to have' }];
   const STATUSES = ['Idea', 'Planned', 'Booked', 'In progress', 'Done', 'Cancelled'];
   const CLOSED = ['Done', 'Cancelled'];
   const CONTRACT = 'Contract or agreement';
-  const ui = { area: 'overview', folder: 'all', q: '', inv: 'open', showDone: false };
+  const ui = { area: 'overview', folder: 'all', q: '', inv: null, showDone: false };
+
+  /* ---------- names and whose money ---------- */
+  const wm = () => GU.workMoney || null;
+  const parts = () => GU.parts;
+  /* The business's short name ('the company' with none set); cap for the start of a sentence. */
+  const co = (cap) => parts().co(store.state, cap);
+  /* Its name without 'Limited' for eyebrows ('' with none set). */
+  const coName = () => (wm() && wm().employer(store.state).set ? parts().coName(store.state) : '');
+  const paysLabel = () => parts().paysLabel(store.state);
+  const short = (iso) => fmtDate(iso, { short: true });
+  const amt = (p) => (p.amount != null && p.amount !== '' ? ' (' + money(p.amount) + ')' : '');
+
+  const isWorkBill = (b) => parts().isWorkBill(b);
+  const isWorkTask = (s, t) => parts().isWorkTask(s, t);
+  const isWorkDoc = (d) => parts().isWorkDoc(d);
+  const ideaPart = (i) => parts().ideaPart(i);
+  /* 'ktk' (the business's money), 'back' (yours, get it back), 'unsorted' or 'home'. */
+  function laneOf(p, c) {
+    const W = wm();
+    if (W) return W.lane(p, c || 'paperwork');
+    return p && p.context === 'work' ? (p.claim ? 'back' : 'unsorted') : 'home';
+  }
+  /* For a work bill: 'me' (out of your account, paid back) or 'company'. */
+  const billPayer = (b) => (wm() ? wm().payerOf(b, 'bills') : b.payer === 'company' ? 'company' : 'me');
+  /* For a work idea: 'company', 'me' or null (not sorted yet). */
+  const ideaPayer = (i) => (GU.costs.ideaPayer ? GU.costs.ideaPayer(i) : i.payer === 'me' || i.payer === 'company' ? i.payer : null);
+  /* An invoice the business still has to pay. */
+  const isWaiting = (p) => p.kind === 'invoice-in' && p.status !== 'paid' && laneOf(p) === 'ktk';
+  /* When the business paid it: a receipt is paid already; an invoice once it's marked paid. */
+  const paidOn = (p) => (p.kind === 'invoice-in' || p.kind === 'invoice-out' ? (p.status === 'paid' ? p.paidDate || p.date || '' : '') : p.date || '');
+  function dueBack(s) {
+    try {
+      return wm() ? wm().dueBack(s) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* Pills for whose money it is, the same on every page. */
+  const coPill = (text) => pill(text || co(true) + '’s money', 'ktk');
+  const minePill = (text) => pill(text || 'Your money · get it back', 'mine');
+  const whoPill = (text) => pill(text || 'Who paid?', 'warn', 'alert');
 
   /* ---------- what counts as work ---------- */
-  const labelOf = (area) => ((store.state.settings.workLabels || {})[area] || (AREAS.find((a) => a.id === area) || {}).label || 'General');
-  function workListId(s) {
-    const l = s.todoLists.find((x) => x.id === 'list-work') || s.todoLists.find((x) => /^work$/i.test(x.name));
-    return l ? l.id : null;
+  /* An area's name: your own name for it from Settings, or the usual one. What the business pays keeps its
+     usual name, because the area means something new now. */
+  function labelOf(area) {
+    if (area === 'back') return 'Get paid back';
+    if (area === 'general' || area === 'overview') return 'Overview';
+    if (area === 'invoices') return paysLabel();
+    return ((store.state.settings.workLabels || {})[area]) || (AREAS.find((a) => a.id === area) || {}).label || 'General';
   }
+  const workListId = (s) => parts().workListId(s);
   /* The Work to-do list, made if it isn't there. Call inside a commit. */
   function ensureWorkList(s) {
     let id = workListId(s);
@@ -39,17 +90,14 @@
     }
     return id;
   }
-  const isWorkBill = (b) => b.context === 'work' || (!b.context && b.category === 'Work expenses');
   function itemsOf(s, area) {
-    if (area === 'tasks') {
-      const wl = workListId(s);
-      return s.tasks.filter((t) => t.context === 'work' || (wl && t.listId === wl && t.context !== 'home'));
-    }
-    if (area === 'invoices') return s.paperwork.filter((p) => p.context === 'work');
+    if (area === 'tasks') return s.tasks.filter((t) => isWorkTask(s, t));
+    if (area === 'invoices') return s.paperwork.filter((p) => p.context === 'work' && ['ktk', 'unsorted'].includes(laneOf(p)));
+    if (area === 'back') return wm() ? s.paperwork.filter(wm().isClaim) : [];
     if (area === 'projects') return s.projects || [];
     if (area === 'bills') return s.bills.filter(isWorkBill);
-    if (area === 'contracts') return s.documents.filter((d) => d.context === 'work');
-    if (area === 'costs') return s.costIdeas || [];
+    if (area === 'contracts') return s.documents.filter(isWorkDoc);
+    if (area === 'costs') return (s.costIdeas || []).filter((i) => ideaPart(i) === 'work');
     return [];
   }
   const NAMED = ['bills', 'projects', 'workFolders', 'costIdeas'];
@@ -60,68 +108,149 @@
   const notesOf = (s, area) => (s.workNotes || []).filter((n) => (n.area || 'general') === area);
 
   /* ---------- what needs doing ---------- */
-  /* Everything at work that needs a look, worst first: the overview's checklist and the tab's badge. */
+  /* Everything at work that needs a look, worst first: the Overview's checklist and the pages' badges.
+     Each is {level, area, title, detail, ref?, go?, inv?, scroll?, acts?}. */
   function checks(s) {
-    const t = today();
     const out = [];
-    const add = (level, area, title, detail, ref) => out.push({ level, area, title, detail, ref });
+    const add = (level, area, title, detail, ref, more) => out.push(Object.assign({ level, area, title, detail, ref: ref || null }, more || {}));
+    const c = co();
+    const C = co(true);
     for (const k of itemsOf(s, 'tasks')) {
       if (k.done || !k.due) continue;
       const n = daysUntil(k.due);
       if (n < 0) add('crit', 'tasks', k.title, 'Task, ' + relDays(k.due).replace(' ago', ' late'), { c: 'tasks', id: k.id });
       else if (n === 0) add('warn', 'tasks', k.title, 'Task due today', { c: 'tasks', id: k.id });
     }
+
+    // What the business pays: its invoices still to pay, and work paperwork nobody has said who paid.
+    const unsorted = [];
     for (const p of itemsOf(s, 'invoices')) {
-      if (p.kind === 'invoice-out' && p.status !== 'paid' && p.dueDate && F.outstanding(p) > 0) {
-        const n = daysUntil(p.dueDate);
-        if (n < 0) add('crit', 'invoices', (p.party || p.title) + ' is late paying you ' + money(F.outstanding(p)), 'Was due ' + fmtDate(p.dueDate, { short: true }) + ', ' + -n + (n === -1 ? ' day' : ' days') + ' ago. Chase it up.', { c: 'paperwork', id: p.id });
-        else if (n <= 7) add('info', 'invoices', (p.party || p.title) + ' should pay you ' + money(F.outstanding(p)), 'Due ' + relDays(p.dueDate), { c: 'paperwork', id: p.id });
+      if (laneOf(p) === 'unsorted') {
+        unsorted.push(p);
+        continue;
       }
-      if (p.kind === 'invoice-in' && p.status !== 'paid') {
+      if (!isWaiting(p)) continue;
+      const n = p.dueDate ? daysUntil(p.dueDate) : null;
+      const what = C + ' still to pay ' + p.title + amt(p);
+      const handed = p.handedDate ? ' · with ' + c + ' since ' + short(p.handedDate) : ' · not sent to ' + c + ' yet';
+      const ref = { c: 'paperwork', id: p.id };
+      if (n != null && n < 0) add('crit', 'invoices', what, 'Overdue since ' + short(p.dueDate) + handed, ref);
+      else if (n != null && n <= 7) add('warn', 'invoices', what, 'Due ' + relDays(p.dueDate) + handed, ref);
+      else if (n == null) add('info', 'invoices', what, 'No due date' + handed, ref);
+    }
+    if (unsorted.length) {
+      const one = unsorted.length === 1 ? unsorted[0] : null;
+      add('warn', 'invoices', one ? 'Who paid for ' + one.title + amt(one) + '?' : 'Who paid? ' + unsorted.length + ' work items aren’t sorted',
+        one ? C + '’s money, or yours to get back?' : 'Tell me for each one: ' + c + '’s money, or yours to get back', null,
+        { go: TAB_OF.invoices, acts: one ? payerActs(one.id) : null });
+    }
+
+    // Your money: things to send, packs to chase, repayments to confirm.
+    const W = wm();
+    const d = dueBack(s);
+    if (W && d) {
+      const e = W.employer(s);
+      if (d.toSend.length) {
+        const o = d.oldest;
+        add(d.nudge ? 'warn' : 'info', 'back', plural(d.toSend.length, 'thing') + ' to send to ' + c + ', ' + money(d.toSendTotal),
+          o ? 'Oldest ' + short(o.date) + ', ' + (o.days ? plural(o.days, 'day') + ' ago' : 'today') : 'Not sent yet', null, { go: TAB_OF.back });
+      }
+      for (const x of d.unpaid || []) {
+        const p = x.p;
         const n = p.dueDate ? daysUntil(p.dueDate) : null;
-        if (n != null && n < 0) add('crit', 'invoices', 'Pay ' + p.title + (p.amount != null ? ' (' + money(p.amount) + ')' : ''), 'Overdue since ' + fmtDate(p.dueDate, { short: true }), { c: 'paperwork', id: p.id });
-        else if (n != null && n <= 7) add('warn', 'invoices', 'Pay ' + p.title + (p.amount != null ? ' (' + money(p.amount) + ')' : ''), 'Due ' + relDays(p.dueDate), { c: 'paperwork', id: p.id });
-        else if (n == null) add('info', 'invoices', 'Pay ' + p.title + (p.amount != null ? ' (' + money(p.amount) + ')' : ''), 'Invoice to pay, no due date', { c: 'paperwork', id: p.id });
+        const ref = { c: 'paperwork', id: p.id };
+        const title = 'Pay ' + p.title + amt(p) + ', then send it to ' + c;
+        if (n != null && n < 0) add('crit', 'back', title, 'Overdue since ' + short(p.dueDate) + ' · you pay it, ' + c + ' pays you back', ref);
+        else if (n != null && n <= 7) add('warn', 'back', title, 'Due ' + relDays(p.dueDate) + ' · you pay it, ' + c + ' pays you back', ref);
+        else add('info', 'back', title, 'You pay it, ' + c + ' pays you back', ref);
+      }
+      for (const pk of d.packs || []) {
+        if (pk.chase) add('warn', 'back', C + ' hasn’t paid back ' + money(pk.left) + ' you sent on ' + short(pk.date), plural(pk.days, 'day') + ' ago. Remind ' + c + ' from Get paid back', null, { go: TAB_OF.back });
+        else if (pk.late) add('info', 'back', 'Waiting for ' + c + ' to pay back ' + money(pk.left), 'Sent ' + short(pk.date) + ', longer than the usual ' + plural(e.repayDays, 'day'), null, { go: TAB_OF.back });
+      }
+      let pr = null;
+      try {
+        pr = W.prompts(s);
+      } catch (err) {
+        pr = null;
+      }
+      if (pr) {
+        for (const r of (pr.repayments || []).slice(0, 3)) {
+          const list = r.claims || [];
+          const what = list.length === 1 ? list[0].title || list[0].party || 'something you paid for' : list.length ? plural(list.length, 'thing') + ' you sent together' : 'something you paid for';
+          add('warn', 'back', 'Confirm: ' + money(r.tx.amount) + ' from ' + c + ' looks like ' + what, 'Came in ' + short(r.tx.date) + '. Say yes or no on Get paid back', null, { go: TAB_OF.back });
+        }
+        if ((pr.repayments || []).length > 3) add('warn', 'back', plural(pr.repayments.length - 3, 'more payment') + ' from ' + c + ' to confirm', 'On Get paid back', null, { go: TAB_OF.back });
+        if ((pr.purchases || []).length) add('info', 'back', 'Check the bank payment for ' + plural(pr.purchases.length, 'thing') + ' you paid for', 'I found payments that might be them', null, { go: TAB_OF.back });
+        if ((pr.noClaimCredits || []).length) add('info', 'back', plural(pr.noClaimCredits.length, 'payment') + ' from ' + c + ' I couldn’t match', 'Pick what each was for, or say it’s fine', null, { go: TAB_OF.back });
       }
     }
-    const claims = F.toClaim(s).filter((x) => x.p.context === 'work');
-    if (claims.length) {
-      const oldest = claims.find((x) => x.p.date);
-      const age = oldest ? -daysUntil(oldest.p.date) : 0;
-      add(age > 30 ? 'warn' : 'info', 'invoices', plural(claims.length, 'expense') + ' to claim back, ' + money(sum(claims, (x) => x.amount)), oldest ? 'Oldest from ' + fmtDate(oldest.p.date, { short: true }) + ' (' + age + ' days)' : 'Not claimed yet', null);
-    }
+
     for (const p of itemsOf(s, 'projects')) {
       if (CLOSED.includes(p.status)) continue;
-      if (p.deadline && daysUntil(p.deadline) < 0) add('crit', 'projects', p.name + ' was due ' + fmtDate(p.deadline, { short: true }), 'Past its deadline and not marked done', { c: 'projects', id: p.id });
+      if (p.deadline && daysUntil(p.deadline) < 0) add('crit', 'projects', p.name + ' was due ' + short(p.deadline), 'Past its deadline and not marked done', { c: 'projects', id: p.id });
       else if (p.deadline && daysUntil(p.deadline) <= 7) add('warn', 'projects', p.name + ' is due ' + relDays(p.deadline), p.client || 'Deadline', { c: 'projects', id: p.id });
       if (p.start && daysUntil(p.start) >= 0 && daysUntil(p.start) <= 14 && p.status !== 'In progress') add('info', 'projects', p.name + ' starts ' + relDays(p.start), (p.client ? p.client + ' · ' : '') + p.status, { c: 'projects', id: p.id });
     }
+
+    // Bills, worded by who pays.
     for (const b of itemsOf(s, 'bills')) {
       if (b.active === false || !b.nextDue) continue;
       const n = daysUntil(b.nextDue);
-      if (!b.autopay && n < 0) add('crit', 'bills', 'Pay ' + b.name + ' (' + money(b.amount) + ')', 'Overdue since ' + fmtDate(b.nextDue, { short: true }), { c: 'bills', id: b.id });
-      else if (!b.autopay && n <= 7) add('warn', 'bills', 'Pay ' + b.name + ' (' + money(b.amount) + ')', 'Due ' + relDays(b.nextDue) + ', pay by hand', { c: 'bills', id: b.id });
+      const ref = { c: 'bills', id: b.id };
+      const name = b.name + ' (' + money(b.amount) + ')';
+      if (billPayer(b) === 'company') {
+        if (!b.autopay && n < 0) add('warn', 'bills', C + ' still to pay ' + name, 'Was due ' + short(b.nextDue), ref);
+        else if (!b.autopay && n <= 7) add('info', 'bills', C + ' pays ' + name + ' ' + relDays(b.nextDue), 'Paid by ' + c + ', not from your account', ref);
+      } else if (b.autopay) {
+        if (n >= 0 && n <= 31) add('info', 'bills', b.name + ' ' + money(b.amount) + ' leaves your account ' + (n <= 1 ? relDays(b.nextDue) : 'on ' + short(b.nextDue)), 'It’ll be added to Get paid back', ref);
+      } else if (n < 0) add('crit', 'bills', 'Pay ' + name, 'Overdue since ' + short(b.nextDue) + ' · then it’s added to Get paid back', ref);
+      else if (n <= 7) add('warn', 'bills', 'Pay ' + name, 'Due ' + relDays(b.nextDue) + ', pay by hand · then it’s added to Get paid back', ref);
     }
-    for (const d of itemsOf(s, 'contracts')) {
-      if (!d.expiryDate) continue;
-      const n = daysUntil(d.expiryDate);
-      if (n < 0 && n >= -60) add('crit', 'contracts', d.title + ' ended ' + fmtDate(d.expiryDate, { short: true }), 'Renew it, replace it or mark it finished', { c: 'documents', id: d.id });
-      else if (n >= 0 && n <= 60) add(n <= 30 ? 'warn' : 'info', 'contracts', d.title + ' ends ' + relDays(d.expiryDate), 'Check the notice period and decide whether to renew', { c: 'documents', id: d.id });
+
+    for (const d2 of itemsOf(s, 'contracts')) {
+      if (!d2.expiryDate) continue;
+      const n = daysUntil(d2.expiryDate);
+      if (n < 0 && n >= -60) add('crit', 'contracts', d2.title + ' ended ' + short(d2.expiryDate), 'Renew it, replace it or mark it finished', { c: 'documents', id: d2.id });
+      else if (n >= 0 && n <= 60) add(n <= 30 ? 'warn' : 'info', 'contracts', d2.title + ' ends ' + relDays(d2.expiryDate), 'Check the notice period and decide whether to renew', { c: 'documents', id: d2.id });
     }
-    if ((s.costIdeas || []).some(GU.costs.isOpen)) {
+
+    // Cost ideas: the business's own are listed, not tested against your money. The rest use the forecast.
+    const workIdeas = itemsOf(s, 'costs').filter(GU.costs.isOpen);
+    if (workIdeas.some((i) => ideaPayer(i) !== 'company')) {
       const plan = GU.costs.schedule(s);
-      for (const r of plan.results) {
+      const mine = plan.results.filter((r) => ideaPart(r.idea) === 'work');
+      for (const r of mine) {
         const i = r.idea;
         const ref = { c: 'costIdeas', id: i.id };
-        if (r.fixed && r.short > 0) add('warn', 'costs', i.name + ' on ' + fmtDate(r.date, { short: true }) + ' would leave you ' + money(r.short) + ' short', 'Booked date · move it later or free up money first', ref);
-        else if (!r.date && i.wantBy) add('warn', 'costs', i.name + ' can’t be afforded by ' + fmtDate(i.wantBy, { short: true }), 'About ' + money(r.shortfall, { whole: true }) + ' short in the time ahead', ref);
-        else if (r.date && r.onTime === false) add('info', 'costs', i.name + ': earliest ' + fmtDate(r.date, { short: true }), r.lateDays + ' days after you wanted it', ref);
+        if (r.fixed && r.short > 0) add('warn', 'costs', i.name + ' on ' + short(r.date) + ' would leave you ' + money(r.short) + ' short', 'Booked date · move it later or free up money first', ref);
+        else if (!r.date && i.wantBy) add('warn', 'costs', i.name + ' can’t be afforded by ' + short(i.wantBy), 'About ' + money(r.shortfall, { whole: true }) + ' short in the time ahead', ref);
+        else if (r.date && r.onTime === false) add('info', 'costs', i.name + ': earliest ' + short(r.date), r.lateDays + ' days after you wanted it', ref);
       }
-      const now = plan.results.filter((r) => r.date && !r.fixed && daysUntil(r.date) <= 0);
+      const now = mine.filter((r) => r.date && !r.fixed && daysUntil(r.date) <= 0);
       if (now.length) add('info', 'costs', now.length === 1 ? 'You can afford ' + now[0].idea.name + ' now' : 'You can afford ' + plural(now.length, 'idea') + ' now', now.map((r) => r.idea.name + ' (' + money(r.cost, { whole: true }) + (r.account ? ', from ' + r.account : '') + ')').join(', '), now.length === 1 ? { c: 'costIdeas', id: now[0].idea.id } : null);
+      const open = workIdeas.filter((i) => !ideaPayer(i));
+      if (open.length) add('info', 'costs', 'Who pays? ' + plural(open.length, 'cost idea') + (open.length === 1 ? ' isn’t' : ' aren’t') + ' sorted', 'Until you say, I plan ' + (open.length === 1 ? 'it' : 'them') + ' on your money', null, { go: TAB_OF.costs });
     }
+
+    // The one-off re-sort's questions.
+    let asks = 0;
+    try {
+      asks = GU.refile && GU.refile.count ? GU.refile.count(s) : 0;
+    } catch (err) {
+      asks = 0;
+    }
+    if (asks) add('info', 'overview', plural(asks, 'thing') + ' to check from the re-sort', 'One tap each, in Check these', null, { scroll: true });
+
     const rank = { crit: 0, warn: 1, info: 2 };
     return out.sort((a, b) => rank[a.level] - rank[b.level]);
+  }
+  /* The two answers to 'Who paid?' for a piece of paperwork. */
+  function payerActs(id) {
+    return [
+      { label: co(true) + '’s money', attr: 'data-payer="paperwork:' + esc(id) + ':company"' },
+      { label: 'Mine, get it back', attr: 'data-payer="paperwork:' + esc(id) + ':me"' },
+    ];
   }
 
   /* Upcoming project dates for the timeline on Home. */
@@ -137,9 +266,49 @@
   }
 
   /* ---------- figures for each area ---------- */
+  /* The money the business pays: waiting, overdue, paid this month and not sorted. */
+  function ktkTotals(s) {
+    const items = itemsOf(s, 'invoices');
+    const t = today();
+    const month = t.slice(0, 7);
+    const waiting = items.filter(isWaiting);
+    const paid = items.filter((p) => laneOf(p) === 'ktk' && !isWaiting(p) && paidOn(p).slice(0, 7) === month);
+    return {
+      waiting, waitTotal: sum(waiting, (p) => Number(p.amount) || 0),
+      overdue: waiting.filter((p) => p.dueDate && p.dueDate < t).length,
+      paid, paidTotal: sum(paid, (p) => Number(p.amount) || 0),
+      unsorted: items.filter((p) => laneOf(p) === 'unsorted'),
+    };
+  }
+  /* Work bills a month, split by who pays. */
+  function billTotals(s) {
+    const live = itemsOf(s, 'bills').filter((b) => b.active !== false);
+    const mo = (list) => sum(list, (b) => F.monthlyEquivalent(b.amount, b.frequency));
+    const me = live.filter((b) => billPayer(b) !== 'company');
+    const them = live.filter((b) => billPayer(b) === 'company');
+    return { live, me, them, monthly: mo(live), meMonthly: mo(me), themMonthly: mo(them) };
+  }
+  /* Work ideas split by who pays. */
+  function ideaTotals(s) {
+    const open = itemsOf(s, 'costs').filter(GU.costs.isOpen);
+    const fund = GU.costs.ktkFund ? GU.costs.ktkFund(s) : { items: [], count: 0, total: 0, monthly: 0 };
+    const me = open.filter((i) => ideaPayer(i) === 'me');
+    const unsorted = open.filter((i) => !ideaPayer(i));
+    const cost = (list) => sum(list, (i) => Math.abs(Number(i.cost) || 0));
+    return { open, fund, me, unsorted, meTotal: cost(me), unsortedTotal: cost(unsorted) };
+  }
+
+  /* The card for each area on the Overview: {big, unit, lines, bad?, good?, warn?}. */
   function figures(s, area) {
     const items = itemsOf(s, area);
     const t = today();
+    const c = co();
+    if (area === 'back') {
+      const d = dueBack(s);
+      if (!d) return { big: money(0), unit: 'due back from ' + c, lines: ['Things you paid for ' + c, 'with your own money'] };
+      const o = d.oldest;
+      return { big: money(d.total), unit: 'due back from ' + c, lines: [money(d.toSendTotal) + ' not sent · ' + money(d.sentTotal) + ' waiting', o ? 'Oldest ' + short(o.date) + ', ' + plural(o.days, 'day') : d.count ? plural(d.count, 'thing') + ' to come back' : 'Nothing to send'], good: d.total > 0 && !d.nudge, warn: d.nudge };
+    }
     if (area === 'tasks') {
       const open = items.filter((k) => !k.done);
       const late = open.filter((k) => k.due && k.due < t).length;
@@ -147,36 +316,78 @@
       return { big: String(open.length), unit: open.length === 1 ? 'open task' : 'open tasks', lines: [late ? late + ' overdue' : 'nothing overdue', week ? week + ' due this week' : 'nothing due this week'], bad: late > 0 };
     }
     if (area === 'invoices') {
-      const owed = sum(items.filter((p) => p.kind === 'invoice-out' && p.status !== 'paid'), (p) => F.outstanding(p));
-      const toPay = sum(items.filter((p) => p.kind === 'invoice-in' && p.status !== 'paid'), (p) => Number(p.amount) || 0);
-      const claim = sum(F.toClaim(s).filter((x) => x.p.context === 'work'), (x) => x.amount);
-      return { big: money(owed), unit: 'owed to you', lines: [money(toPay) + ' to pay', money(claim) + ' to claim back'], good: owed > 0 };
+      const k = ktkTotals(s);
+      return { big: money(k.waitTotal), unit: 'waiting for ' + c,
+        lines: [k.unsorted.length ? plural(k.unsorted.length, 'item') + ' not sorted yet' : k.overdue ? k.overdue + ' overdue' : plural(k.waiting.length, 'invoice') + ' waiting', plural(k.paid.length, 'thing') + ' paid by ' + c + ' this month'],
+        bad: k.overdue > 0, warn: !k.overdue && k.unsorted.length > 0 };
     }
     if (area === 'projects') {
       const live = items.filter((p) => !CLOSED.includes(p.status));
       const next = live.filter((p) => p.start && p.start >= t).sort((a, b) => a.start.localeCompare(b.start))[0];
       const value = sum(live, (p) => Number(p.value) || 0);
-      return { big: String(live.length), unit: live.length === 1 ? 'project on the go' : 'projects on the go', lines: [next ? 'Next: ' + next.name + ', ' + fmtDate(next.start, { short: true }) : 'nothing booked to start', value ? money(value, { whole: true }) + ' expected' : 'no fees added yet'] };
+      return { big: String(live.length), unit: live.length === 1 ? 'project on the go' : 'projects on the go', lines: [next ? 'Next: ' + next.name + ', ' + short(next.start) : 'nothing booked to start', value ? money(value, { whole: true }) + ' expected' : 'no fees added yet'] };
     }
     if (area === 'bills') {
-      const live = items.filter((b) => b.active !== false);
-      const monthly = sum(live, (b) => F.monthlyEquivalent(b.amount, b.frequency));
-      const next = live.filter((b) => b.nextDue).sort((a, b) => a.nextDue.localeCompare(b.nextDue))[0];
-      return { big: money(monthly), unit: 'a month', lines: [plural(live.length, 'bill'), next ? 'Next: ' + next.name + ', ' + fmtDate(next.nextDue, { short: true }) : 'none due'] };
+      const b = billTotals(s);
+      const next = b.live.filter((x) => x.nextDue).sort((x, y) => x.nextDue.localeCompare(y.nextDue))[0];
+      return { big: money(b.monthly), unit: 'a month', lines: [money(b.meMonthly) + ' you pay and claim · ' + money(b.themMonthly) + ' ' + c + ' pays', next ? 'Next: ' + next.name + ', ' + short(next.nextDue) : plural(b.live.length, 'bill')] };
     }
     if (area === 'contracts') {
       const ending = items.filter((d) => d.expiryDate && daysUntil(d.expiryDate) >= 0 && daysUntil(d.expiryDate) <= 90);
       const next = items.filter((d) => d.expiryDate && d.expiryDate >= t).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))[0];
-      return { big: String(items.length), unit: items.length === 1 ? 'contract' : 'contracts', lines: [ending.length ? ending.length + ' ending in 90 days' : 'none ending soon', next ? 'Next ends ' + fmtDate(next.expiryDate, { short: true }) : 'no end dates'], bad: ending.some((d) => daysUntil(d.expiryDate) <= 30) };
+      return { big: String(items.length), unit: items.length === 1 ? 'contract or document' : 'contracts and documents', lines: [ending.length ? ending.length + ' ending in 90 days' : 'none ending soon', next ? 'Next ends ' + short(next.expiryDate) : 'no end dates'], bad: ending.some((d) => daysUntil(d.expiryDate) <= 30) };
     }
     if (area === 'costs') {
-      const open = items.filter(GU.costs.isOpen);
-      if (!open.length) return { big: money(0), unit: 'of ideas to fund', lines: ['Add ideas and what they’ll cost', 'and I’ll find when you can afford them'] };
-      const plan = GU.costs.schedule(s);
-      const next = plan.results.filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date))[0];
-      return { big: money(plan.outstanding, { whole: true }), unit: 'of ideas to fund', lines: [next ? 'Next: ' + next.idea.name + ', ' + (daysUntil(next.date) <= 0 ? 'now' : fmtDate(next.date, { short: true })) : 'none fit yet', plan.notFitting ? plural(plan.notFitting, 'idea') + ' don’t fit in ' + plan.base.cfg.months + ' months' : plan.allBy ? 'All done by ' + fmtDate(plan.allBy, { short: true }) : ''], bad: plan.notFitting > 0 };
+      const x = ideaTotals(s);
+      if (!x.open.length) return { big: money(0), unit: 'for ' + c + ' to fund', lines: ['Add things ' + c + ' wants to buy', 'and say who pays'] };
+      return { big: money(x.fund.total, { whole: true }), unit: 'for ' + c + ' to fund', lines: [
+        x.fund.count ? plural(x.fund.count, 'idea') + (x.fund.monthly ? ' + ' + money(x.fund.monthly, { whole: true }) + ' a month' : '') : 'nothing for ' + c + ' to fund yet',
+        x.unsorted.length ? plural(x.unsorted.length, 'idea') + ' not sorted yet' : x.me.length ? plural(x.me.length, 'idea') + ' you pay and get back' : 'none on your money',
+      ], warn: x.unsorted.length > 0 };
     }
-    return {};
+    return { big: '', unit: '', lines: [] };
+  }
+
+  /* The summary boxes at the top of each page. */
+  function tallyHTML(s, area) {
+    const c = co();
+    const t = today();
+    let boxes = [];
+    if (area === 'invoices') {
+      const k = ktkTotals(s);
+      boxes = [
+        ['Waiting for ' + c, money(k.waitTotal), plural(k.waiting.length, 'invoice') + (k.overdue ? ', ' + k.overdue + ' overdue' : ''), k.overdue ? 'is-crit' : ''],
+        ['Paid by ' + c + ' this month', money(k.paidTotal), plural(k.paid.length, 'thing')],
+        ['Who paid?', String(k.unsorted.length), k.unsorted.length ? 'not sorted yet' : 'all sorted', k.unsorted.length ? 'is-warn' : ''],
+      ];
+    } else if (area === 'bills') {
+      const b = billTotals(s);
+      boxes = [
+        ['A month in all', money(b.monthly), plural(b.live.length, 'bill')],
+        ['You pay, ' + c + ' pays you back', money(b.meMonthly), 'a month, added to Get paid back'],
+        [paysLabel(), money(b.themMonthly), 'a month, not from your account'],
+      ];
+    } else if (area === 'costs') {
+      const x = ideaTotals(s);
+      boxes = [
+        ['For ' + c + ' to fund', money(x.fund.total, { whole: true }), plural(x.fund.count, 'idea') + (x.fund.monthly ? ' + ' + money(x.fund.monthly, { whole: true }) + ' a month' : '')],
+        ['You pay, ' + c + ' pays you back', money(x.meTotal, { whole: true }), plural(x.me.length, 'idea')],
+        ['Not sorted yet', money(x.unsortedTotal, { whole: true }), x.unsorted.length ? plural(x.unsorted.length, 'idea') + ', planned on your money' : 'all sorted', x.unsorted.length ? 'is-warn' : ''],
+      ];
+    } else if (area === 'tasks') {
+      const open = itemsOf(s, 'tasks').filter((k) => !k.done);
+      const late = open.filter((k) => k.due && k.due < t).length;
+      boxes = [
+        ['To do', String(open.length), plural(open.length, 'open task')],
+        ['Overdue', String(late), late ? 'past their date' : 'nothing late', late ? 'is-crit' : ''],
+        ['Due this week', String(open.filter((k) => k.due && k.due >= t && daysUntil(k.due) <= 7).length), 'in the next 7 days'],
+      ];
+    } else {
+      // Projects and contracts: one line is enough.
+      const f = figures(s, area);
+      return '<p class="wk-figline">' + esc([f.big + ' ' + f.unit].concat(f.lines).filter(Boolean).join(' · ')) + '</p>';
+    }
+    return '<section class="panel tally wk-tally" aria-label="Summary"><div class="tally__sum">' + boxes.map((b) => '<div><span>' + esc(b[0]) + '</span><b class="' + (b[3] || '') + '">' + esc(b[1]) + '</b><em>' + esc(b[2]) + '</em></div>').join('') + '</div></section>';
   }
 
   /* ---------- rows ---------- */
@@ -187,8 +398,11 @@
     return fo ? pill(fo.name, 'muted', 'folder') : '';
   }
   const moreBtn = (c, r) => '<button type="button" class="icon-btn" data-more="' + esc(c + ':' + r.id) + '" aria-label="More for ' + esc(nameOf(c, r)) + '">' + icon('more') + '</button>';
+  const actBtn = (attr, label, ico, cls) => '<button type="button" class="btn btn--sm ' + (cls || 'btn--soft') + '" ' + attr + '>' + (ico ? icon(ico) : '') + esc(label) + '</button>';
 
+  /* One row. Also used by Home › Plans for your own ideas (area 'costs'). */
   function rowHTML(s, area, r) {
+    s = s || store.state;
     const c = COLL[area];
     const chipF = folderChip(s, r, area);
     if (area === 'tasks') {
@@ -200,32 +414,35 @@
         '<span class="wk-row__end"></span><span class="wk-row__act">' + moreBtn(c, r) + '</span></li>';
     }
     if (area === 'invoices') {
-      const kind = { receipt: 'Receipt', 'invoice-in': 'Invoice to pay', 'invoice-out': 'Sent invoice', warranty: 'Warranty' }[r.kind] || 'Item';
+      const ln = laneOf(r);
+      const kind = { receipt: 'Receipt', 'invoice-in': 'Invoice', 'invoice-out': 'Invoice sent', warranty: 'Warranty' }[r.kind] || 'Item';
       let status = '';
       let act = '';
-      if (r.kind === 'invoice-out') {
-        const left = F.outstanding(r);
-        status = r.status === 'paid' ? pill('Paid to you', 'good', 'check') : r.dueDate && r.dueDate < today() ? pill('Late ' + -daysUntil(r.dueDate) + 'd', 'crit', 'alert') : r.dueDate ? pill('Due ' + fmtDate(r.dueDate, { short: true }), 'muted', 'clock') : pill('Not paid yet', 'warn');
-        if (r.status !== 'paid') act = '<button type="button" class="btn btn--sm btn--soft" data-paid="' + esc(r.id) + '">' + icon('check') + 'Got paid</button>';
-        if (r.status !== 'paid' && (r.payments || []).length) status += pill(money(left) + ' still to come', 'info');
-      } else if (r.kind === 'invoice-in') {
-        status = r.status === 'paid' ? pill('Paid', 'good', 'check') : r.dueDate && r.dueDate < today() ? pill('Overdue', 'crit', 'alert') : r.dueDate ? pill('Due ' + fmtDate(r.dueDate, { short: true }), daysUntil(r.dueDate) <= 7 ? 'warn' : 'muted', 'clock') : pill('To pay', 'warn');
-        if (r.status !== 'paid') act = '<button type="button" class="btn btn--sm btn--soft" data-paid="' + esc(r.id) + '">' + icon('check') + 'Paid</button>';
+      if (ln === 'unsorted') {
+        status = whoPill();
+        act = payerActs(r.id).map((a, i) => actBtn(a.attr, a.label, i ? 'coin' : 'briefcase', i ? '' : 'btn--soft')).join('');
+      } else {
+        status = coPill();
+        if (isWaiting(r)) {
+          const n = r.dueDate ? daysUntil(r.dueDate) : null;
+          status += n != null && n < 0 ? pill('Overdue ' + -n + 'd', 'crit', 'alert') : r.dueDate ? pill('Due ' + short(r.dueDate), n <= 7 ? 'warn' : 'muted', 'clock') : pill('To pay', 'warn');
+          if (r.handedDate) status += pill('With ' + co() + ' since ' + short(r.handedDate), 'info', 'send');
+          act = actBtn('data-send-co="' + esc(r.id) + '"', r.handedDate ? 'Send again' : 'Send to ' + co(), 'send', 'btn--soft') + actBtn('data-ktkpaid="' + esc(r.id) + '"', 'Paid by ' + co(), 'check', '');
+        } else {
+          const when = paidOn(r);
+          status += pill('Paid by ' + co() + (when ? ' ' + short(when) : ''), 'good', 'check');
+        }
       }
-      if (r.claim && !r.claimed) {
-        status += pill('Claim back', 'info', 'flag');
-        act += '<button type="button" class="btn btn--sm btn--soft" data-claimed="' + esc(r.id) + '">' + icon('check') + 'Claimed</button>';
-      } else if (r.claim && r.claimed) status += pill('Claimed', 'good', 'check');
-      return '<li class="wk-row"><button type="button" class="wk-row__lead doc-row__thumb" data-files="' + esc(c + ':' + r.id) + '" aria-label="' + ((r.files || []).length ? 'View files for ' : 'Add a file to ') + esc(r.title) + '">' + thumbHTML(r.files) + '</button>' +
-        '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.title) + '</b><em>' + esc([r.party, fmtDate(r.date, { short: true }), r.reference].filter(Boolean).join(' · ')) + '</em>' +
+      return '<li class="wk-row' + (act ? ' wk-row--acts' : '') + '"><button type="button" class="wk-row__lead doc-row__thumb" data-files="' + esc(c + ':' + r.id) + '" aria-label="' + ((r.files || []).length ? 'View files for ' : 'Add a file to ') + esc(r.title) + '">' + thumbHTML(r.files) + '</button>' +
+        '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.title) + '</b><em>' + esc([r.party, short(r.date), r.reference].filter(Boolean).join(' · ')) + '</em>' +
         '<span class="wk-row__chips">' + pill(kind, 'kind-' + r.kind) + status + chipF + '</span></button>' +
-        '<span class="wk-row__end">' + (r.amount != null ? '<b class="' + (r.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(r.amount)) + '</b>' : '') + '</span>' +
+        '<span class="wk-row__end">' + (r.amount != null && r.amount !== '' ? '<b>' + esc(money(r.amount)) + '</b>' : '') + '</span>' +
         '<span class="wk-row__act">' + act + GU.ui.dlButton(r.files, r.title) + moreBtn(c, r) + '</span></li>';
     }
     if (area === 'projects') {
       const late = r.deadline && !CLOSED.includes(r.status) && daysUntil(r.deadline) < 0;
       const tone = { Idea: 'muted', Planned: 'info', Booked: 'info', 'In progress': 'warn', Done: 'good', Cancelled: 'muted' }[r.status] || 'muted';
-      const when = [r.start ? (r.start >= today() ? 'Starts ' : 'Started ') + fmtDate(r.start, { short: true }) : '', r.deadline ? 'due ' + fmtDate(r.deadline, { short: true }) : ''].filter(Boolean).join(', ');
+      const when = [r.start ? (r.start >= today() ? 'Starts ' : 'Started ') + short(r.start) : '', r.deadline ? 'due ' + short(r.deadline) : ''].filter(Boolean).join(', ');
       return '<li class="wk-row"><span class="wk-row__lead wk-row__ico">' + icon('star') + '</span>' +
         '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' + esc([r.client, when].filter(Boolean).join(' · ')) + '</em>' +
         '<span class="wk-row__chips">' + pill(r.status || 'Idea', tone) + (late ? pill('Past deadline', 'crit', 'alert') : '') + chipF + '</span></button>' +
@@ -234,72 +451,119 @@
     }
     if (area === 'bills') {
       const stopped = r.active === false;
+      const them = billPayer(r) === 'company';
       const n = r.nextDue ? daysUntil(r.nextDue) : null;
-      const due = stopped ? pill('Stopped', 'muted') : r.nextDue ? pill((n < 0 && !r.autopay ? 'Overdue ' : 'Next ') + fmtDate(r.nextDue, { short: true }), n < 0 && !r.autopay ? 'crit' : n <= 7 ? 'warn' : 'muted', 'clock') : '';
-      return '<li class="wk-row' + (stopped ? ' is-done' : '') + '"><span class="wk-row__lead wk-row__ico">' + icon(r.autopay ? 'repeat' : 'bills') + '</span>' +
+      const due = stopped ? pill('Stopped', 'muted') : r.nextDue ? pill((n < 0 && !r.autopay ? 'Overdue ' : 'Next ') + short(r.nextDue), n < 0 && !r.autopay ? (them ? 'warn' : 'crit') : n <= 7 ? 'warn' : 'muted', 'clock') : '';
+      const who = them ? coPill(paysLabel()) : minePill('You pay · ' + co() + ' pays you back');
+      // Found in your bank statements and not checked yet: keep it with one tap (⋯ › Stop it if it isn't one).
+      const found = !stopped && r.review;
+      return '<li class="wk-row' + (stopped ? ' is-done' : '') + (found ? ' wk-row--acts' : '') + '"><span class="wk-row__lead wk-row__ico">' + icon(r.autopay ? 'repeat' : 'bills') + '</span>' +
         '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' + esc([r.payee, F.freqLabel(r.frequency), r.autopay ? r.method || 'Automatic' : 'Pay by hand'].filter(Boolean).join(' · ')) + '</em>' +
-        '<span class="wk-row__chips">' + due + chipF + '</span></button>' +
+        '<span class="wk-row__chips">' + who + due + (found ? pill('Found in your statements', 'info', 'search') : '') + chipF + '</span></button>' +
         '<span class="wk-row__end"><b>' + esc(money(r.amount)) + '</b></span>' +
-        '<span class="wk-row__act">' + (!stopped && !r.autopay ? '<button type="button" class="btn btn--sm btn--soft" data-billpaid="' + esc(r.id) + '">' + icon('check') + 'Paid</button>' : '') + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
+        '<span class="wk-row__act">' + (found ? actBtn('data-bill-keep="' + esc(r.id) + '"', 'Keep', 'check', 'btn--soft') : '') +
+        (!stopped && !r.autopay ? actBtn('data-billpaid="' + esc(r.id) + '"', them ? co() + ' paid' : 'Paid', 'check') : '') + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
     }
-    if (area === 'costs') {
-      const plan = GU.costs.schedule(s);
-      const x = plan.results.find((y) => y.idea.id === r.id);
-      const pr = PRIORITIES.find((p) => p.value === (r.priority || 'should'));
-      const proj = r.projectId && (s.projects || []).find((p) => p.id === r.projectId);
-      let when = '';
-      if (r.status === 'done') when = pill('Done' + (r.doneDate ? ' ' + fmtDate(r.doneDate, { short: true }) : ''), 'good', 'check');
-      else if (r.status === 'dropped') when = pill('Dropped', 'muted');
-      else if (x && x.date) {
-        when = x.fixed ? pill('Booked ' + fmtDate(x.date, { short: true }), x.short > 0 ? 'crit' : 'info', 'clock') + (x.short > 0 ? pill(money(x.short, { whole: true }) + ' short', 'crit', 'alert') : '')
-          : pill(daysUntil(x.date) <= 0 ? 'You can afford it now' : 'Earliest ' + fmtDate(x.date, { short: true }), daysUntil(x.date) <= 0 ? 'good' : 'info', 'clock');
-        if (x.account) when += pill('from ' + x.account, 'muted', 'bank');
-        if (r.wantBy) when += x.onTime ? pill('In time for ' + fmtDate(r.wantBy, { short: true }), 'good', 'check') : pill(x.lateDays + ' days after you wanted', 'warn', 'alert');
-      } else if (x) when = pill('Not in the next ' + plan.base.cfg.months + ' months', 'crit', 'alert') + (x.shortfall ? pill('about ' + money(x.shortfall, { whole: true }) + ' short', 'warn') : '');
-      return '<li class="wk-row' + (GU.costs.isOpen(r) ? '' : ' is-done') + '"><span class="wk-row__lead wk-row__ico">' + icon('coin') + '</span>' +
-        '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' +
-        esc([pr ? pr.label : '', proj ? 'for ' + proj.name : '', r.notBefore ? 'not before ' + fmtDate(r.notBefore, { short: true }) : '', r.wantBy ? 'wanted by ' + fmtDate(r.wantBy, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em>' +
-        '<span class="wk-row__chips">' + when + chipF + '</span></button>' +
-        '<span class="wk-row__end"><b>' + esc(money(r.cost)) + '</b>' + (Number(r.monthly) > 0 ? '<em>+ ' + esc(money(r.monthly)) + ' a month</em>' : '') + '</span>' +
-        '<span class="wk-row__act">' + (GU.costs.isOpen(r) ? '<button type="button" class="btn btn--sm btn--soft" data-idea-done="' + esc(r.id) + '">' + icon('check') + 'Done</button>' : '') + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
-    }
-    // contracts
+    if (area === 'costs') return ideaRowHTML(s, r, chipF);
+    // contracts and documents
     const n = r.expiryDate ? daysUntil(r.expiryDate) : null;
-    const end = r.expiryDate ? (n < 0 ? pill('Ended ' + fmtDate(r.expiryDate, { short: true }), 'muted') : pill('Ends ' + fmtDate(r.expiryDate, { short: true }), n <= 30 ? 'crit' : n <= 90 ? 'warn' : 'good', 'clock')) : pill('No end date', 'muted');
+    const end = r.expiryDate ? (n < 0 ? pill('Ended ' + short(r.expiryDate), 'muted') : pill('Ends ' + short(r.expiryDate), n <= 30 ? 'crit' : n <= 90 ? 'warn' : 'good', 'clock')) : pill('No end date', 'muted');
     return '<li class="wk-row"><button type="button" class="wk-row__lead doc-row__thumb" data-files="' + esc(c + ':' + r.id) + '" aria-label="' + ((r.files || []).length ? 'View ' : 'Add a scan to ') + esc(r.title) + '">' + thumbHTML(r.files) + '</button>' +
-      '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.title) + '</b><em>' + esc([r.holder, r.issueDate ? 'from ' + fmtDate(r.issueDate, { short: true }) : '', r.type !== CONTRACT ? r.type : ''].filter(Boolean).join(' · ')) + '</em>' +
+      '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.title) + '</b><em>' + esc([r.holder, r.issueDate ? 'from ' + short(r.issueDate) : '', r.type !== CONTRACT ? r.type : ''].filter(Boolean).join(' · ')) + '</em>' +
       '<span class="wk-row__chips">' + end + chipF + '</span></button>' +
       '<span class="wk-row__end"></span><span class="wk-row__act">' + GU.ui.dlButton(r.files, r.title) + moreBtn(c, r) + '</span></li>';
+  }
+
+  /* A cost idea. Work ideas show who pays: the business's own are only listed (its balance isn't known),
+     the rest show when you could afford them. */
+  function ideaRowHTML(s, r, chipF) {
+    const c = 'costIdeas';
+    const work = ideaPart(r) === 'work';
+    const payer = work ? ideaPayer(r) : null;
+    const open = GU.costs.isOpen(r);
+    const pr = PRIORITIES.find((p) => p.value === (r.priority || 'should'));
+    const proj = r.projectId && (s.projects || []).find((p) => p.id === r.projectId);
+    let when = '';
+    let act = '';
+    if (r.status === 'done') when = pill('Done' + (r.doneDate ? ' ' + short(r.doneDate) : ''), 'good', 'check');
+    else if (r.status === 'dropped') when = pill('Dropped', 'muted');
+    else if (payer === 'company') {
+      when = r.plannedDate ? pill('Booked ' + short(r.plannedDate), 'info', 'clock') : r.wantBy ? pill('Wanted by ' + short(r.wantBy), daysUntil(r.wantBy) < 0 ? 'crit' : daysUntil(r.wantBy) <= 30 ? 'warn' : 'muted', 'clock') : '';
+      if ((r.files || []).length) when += pill(plural(r.files.length, 'quote'), 'muted', 'clip');
+    } else {
+      const plan = GU.costs.schedule(s);
+      const x = plan.results.find((y) => y.idea.id === r.id);
+      if (x && x.date) {
+        when = x.fixed ? pill('Booked ' + short(x.date), x.short > 0 ? 'crit' : 'info', 'clock') + (x.short > 0 ? pill(money(x.short, { whole: true }) + ' short', 'crit', 'alert') : '')
+          : pill(daysUntil(x.date) <= 0 ? 'You can afford it now' : 'Earliest ' + short(x.date), daysUntil(x.date) <= 0 ? 'good' : 'info', 'clock');
+        if (x.account) when += pill('from ' + x.account, 'muted', 'bank');
+        if (x.back) when += pill('back about ' + short(x.back), 'muted', 'repeat');
+        if (r.wantBy) when += x.onTime ? pill('In time for ' + short(r.wantBy), 'good', 'check') : pill(x.lateDays + ' days after you wanted', 'warn', 'alert');
+      } else if (x) when = pill('Not in the next ' + plan.base.cfg.months + ' months', 'crit', 'alert') + (x.shortfall ? pill('about ' + money(x.shortfall, { whole: true }) + ' short', 'warn') : '');
+    }
+    const who = !work ? '' : payer === 'company' ? coPill(paysLabel()) : payer === 'me' ? minePill('You pay · get it back') : whoPill('Who pays?');
+    if (work && open && !payer) {
+      act = actBtn('data-idea-payer="' + esc(r.id) + ':company"', paysLabel(), 'briefcase', 'btn--soft') + actBtn('data-idea-payer="' + esc(r.id) + ':me"', 'I pay, get it back', 'coin', '') +
+        actBtn('data-idea-payer="' + esc(r.id) + ':home"', 'It’s mine', 'home', '');
+    } else if (open) act = actBtn('data-idea-done="' + esc(r.id) + '"', 'Done', 'check');
+    return '<li class="wk-row' + (open ? '' : ' is-done') + (work && open && !payer ? ' wk-row--acts' : '') + '"><span class="wk-row__lead wk-row__ico">' + icon('coin') + '</span>' +
+      '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' +
+      esc([pr ? pr.label : '', proj ? 'for ' + proj.name : '', r.notBefore && payer !== 'company' ? 'not before ' + short(r.notBefore) : '', r.wantBy && payer !== 'company' ? 'wanted by ' + short(r.wantBy) : ''].filter(Boolean).join(' · ')) + '</em>' +
+      '<span class="wk-row__chips">' + who + when + (chipF || '') + '</span></button>' +
+      '<span class="wk-row__end"><b>' + esc(money(r.cost)) + '</b>' + (Number(r.monthly) > 0 ? '<em>+ ' + esc(money(r.monthly)) + ' a month</em>' : '') + '</span>' +
+      '<span class="wk-row__act">' + act + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
   }
 
   function noteHTML(s, n, showArea) {
     const fo = n.folder && (s.workFolders || []).find((x) => x.id === n.folder);
     return '<li class="wk-note"><button type="button" class="wk-note__main" data-open="' + esc('workNotes:' + n.id) + '"><b>' + esc(n.title || 'Note') + '</b>' +
       (n.body ? '<span>' + esc(n.body.length > 220 ? n.body.slice(0, 220) + '…' : n.body) + '</span>' : '') +
-      '<em>' + esc([showArea ? labelOf(n.area || 'general') : '', fo ? fo.name : '', 'updated ' + fmtDate(n.updated || n.created, { short: true })].filter(Boolean).join(' · ')) + '</em></button>' +
+      '<em>' + esc([showArea ? labelOf(n.area || 'general') : '', fo ? fo.name : '', 'updated ' + short(n.updated || n.created)].filter(Boolean).join(' · ')) + '</em></button>' +
       moreBtn('workNotes', n) + '</li>';
   }
 
   /* ---------- the overview ---------- */
+  const CARDS = ['back', 'invoices', 'bills', 'tasks', 'projects', 'costs', 'contracts'];
+  const ICON_OF = { back: 'coin' };
   function overviewHTML(s) {
     const list = checks(s);
     const crit = list.filter((x) => x.level === 'crit').length;
     const notes = (s.workNotes || []).slice().sort((a, b) => (b.updated || b.created || '').localeCompare(a.updated || a.created || '')).slice(0, 6);
-    return '<section class="panel wk-check"><header class="panel__head"><h2>' + icon(list.length ? 'alert' : 'check') + 'What needs doing</h2>' +
+    const c = co();
+    let ask = '';
+    try {
+      ask = GU.refile && GU.refile.cardHTML ? GU.refile.cardHTML(s) : '';
+    } catch (e) {
+      ask = '';
+    }
+    const checkLi = (x, i) => '<li class="is-' + x.level + (x.acts ? ' has-acts' : '') + '"><button type="button" data-check="' + i + '"><span class="dot dot--' + x.level + '">' + icon(x.level === 'info' ? 'info' : 'alert') + '</span>' +
+      '<span><b>' + esc(x.title) + '</b><em>' + esc((x.area === 'overview' ? '' : labelOf(x.area) + ' · ') + x.detail) + '</em></span>' + icon('chevron') + '</button>' +
+      (x.acts ? '<div class="wk-check__acts">' + x.acts.map((a, k) => actBtn(a.attr, a.label, k ? 'coin' : 'briefcase', k ? '' : 'btn--soft')).join('') + '</div>' : '') + '</li>';
+    const wages = wm() && wm().wageSource ? wm().wageSource(s) : null;
+    return '<form class="capture wk-tell" data-tell>' +
+      '<label class="capture__field">' + icon('briefcase') + '<input type="text" name="note" id="wk-tell" autocomplete="off" placeholder="' + esc('Tell me anything for ' + c + ', e.g. Paid £18 for printer paper') + '" aria-label="' + esc('Tell me anything for ' + c) + '"></label>' +
+      '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
+      '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button></div></form>' +
+      '<section class="panel wk-check"><header class="panel__head"><h2>' + icon(list.length ? 'alert' : 'check') + 'What needs doing</h2>' +
       '<span class="muted">' + esc(list.length ? plural(list.length, 'thing') + (crit ? ', ' + crit + ' overdue or late' : '') : 'all up to date') + '</span></header>' +
-      (list.length ? '<ul class="wk-check__list">' + list.map((x, i) => '<li class="is-' + x.level + '"><button type="button" data-check="' + i + '"><span class="dot dot--' + x.level + '">' + icon(x.level === 'info' ? 'info' : 'alert') + '</span>' +
-        '<span><b>' + esc(x.title) + '</b><em>' + esc(labelOf(x.area) + ' · ' + x.detail) + '</em></span>' + icon('chevron') + '</button></li>').join('') + '</ul>'
+      (list.length ? '<ul class="wk-check__list">' + list.map(checkLi).join('') + '</ul>'
         : '<div class="panel__body"><p class="wk-allgood">' + icon('check') + '<span>Everything at work is managed. Nothing is late, overdue or about to end.</span></p></div>') + '</section>' +
-      '<div class="wk-cards">' + AREAS.map((a) => {
-        const f = figures(s, a.id);
-        const n = itemsOf(s, a.id).length;
-        return '<button type="button" class="wk-card" data-area="' + a.id + '"><span class="wk-card__head">' + icon(a.icon) + esc(labelOf(a.id)) + '</span>' +
-          '<b class="' + (f.bad ? 'is-crit' : f.good ? 'is-in' : '') + '">' + esc(f.big) + '</b><em>' + esc(f.unit) + '</em>' +
+      ask +
+      '<div class="wk-cards">' + CARDS.map((a) => {
+        const f = figures(s, a);
+        const n = a === 'back' ? ((dueBack(s) || {}).count || 0) : itemsOf(s, a).length;
+        const nf = a === 'back' ? 0 : foldersOf(s, a).length;
+        const cls = f.bad ? 'is-crit' : f.warn ? 'is-warn' : f.good ? 'is-in' : '';
+        return '<button type="button" class="wk-card' + (f.warn && !f.bad ? ' is-warn' : '') + '" data-go="' + TAB_OF[a] + '"><span class="wk-card__head">' + icon(ICON_OF[a] || (AREAS.find((x) => x.id === a) || {}).icon) + esc(labelOf(a)) + '</span>' +
+          '<b class="' + cls + '">' + esc(f.big) + '</b><em>' + esc(f.unit) + '</em>' +
           '<span class="wk-card__lines">' + f.lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</span>' +
-          '<span class="wk-card__foot">' + esc(plural(n, 'item') + (foldersOf(s, a.id).length ? ' · ' + plural(foldersOf(s, a.id).length, 'folder') : '')) + icon('chevron') + '</span></button>';
+          '<span class="wk-card__foot">' + esc(a === 'back' ? plural(n, 'thing') + ' to come back' : plural(n, 'item') + (nf ? ' · ' + plural(nf, 'folder') : '')) + icon('chevron') + '</span></button>';
       }).join('') + '</div>' +
       '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header>' +
-      (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, true)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">Jot down anything for work: meeting notes, ideas, who to call. Each category has its own notes too.</p></div>') + '</section>';
+      (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, true)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">Jot down anything for work: meeting notes, ideas, who to call. Each page has its own notes too.</p></div>') + '</section>' +
+      '<p class="wk-footnote">' + icon('info') + '<span>' + esc('Your wages' + (wm() && wm().employer(s).set ? ' from ' + c : '') + ' are your own money, so they’re in Home › Income' + (wages ? ' as ' + (wages.name || 'your pay') : '') + '.') +
+      ' <a class="link" href="#incomings">Open Income</a></span></p>' +
+      '<div class="dropcover" hidden><div>' + icon('upload') + '<b>' + esc('Drop to file it under Work') + '</b></div></div>';
   }
 
   /* ---------- one area ---------- */
@@ -312,17 +576,35 @@
     return list;
   }
 
+  /* The chips on the page for what the business pays. */
+  const INV = [['waiting', () => 'Waiting for ' + co()], ['paid', () => 'Paid by ' + co()], ['unsorted', () => 'Not sorted'], ['all', () => 'All']];
   function invoiceFilter(list, t) {
-    if (t === 'open') return list.filter((p) => (p.kind === 'invoice-out' || p.kind === 'invoice-in') ? p.status !== 'paid' : p.claim && !p.claimed);
-    if (t === 'sent') return list.filter((p) => p.kind === 'invoice-out');
-    if (t === 'to-pay') return list.filter((p) => p.kind === 'invoice-in');
-    if (t === 'expenses') return list.filter((p) => p.kind === 'receipt' || p.kind === 'warranty');
-    if (t === 'paid') return list.filter((p) => (p.kind === 'invoice-out' || p.kind === 'invoice-in') && p.status === 'paid');
+    if (t === 'waiting') return list.filter(isWaiting);
+    if (t === 'paid') return list.filter((p) => laneOf(p) === 'ktk' && !isWaiting(p));
+    if (t === 'unsorted') return list.filter((p) => laneOf(p) === 'unsorted');
     return list;
   }
+  /* The chip to show: the one you chose, or waiting (when there's anything waiting) and otherwise all. */
+  function invView(list) {
+    if (ui.inv && INV.some((x) => x[0] === ui.inv)) return ui.inv;
+    return invoiceFilter(list, 'waiting').length ? 'waiting' : 'all';
+  }
+  /* Paid things grouped by the month they were paid, newest first. */
+  function byMonth(list, prefix) {
+    const groups = [];
+    for (const p of list.slice().sort((a, b) => (paidOn(b) || '').localeCompare(paidOn(a) || ''))) {
+      const key = (paidOn(p) || '').slice(0, 7);
+      let g = groups.find((x) => x.key === key);
+      if (!g) groups.push((g = { key, title: (prefix || '') + (key ? monthLabel(key, true) : 'No date'), items: [] }));
+      g.items.push(p);
+    }
+    return groups;
+  }
+  const groupTotal = (items, fn) => money(sum(items, fn));
 
   function areaBody(s, area) {
     const list = filtered(s, area);
+    const c = co();
     let extra = '';
     let groups;
     if (area === 'tasks') {
@@ -333,36 +615,125 @@
       groups = [{ title: 'To do', items: open }];
       if (done.length) groups.push({ title: 'Done', items: done, closed: true });
     } else if (area === 'invoices') {
-      const opts = [['open', 'Needs action'], ['sent', 'Sent'], ['to-pay', 'To pay'], ['expenses', 'Receipts & expenses'], ['paid', 'Paid'], ['all', 'All']];
-      extra = '<div class="toolbar">' + GU.ui.chips('inv', opts.map(([value, label]) => ({ value, label, count: invoiceFilter(list, value).length })), ui.inv) + '</div>';
-      groups = [{ title: '', items: invoiceFilter(list, ui.inv).sort((a, b) => (b.date || '').localeCompare(a.date || '')) }];
+      const view = invView(list);
+      // Things nobody has said who paid for are in the 'Who paid?' strip above, unless there are too many for it.
+      const strip = invoiceFilter(itemsOf(s, 'invoices'), 'unsorted').length <= WHO_MAX;
+      const opts = INV.filter(([value]) => value !== 'unsorted' || view === 'unsorted' || (!strip && invoiceFilter(list, 'unsorted').length));
+      extra = '<div class="toolbar">' + GU.ui.chips('inv', opts.map(([value, label]) => ({ value, label: label(), count: invoiceFilter(list, value).length })), view) + '</div>';
+      const waiting = invoiceFilter(list, 'waiting').sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999') || (a.date || '').localeCompare(b.date || ''));
+      const unsorted = invoiceFilter(list, 'unsorted').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const paid = invoiceFilter(list, 'paid');
+      const amount = (p) => Number(p.amount) || 0;
+      if (view === 'waiting') groups = [{ title: '', items: waiting }];
+      else if (view === 'paid') groups = byMonth(paid).map((g) => Object.assign(g, { title: g.title + ' · ' + groupTotal(g.items, amount) }));
+      else if (view === 'unsorted') groups = [{ title: '', items: unsorted }];
+      else {
+        groups = [{ title: 'Waiting for ' + c + ' · ' + groupTotal(waiting, amount), items: waiting }, { title: 'Not sorted yet', items: strip ? [] : unsorted }]
+          .concat(byMonth(paid, 'Paid by ' + c + ' · ').map((g) => Object.assign(g, { title: g.title + ' · ' + groupTotal(g.items, amount) })));
+      }
     } else if (area === 'projects') {
       const order = (p) => (p.start || p.deadline || '9999');
       const by = (st) => list.filter((p) => st.includes(p.status || 'Idea')).sort((a, b) => order(a).localeCompare(order(b)));
       groups = [{ title: 'In progress', items: by(['In progress']) }, { title: 'Coming up', items: by(['Booked', 'Planned']) }, { title: 'Ideas', items: by(['Idea']) }, { title: 'Done or cancelled', items: by(CLOSED), closed: true }];
     } else if (area === 'bills') {
-      groups = [{ title: '', items: list.filter((b) => b.active !== false).sort((a, b) => (a.nextDue || '9').localeCompare(b.nextDue || '9')) }, { title: 'Stopped', items: list.filter((b) => b.active === false), closed: true }];
+      const live = list.filter((b) => b.active !== false).sort((a, b) => (a.nextDue || '9').localeCompare(b.nextDue || '9'));
+      const mo = (items) => money(sum(items, (b) => F.monthlyEquivalent(b.amount, b.frequency))) + ' a month';
+      const me = live.filter((b) => billPayer(b) !== 'company');
+      const them = live.filter((b) => billPayer(b) === 'company');
+      groups = [
+        { title: 'You pay, ' + c + ' pays you back · ' + mo(me), note: 'These come out of your account. Each payment is added to Get paid back on the day it leaves.', items: me },
+        { title: paysLabel() + ' · ' + mo(them), note: c.charAt(0).toUpperCase() + c.slice(1) + ' pays these itself, so they’re never in your Money ahead.', items: them },
+        { title: 'Stopped', items: list.filter((b) => b.active === false), closed: true },
+      ];
     } else if (area === 'costs') {
-      extra = forecastHTML(s);
+      const open = list.filter(GU.costs.isOpen);
+      const fund = open.filter((i) => ideaPayer(i) === 'company').sort((a, b) => (a.plannedDate || a.wantBy || '9999').localeCompare(b.plannedDate || b.wantBy || '9999'));
+      const me = open.filter((i) => ideaPayer(i) === 'me');
+      const unsorted = open.filter((i) => !ideaPayer(i));
+      if (me.length || unsorted.length) extra = forecastHTML(s, { context: 'work' });
       const plan = GU.costs.schedule(s);
       const at = (i) => (plan.results.find((r) => r.idea.id === i.id) || {}).date || '9999';
-      const open = list.filter(GU.costs.isOpen);
-      groups = [{ title: 'Can be done', items: open.filter((i) => at(i) !== '9999').sort((a, b) => at(a).localeCompare(at(b))) },
-        { title: 'Doesn’t fit yet', items: open.filter((i) => at(i) === '9999') },
-        { title: 'Done or dropped', items: list.filter((i) => !GU.costs.isOpen(i)).sort((a, b) => (b.doneDate || '').localeCompare(a.doneDate || '')), closed: true }];
+      const cost = (i) => Math.abs(Number(i.cost) || 0);
+      const fundMonthly = sum(fund, (i) => Math.abs(Number(i.monthly) || 0));
+      groups = [
+        { title: 'For ' + c + ' to fund · ' + money(sum(fund, cost), { whole: true }) + (fundMonthly ? ' + ' + money(fundMonthly, { whole: true }) + ' a month' : ''), note: 'Not tested against your money, because ' + c + '’s balance isn’t known here. This is the list to show ' + c + '.', items: fund },
+        { title: 'You pay, ' + c + ' pays you back · ' + money(sum(me, cost), { whole: true }), note: 'Planned on your money as a dip that comes back after about ' + plural(plan.repayDays || 14, 'day') + '.', items: me.sort((a, b) => at(a).localeCompare(at(b))) },
+        { title: 'Not sorted yet · ' + money(sum(unsorted, cost), { whole: true }), note: 'Until you say who pays, I plan these on your money.', items: unsorted.sort((a, b) => at(a).localeCompare(at(b))) },
+        { title: 'Done or dropped', items: list.filter((i) => !GU.costs.isOpen(i)).sort((a, b) => (b.doneDate || '').localeCompare(a.doneDate || '')), closed: true },
+      ];
     } else {
       groups = [{ title: '', items: list.sort((a, b) => (a.expiryDate || '9999').localeCompare(b.expiryDate || '9999')) }];
     }
     groups = groups.filter((g) => g.items.length);
     const empty = !groups.length;
+    const a = AREAS.find((x) => x.id === area);
+    let emptyTitle = ui.q ? 'Nothing matches' : ui.folder !== 'all' ? 'Nothing in this folder yet' : 'No ' + (a ? a.one + 's' : 'items') + ' yet';
+    let emptyText = ui.q ? 'Try another search.' : 'Add one with the button above' + (area === 'tasks' ? ', or type it in the box.' : ui.folder !== 'all' ? ', or move something here from its ⋯ menu.' : '.');
+    if (area === 'invoices' && !ui.q) {
+      const view = invView(list);
+      if (view === 'waiting') emptyTitle = 'Nothing waiting for ' + c;
+      else if (view === 'paid') emptyTitle = 'Nothing paid by ' + c + ' yet';
+      else if (list.length) emptyTitle = 'Nothing else here yet';
+      else if (!ui.folder || ui.folder === 'all') emptyTitle = 'Nothing for ' + c + ' to pay yet';
+      if (list.length) emptyText = view === 'all' ? 'Say who paid for the things above, or add something ' + c + ' is paying.' : 'Try another tab above.';
+      else emptyText = 'Add an order, invoice or receipt ' + c + ' is paying for, or drop the files above.';
+    }
     return extra + '<section class="panel">' +
-      (empty ? emptyState({ icon: AREAS.find((a) => a.id === area).icon, title: ui.q ? 'Nothing matches' : ui.folder !== 'all' ? 'Nothing in this folder yet' : 'No ' + labelOf(area).toLowerCase() + ' yet', text: ui.q ? 'Try another search.' : 'Add one with the button above' + (area === 'tasks' ? ', or type it in the box.' : ui.folder !== 'all' ? ', or move something here from its ⋯ menu.' : '.') })
+      (empty ? emptyState({ icon: a.icon, title: emptyTitle, text: esc(emptyText) })
         : groups.map((g) => (g.closed ? '<details class="wk-group"' + (ui.showDone ? ' open' : '') + '><summary>' + esc(g.title) + ' (' + g.items.length + ')</summary>' : g.title ? '<h3 class="wk-group__title">' + esc(g.title) + '</h3>' : '') +
+          (g.note ? '<p class="wk-group__note">' + esc(g.note) + '</p>' : '') +
           '<ul class="wk-rows">' + g.items.map((r) => rowHTML(s, area, r)).join('') + '</ul>' + (g.closed ? '</details>' : '')).join('')) + '</section>';
   }
 
+  const WHO_MAX = 12;
+  /* 'Who paid?': work paperwork with no payer yet, one tap each. A bank payment of the same amount from
+     your own account suggests it was yours. */
+  function whoHTML(s) {
+    const list = itemsOf(s, 'invoices').filter((p) => laneOf(p) === 'unsorted').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (!list.length) return '';
+    const W = wm();
+    const C = co(true);
+    const rows = list.slice(0, WHO_MAX).map((p) => {
+      let hint = null;
+      try {
+        hint = W && W.purchaseFor ? W.purchaseFor(s, p) : null;
+      } catch (e) {
+        hint = null;
+      }
+      const mine = !!(hint && hint.sure && hint.tx);
+      const acts = payerActs(p.id);
+      return '<li class="ask-card__item"><div class="ask-card__q"><b>' + esc(p.title + amt(p)) + '</b><em>' +
+        esc([p.party, short(p.date)].filter(Boolean).join(' · ') + (mine ? (p.party || p.date ? ' · ' : '') + 'your bank shows a payment of this amount on ' + short(hint.tx.date) : '')) + '</em></div>' +
+        '<div class="ask-card__opts">' + acts.map((a, k) => '<button type="button" class="btn btn--sm' + (k === 1 && mine ? ' is-suggested' : '') + '" ' + a.attr + '>' + esc(a.label) + '</button>').join('') + '</div></li>';
+    }).join('');
+    return '<section class="ask-card wk-who" aria-label="Who paid?"><header class="ask-card__head"><h2>' + icon('alert') + 'Who paid?</h2>' +
+      '<p>' + esc(plural(list.length, 'thing') + ' for work with no answer yet. ' + C + '’s money stays here; yours moves to Get paid back so you can claim it.') + '</p></header>' +
+      '<ul class="ask-card__list">' + rows + '</ul>' +
+      (list.length > WHO_MAX ? '<footer class="ask-card__foot">' + esc(plural(list.length - WHO_MAX, 'more') + ' under Not sorted below.') + '</footer>' : '') + '</section>';
+  }
+
+  /* The page text for each area, under its title. */
+  function introOf(area) {
+    const s = store.state;
+    const c = co();
+    const C = co(true);
+    const e = wm() ? wm().employer(s) : null;
+    const contact = e && e.contact ? String(e.contact).trim() : '';
+    if (area === 'invoices') return 'Orders, invoices and receipts ' + c + ' pays for, on ' + c + '’s card or account' + (contact ? ' or settled by ' + contact : '') + '. None of this is your money, so it never shows in Home.';
+    if (area === 'bills') return 'Regular costs for ' + c + '. Say who pays each one: if it comes out of your account, each payment joins Get paid back by itself.';
+    if (area === 'tasks') return 'Things to do for ' + c + '. They stay out of Home › To-do.';
+    if (area === 'projects') return 'Jobs and pieces of work: on the go, coming up, ideas and done.';
+    if (area === 'costs') return 'Things ' + c + ' wants to buy. Say who pays: ' + c + '’s own are listed for ' + c + ' to fund, and the ones you pay for are planned on your money until ' + c + ' pays you back.';
+    if (area === 'contracts') return C + '’s contracts, leases, licences, insurance, supplier terms and registrations, with reminders before they end. Your own payslips and P60s stay in Home › Documents.';
+    return '';
+  }
+  const DROP = {
+    invoices: () => ['Drop invoices or receipts ' + co() + ' pays for', 'Photos and PDFs. I’ll read each one and file it as ' + co() + '’s money.'],
+    bills: () => ['Drop work bills here', 'Photos and PDFs. I’ll read each one and file it under Work › Bills.'],
+    contracts: () => ['Drop contracts or documents for ' + co(), 'Photos and PDFs. I’ll read each one and file it under Work.'],
+  };
+
   function areaHTML(s, area) {
-    const a = AREAS.find((x) => x.id === area);
     const folders = foldersOf(s, area);
     const all = itemsOf(s, area);
     if (ui.folder !== 'all' && ui.folder !== 'none' && !folders.some((f) => f.id === ui.folder)) ui.folder = 'all';
@@ -371,52 +742,60 @@
     const cur = folders.find((f) => f.id === ui.folder);
     const notes = notesOf(s, area).filter((n) => ui.folder === 'all' || (ui.folder === 'none' ? !n.folder || !folders.some((f) => f.id === n.folder) : n.folder === ui.folder))
       .sort((x, y) => (y.updated || y.created || '').localeCompare(x.updated || x.created || ''));
-    const f = figures(s, area);
-    return '<div class="wk-area__head"><div><p class="eyebrow">Work</p><h2 class="wk-area__title">' + icon(a.icon) + esc(labelOf(area)) +
-      '<button type="button" class="icon-btn icon-btn--sm" data-rename-area="' + area + '" aria-label="Rename ' + esc(labelOf(area)) + '" data-tip="Rename">' + icon('edit') + '</button></h2>' +
-      '<p class="muted">' + esc(f.big + ' ' + f.unit + ' · ' + f.lines.join(' · ')) + '</p></div>' +
-      '<div class="wk-area__actions">' + addButtons(area) + '</div></div>' +
+    const drop = DROP[area] ? DROP[area]() : null;
+    return tallyHTML(s, area) +
+      (area === 'invoices' ? whoHTML(s) : '') +
       '<div class="wk-folders" role="group" aria-label="Folders">' +
       '<button type="button" class="chip" data-folder="all" aria-pressed="' + (ui.folder === 'all') + '">' + icon('list') + 'All <span class="chip__n">' + all.length + '</span></button>' +
       folders.map((fo) => '<button type="button" class="chip" data-folder="' + esc(fo.id) + '" aria-pressed="' + (ui.folder === fo.id) + '">' + icon('folder') + esc(fo.name) + ' <span class="chip__n">' + inFolder(fo.id) + '</span></button>').join('') +
       (folders.length ? '<button type="button" class="chip" data-folder="none" aria-pressed="' + (ui.folder === 'none') + '">Not in a folder <span class="chip__n">' + unfiled + '</span></button>' : '') +
       '<button type="button" class="chip chip--add" data-new-folder>' + icon('plus') + 'New folder</button>' +
-      '<label class="search wk-search">' + icon('search') + '<input type="search" id="wk-q" placeholder="Search ' + esc(labelOf(area).toLowerCase()) + '" value="' + esc(ui.q) + '" aria-label="Search"></label></div>' +
+      '<label class="search wk-search">' + icon('search') + '<input type="search" id="wk-q" placeholder="Search ' + esc(((AREAS.find((x) => x.id === area) || {}).one || 'item') + 's') + '" value="' + esc(ui.q) + '" aria-label="Search"></label></div>' +
       (cur ? '<div class="wk-folderbar">' + icon('folder') + '<b>' + esc(cur.name) + '</b><span class="spacer"></span><button type="button" class="btn btn--sm btn--ghost" data-rename-folder="' + esc(cur.id) + '">' + icon('edit') + 'Rename</button>' +
         '<button type="button" class="btn btn--sm btn--ghost" data-delete-folder="' + esc(cur.id) + '">' + icon('trash') + 'Delete folder</button></div>' : '') +
-      (['invoices', 'bills', 'contracts'].includes(area) ? GU.ui.dropbar('Drop ' + (area === 'invoices' ? 'invoices or receipts' : area === 'bills' ? 'bills' : 'contracts') + ' here' + (cur ? ' to file them in ' + cur.name : ''), 'Photos and PDFs. I’ll read each one and file it under Work.') : '') +
+      (drop ? GU.ui.dropbar(drop[0] + (cur ? ' to file them in ' + cur.name : ''), drop[1]) : '') +
       '<div id="wk-body">' + areaBody(s, area) + '</div>' +
       '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes' + (cur ? ' in ' + esc(cur.name) : '') + '</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header>' +
       (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, false)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">No notes here yet.</p></div>') + '</section>';
   }
 
-  function addButtons(area) {
-    if (area === 'tasks') return '<button type="button" class="btn btn--primary" data-add="tasks">' + icon('plus') + 'New task</button>';
-    if (area === 'invoices') return '<button type="button" class="btn" data-add="invoices" data-kind="receipt">' + icon('receipt') + 'Receipt or expense</button><button type="button" class="btn" data-add="invoices" data-kind="invoice-in">' + icon('out') + 'Invoice to pay</button>' +
-      '<button type="button" class="btn btn--primary" data-add="invoices" data-kind="invoice-out">' + icon('in') + 'Invoice I’ve sent</button>';
-    if (area === 'projects') return '<button type="button" class="btn btn--primary" data-add="projects">' + icon('plus') + 'New project</button>';
-    if (area === 'costs') return '<button type="button" class="btn" data-cf-settings>' + icon('settings') + 'Forecast settings</button><button type="button" class="btn btn--primary" data-add="costs">' + icon('plus') + 'New idea</button>';
-    if (area === 'bills') return '<button type="button" class="btn" data-bring="bills">' + icon('list') + 'Choose from your bills</button><button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New bill</button>';
-    return '<button type="button" class="btn" data-bring="contracts">' + icon('list') + 'Choose from your documents</button><button type="button" class="btn btn--primary" data-add="contracts">' + icon('plus') + 'New contract</button>';
+  function addButtons(s, area) {
+    const c = co();
+    const renameBtn = area === 'invoices' ? '' : '<button type="button" class="icon-btn" data-rename-area="' + area + '" aria-label="' + esc('Rename ' + labelOf(area)) + '" data-tip="Rename this page">' + icon('edit') + '</button>';
+    if (area === 'tasks') return renameBtn + '<button type="button" class="btn btn--primary" data-add="tasks">' + icon('plus') + 'New task</button>';
+    if (area === 'invoices') {
+      const send = ktkTotals(s).waiting.filter((p) => !p.handedDate);
+      return '<button type="button" class="btn" data-import-orders>' + icon('upload') + 'Import orders</button>' +
+        (send.length ? '<button type="button" class="btn" data-send-co="' + esc(send.map((p) => p.id).join(',')) + '">' + icon('send') + esc('Send to ' + c + ' (' + send.length + ')') + '</button>' : '') +
+        '<button type="button" class="btn btn--primary" data-add="invoices">' + icon('plus') + esc('Something ' + c + ' is paying') + '</button>';
+    }
+    if (area === 'projects') return renameBtn + '<button type="button" class="btn btn--primary" data-add="projects">' + icon('plus') + 'New project</button>';
+    if (area === 'costs') return renameBtn + '<button type="button" class="btn" data-cf-settings>' + icon('settings') + 'Forecast settings</button><button type="button" class="btn btn--primary" data-add="costs">' + icon('plus') + 'New idea</button>';
+    if (area === 'bills') return renameBtn + '<button type="button" class="btn" data-move-home="bills">' + icon('home') + 'Move a bill from Home</button><button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New bill</button>';
+    return renameBtn + '<button type="button" class="btn" data-move-home="contracts">' + icon('home') + 'Move a document from Home</button><button type="button" class="btn btn--primary" data-add="contracts">' + icon('plus') + 'New contract or document</button>';
   }
 
   /* ---------- the page ---------- */
-  function render(root) {
+  /* Draws the Overview ('overview') or one area. Folders and search reset when you move to another area. */
+  function render(root, area) {
     const s = store.state;
-    if (ui.area !== 'overview' && !AREAS.some((a) => a.id === ui.area)) ui.area = 'overview';
-    const n = checks(s).filter((x) => x.level !== 'info');
-    const count = (area) => n.filter((x) => x.area === area).length;
-    root.innerHTML = GU.view.head({
-      eyebrow: 'Work',
-      title: 'Work',
-      text: 'Everything for work in one place: tasks, invoices, upcoming projects, bills and contracts. Make folders, keep notes and rename anything to suit you.',
-      actions: '<button type="button" class="btn btn--primary" data-add-menu>' + icon('plus') + 'Add</button>',
-    }) +
-      '<div class="split wk">' +
-      '<nav class="lists" aria-label="Work sections">' +
-      '<button type="button" class="lists__item" data-area="overview" aria-current="' + (ui.area === 'overview') + '">' + icon('today') + '<span>Overview</span><b>' + (n.length || '') + '</b></button>' +
-      AREAS.map((a) => '<button type="button" class="lists__item" data-area="' + a.id + '" aria-current="' + (ui.area === a.id) + '">' + icon(a.icon) + '<span>' + esc(labelOf(a.id)) + '</span><b class="' + (count(a.id) ? 'is-crit' : '') + '">' + (count(a.id) || itemsOf(s, a.id).length || '') + '</b></button>').join('') +
-      '</nav><div class="stack">' + (ui.area === 'overview' ? overviewHTML(s) : areaHTML(s, ui.area)) + '</div></div>';
+    area = area === 'overview' || AREAS.some((a) => a.id === area) ? area : 'overview';
+    if (ui.area !== area) {
+      ui.area = area;
+      ui.folder = 'all';
+      ui.q = '';
+    }
+    const name = coName();
+    const head = area === 'overview'
+      ? GU.view.head({
+        eyebrow: name,
+        title: 'Work overview',
+        text: esc(name ? 'Everything for ' + name + ' in one place. Each thing is either ' + co() + '’s money or yours to get back.' : 'Everything for your job or business in one place. Each thing is either the company’s money or yours to get back.'),
+        actions: '<button type="button" class="btn btn--primary" data-add-menu>' + icon('plus') + 'Add</button>',
+      })
+      : GU.view.head({ eyebrow: name, title: labelOf(area), text: esc(introOf(area)), actions: addButtons(s, area) });
+    root.innerHTML = (area === 'overview' && parts().doorsHTML ? parts().doorsHTML(s, 'work') : '') + head +
+      '<div class="stack wk wk--' + area + '">' + (area === 'overview' ? overviewHTML(s) : areaHTML(s, area)) + '</div>';
 
     const q = root.querySelector('#wk-q');
     if (q) {
@@ -435,10 +814,10 @@
         e.preventDefault();
         const raw = quick.elements.title.value.trim();
         if (!raw) return;
-        const parsed = GU.tabs.today.parseQuickTask ? GU.tabs.today.parseQuickTask(raw) : { title: raw };
+        const parsed = GU.tabs.today && GU.tabs.today.parseQuickTask ? GU.tabs.today.parseQuickTask(raw) : { title: raw };
         store.commit((st) => {
           const listId = ensureWorkList(st);
-          st.tasks.push({ id: 'k-' + uid(), listId, context: 'work', workFolder: ui.folder !== 'all' && ui.folder !== 'none' ? ui.folder : '', title: parsed.title || raw, due: parsed.due || quick.elements.due.value, priority: 'normal', notes: '', done: false, created: today() });
+          st.tasks.push({ id: 'k-' + uid(), listId, context: 'work', workFolder: curFolder(), title: parsed.title || raw, due: parsed.due || quick.elements.due.value, priority: 'normal', notes: '', done: false, created: today() });
         });
         setTimeout(() => {
           const el = document.getElementById('wk-task');
@@ -446,8 +825,23 @@
         }, 0);
       });
     }
+    const tell = root.querySelector('[data-tell]');
+    if (tell) {
+      tell.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const note = tell.elements.note.value.trim();
+        if (!note) return tell.elements.note.focus();
+        tell.elements.note.value = '';
+        if (GU.inbox && GU.inbox.add) GU.inbox.add({ note, scope: { kind: 'work', area: null, name: 'Work' }, ctx: 'work' });
+        setTimeout(() => {
+          const el = document.getElementById('wk-tell');
+          if (el) el.focus();
+        }, 0);
+      });
+      wireDropCover(root);
+    }
     root.querySelectorAll('.wk-group').forEach((d) => d.addEventListener('toggle', () => (ui.showDone = d.open)));
-    if (ui.area !== 'overview') GU.ui.wireDropbar(root, (files) => upload(files));
+    if (area !== 'overview') GU.ui.wireDropbar(root, (files) => upload(files));
     root.addEventListener('change', (e) => {
       const d = e.target.closest('[data-done]');
       if (d) GU.tabs.todos.complete(d.dataset.done, d.checked);
@@ -455,16 +849,41 @@
     root.addEventListener('click', onClick);
   }
 
+  /* Drop files anywhere on the Overview to file them under Work. */
+  function wireDropCover(root) {
+    const cover = root.querySelector('.dropcover');
+    if (!cover) return;
+    let depth = 0;
+    root.addEventListener('dragenter', (e) => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+      depth++;
+      cover.hidden = false;
+    });
+    root.addEventListener('dragleave', () => {
+      depth = Math.max(0, depth - 1);
+      if (!depth) cover.hidden = true;
+    });
+    root.addEventListener('dragover', (e) => e.preventDefault());
+    root.addEventListener('drop', (e) => {
+      e.preventDefault();
+      depth = 0;
+      cover.hidden = true;
+      GU.ui.filesFromDrop(e.dataTransfer).then((files) => files.length && upload(files));
+    });
+  }
+
+  /* Goes to an area's page. */
+  function go(area) {
+    const tab = TAB_OF[area] || 'work';
+    GU.view.go(GU.tabs[tab] ? tab : 'work');
+  }
+
   function onClick(e) {
     const s = store.state;
     const b = (sel) => e.target.closest(sel);
     let el;
-    if ((el = b('[data-area]'))) {
-      ui.area = el.dataset.area;
-      ui.folder = 'all';
-      ui.q = '';
-      return GU.render();
-    }
+    if ((el = b('[data-go]'))) return GU.view.go(GU.tabs[el.dataset.go] ? el.dataset.go : 'work');
+    if ((el = b('[data-area]'))) return go(el.dataset.area);
     if ((el = b('[data-folder]'))) {
       ui.folder = el.dataset.folder;
       return GU.render();
@@ -473,111 +892,212 @@
       ui.inv = el.dataset.value;
       return GU.render();
     }
+    if (rowClick(e)) return;
     if ((el = b('[data-check]'))) {
       const x = checks(s)[+el.dataset.check];
       if (!x) return;
+      if (x.scroll) {
+        const card = document.querySelector('.rf-card, .ask-card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (x.inv) ui.inv = x.inv;
+      if (x.go) return GU.view.go(GU.tabs[x.go] ? x.go : 'work');
       if (x.ref) return GU.view.open(x.ref);
-      ui.area = x.area;
-      ui.folder = 'all';
-      if (x.area === 'invoices') ui.inv = 'open';
-      return GU.render();
+      return go(x.area);
     }
-    if (b('[data-add-menu]')) return addMenu(b('[data-add-menu]'));
+    if (b('[data-add-menu]')) return menu(b('[data-add-menu]'), parts().addMenu('work'));
     if ((el = b('[data-add]'))) return add(el.dataset.add, el.dataset.kind);
-    if ((el = b('[data-bring]'))) return bringIn(el.dataset.bring);
-    if (b('[data-new-folder]')) return newFolder(ui.area);
+    if ((el = b('[data-move-home]'))) return moveFromHome(el.dataset.moveHome);
+    if (b('[data-import-orders]')) return importOrders();
+    if (b('[data-upload]')) {
+      return GU.ui.pickFiles().then((files) => files.length && upload(files));
+    }
+    if (b('[data-new-folder]')) return newFolder(ui.area === 'overview' ? null : ui.area);
     if ((el = b('[data-rename-folder]'))) return rename('workFolders', el.dataset.renameFolder);
     if ((el = b('[data-delete-folder]'))) return deleteFolder(el.dataset.deleteFolder);
     if ((el = b('[data-rename-area]'))) return renameArea(el.dataset.renameArea);
-    if (b('[data-new-note]')) return editNote(null, { area: ui.area === 'overview' ? 'general' : ui.area, folder: ui.folder !== 'all' && ui.folder !== 'none' ? ui.folder : '' });
+    if (b('[data-new-note]')) return editNote(null, { area: ui.area === 'overview' ? 'general' : ui.area, folder: curFolder() });
+  }
+
+  /* Clicks on rows, the forecast and the 'Who paid?' answers. Home › Plans uses this for its rows too:
+     returns true when it dealt with the click. */
+  function rowClick(e) {
+    const b = (sel) => e.target.closest(sel);
+    const W = wm();
+    let el;
     if ((el = b('[data-more]'))) {
       const [c, id] = el.dataset.more.split(':');
-      return moreMenu(el, c, id);
+      moreMenu(el, c, id);
+      return true;
     }
-    if (b('[data-cf-settings]')) return forecastSettings();
-    if (b('[data-balances]')) return GU.tabs.transactions.updateBalances();
-    if ((el = b('[data-idea-done]'))) return ideaStatus(el.dataset.ideaDone, 'done');
-    if ((el = b('[data-paid]'))) return GU.tabs.receipts.markPaid(el.dataset.paid);
-    if ((el = b('[data-claimed]'))) return GU.tabs.receipts.markClaimed([el.dataset.claimed]);
-    if ((el = b('[data-billpaid]'))) return GU.tabs.bills.markPaid(el.dataset.billpaid);
+    if ((el = b('[data-payer]'))) {
+      const [c, id, who] = el.dataset.payer.split(':');
+      if (W && W.setPayer) W.setPayer(c, id, who);
+      return true;
+    }
+    if ((el = b('[data-idea-payer]'))) {
+      const [id, who] = el.dataset.ideaPayer.split(':');
+      if (who === 'home') takeOut('costIdeas', id);
+      else if (W && W.setPayer) W.setPayer('costIdeas', id, who);
+      return true;
+    }
+    if ((el = b('[data-send-co]'))) {
+      sendToCo(el.dataset.sendCo.split(',').filter(Boolean));
+      return true;
+    }
+    if ((el = b('[data-ktkpaid]'))) {
+      if (W && W.markKtkPaid) W.markKtkPaid(el.dataset.ktkpaid);
+      return true;
+    }
+    if (b('[data-cf-settings]')) {
+      forecastSettings();
+      return true;
+    }
+    if (b('[data-balances]')) {
+      GU.tabs.transactions.updateBalances();
+      return true;
+    }
+    if ((el = b('[data-idea-done]'))) {
+      ideaStatus(el.dataset.ideaDone, 'done');
+      return true;
+    }
+    if ((el = b('[data-paid]'))) {
+      GU.tabs.receipts.markPaid(el.dataset.paid);
+      return true;
+    }
+    if ((el = b('[data-billpaid]'))) {
+      GU.tabs.bills.markPaid(el.dataset.billpaid);
+      return true;
+    }
+    if ((el = b('[data-bill-keep]'))) {
+      const id = el.dataset.billKeep;
+      store.commit((st) => {
+        const x = st.bills.find((y) => y.id === id);
+        if (x) x.review = false;
+      });
+      toast('Kept it', { action: 'Undo', onAction: () => store.commit((st) => {
+        const x = st.bills.find((y) => y.id === id);
+        if (x) x.review = true;
+      }) });
+      return true;
+    }
     if ((el = b('[data-files]'))) {
       const [c, id] = el.dataset.files.split(':');
       const r = store.find(c, id);
-      if (r && (r.files || []).length) return viewFiles(r.files, 0, nameOf(c, r));
-      return GU.view.open({ c, id });
+      if (r && (r.files || []).length) viewFiles(r.files, 0, nameOf(c, r));
+      else GU.view.open({ c, id });
+      return true;
     }
     if ((el = b('[data-open]'))) {
       const [c, id] = el.dataset.open.split(':');
-      return GU.view.open({ c, id });
+      GU.view.open({ c, id });
+      return true;
     }
+    return false;
+  }
+
+  /* ---------- sending to the business ---------- */
+  /* Shares invoices with the business to pay (the file itself, or a zip with a summary), or copies the
+     message. Marks them as sent to the business unless you untick it. */
+  function sendToCo(ids) {
+    const W = wm();
+    const recs = ids.map((id) => store.find('paperwork', id)).filter(Boolean);
+    if (!recs.length) return;
+    if (!W || !W.share || !W.message) return toast('Sending isn’t ready yet. Download the files from the row instead.');
+    const c = co();
+    const total = sum(recs, (p) => Math.abs(Number(p.amount) || 0));
+    const noFile = recs.filter((p) => !(p.files || []).length).length;
+    const what = recs.length === 1 ? recs[0].title + amt(recs[0]) : plural(recs.length, 'invoice') + ', ' + money(total) + ' in total';
+    const d = GU.ui.openDialog({
+      title: 'Send to ' + c,
+      body: '<p class="dlg__intro">' + esc(what + '. Share it with ' + c + ' (by WhatsApp or email on a phone), or download it and send it yourself.') + '</p>' +
+        (noFile ? '<p class="note-line">' + icon('alert') + '<span>' + esc((recs.length === 1 ? 'It has' : noFile + ' of them have') + ' no file yet, so only the summary goes. You can add a file from its row first.') + '</span></p>' : '') +
+        '<div class="field"><label class="field__label" for="wk-send-text">Message</label><textarea id="wk-send-text" name="text" rows="5">' + esc(W.message(ids, 'ktk')) + '</textarea></div>' +
+        '<label class="check"><input type="checkbox" name="mark" checked><span>' + esc('Mark as sent to ' + c + ' today') + '</span></label>',
+      footer: '<button type="button" class="btn" data-copy>' + icon('list') + 'Copy message</button><span class="spacer"></span><button type="button" class="btn" data-close>Cancel</button>' +
+        '<button type="submit" class="btn btn--primary">' + icon('send') + 'Share or download</button>',
+    });
+    const text = () => d.form.elements.text.value.trim();
+    const mark = () => d.form.elements.mark.checked;
+    d.el.querySelector('[data-copy]').addEventListener('click', async () => {
+      const ok = await W.copyMessage(ids, 'ktk', { text: text(), markSent: mark() });
+      if (ok) d.close();
+    });
+    d.form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const out = await W.share(ids, 'ktk', { text: text(), markSent: mark() });
+      if (out && !out.cancelled) d.close();
+    });
   }
 
   /* ---------- adding ---------- */
   const curFolder = () => (ui.folder !== 'all' && ui.folder !== 'none' ? ui.folder : '');
-  /* Marks a record made by another tab's form as work, in the folder you're looking at. */
-  function tag(c, id, folder) {
+  /* Marks a record made by another page's form as work, in the folder you're looking at. extra fills in
+     fields the form didn't set (who pays, say), without overriding what you chose. */
+  function tag(c, id, folder, extra) {
     store.commit((s) => {
       const r = (s[c] || []).find((x) => x.id === id);
       if (!r) return;
       r.context = 'work';
-      if (folder !== undefined) r.workFolder = folder;
+      if (folder) r.workFolder = folder;
       if (c === 'tasks') r.listId = ensureWorkList(s);
+      for (const k in extra || {}) if (r[k] == null || r[k] === '') r[k] = extra[k];
+      if (c === 'paperwork' && wm() && wm().normalise) wm().normalise(r);
     });
   }
 
   function add(area, kind) {
     const folder = curFolder();
+    const R = GU.tabs.receipts;
     if (area === 'tasks') {
       if (!workListId(store.state)) store.commit((s) => ensureWorkList(s));
-      return GU.tabs.todos.create({ listId: workListId(store.state) }, { onSaved: (r) => tag('tasks', r.id, folder) });
+      return GU.tabs.todos.create({ listId: workListId(store.state), context: 'work' }, { onSaved: (r) => tag('tasks', r.id, folder) });
     }
-    if (area === 'invoices') return GU.tabs.receipts.create({ values: { kind: kind || 'invoice-out', context: 'work', date: today(), status: 'unpaid', claim: kind === 'receipt' }, onSaved: (r) => tag('paperwork', r.id, folder) });
+    if (area === 'invoices') {
+      const v = kind === 'receipt' ? { kind: 'receipt', context: 'work', payer: 'company', date: today() } : { kind: 'invoice-in', context: 'work', payer: 'company', status: 'unpaid', date: today() };
+      return R.create({ values: v, onSaved: (r) => tag('paperwork', r.id, folder, { payer: 'company' }) });
+    }
+    if (area === 'back') return R.create({ values: { kind: 'receipt', context: 'work', payer: 'me', date: today() }, onSaved: (r) => tag('paperwork', r.id, '', { payer: 'me' }) });
     if (area === 'projects') return editProject(null, { folder });
-    if (area === 'costs') return editIdea(null, { folder });
-    if (area === 'bills') return GU.tabs.bills.create({ category: 'Work expenses' }, { onSaved: (r) => tag('bills', r.id, folder) });
-    if (area === 'contracts') return GU.tabs.documents.create({ type: CONTRACT, title: '' }, { onSaved: (r) => tag('documents', r.id, folder) });
+    if (area === 'costs') return editIdea(null, { folder, context: 'work' });
+    if (area === 'bills') return GU.tabs.bills.create({ category: (F.WORK_OUT || 'Work expenses'), context: 'work' }, { onSaved: (r) => tag('bills', r.id, folder) });
+    if (area === 'contracts') return GU.tabs.documents.create({ type: CONTRACT, title: '', context: 'work' }, { onSaved: (r) => tag('documents', r.id, folder) });
     if (area === 'note') return editNote(null, { area: ui.area === 'overview' ? 'general' : ui.area, folder });
     if (area === 'folder') return newFolder(ui.area === 'overview' ? null : ui.area);
   }
 
-  function addMenu(anchor) {
-    menu(anchor, [
-      { icon: 'todo', label: 'Task', hint: labelOf('tasks'), onClick: () => add('tasks') },
-      { icon: 'in', label: 'Invoice I’ve sent', hint: 'Someone owes you', onClick: () => add('invoices', 'invoice-out') },
-      { icon: 'out', label: 'Invoice to pay', hint: 'You owe someone', onClick: () => add('invoices', 'invoice-in') },
-      { icon: 'receipt', label: 'Receipt or expense', hint: 'To claim back', onClick: () => add('invoices', 'receipt') },
-      { icon: 'star', label: 'Project', hint: labelOf('projects'), onClick: () => add('projects') },
-      { icon: 'bills', label: 'Bill', hint: 'A regular work cost', onClick: () => add('bills') },
-      { icon: 'file', label: 'Contract', hint: 'With its start and end dates', onClick: () => add('contracts') },
-      { icon: 'trend', label: 'Idea to cost', hint: 'I’ll work out when you can afford it', onClick: () => add('costs') },
-      { icon: 'note', label: 'Note', hint: 'Anything to remember', onClick: () => add('note') },
-      { icon: 'folder', label: 'Folder', hint: 'To group things in a category', onClick: () => add('folder') },
-      { icon: 'upload', label: 'Upload files', hint: 'I’ll read them and file them under Work', onClick: async () => {
-        const files = await GU.ui.pickFiles();
-        if (files.length) upload(files);
-      } },
-    ]);
+  /* An order history file: the importer, set to work and the business's card. */
+  function importOrders() {
+    const R = GU.tabs.receipts;
+    if (R && R.importOrders) R.importOrders(null, { context: 'work', payer: 'company' });
   }
 
-  /* Files dropped or picked here are read by the assistant and filed under Work, in this area and folder. */
+  /* Files dropped or picked here are read by the assistant and filed under Work, on this page and in this
+     folder. On the business's page they're its money. */
   function upload(files) {
     const area = ui.area === 'overview' ? null : ui.area;
     const folder = curFolder();
     const fo = folder && (store.state.workFolders || []).find((x) => x.id === folder);
-    GU.inbox.add({ files, scope: { kind: 'work', area, folderId: folder, name: 'Work' + (area ? ' › ' + labelOf(area) : '') + (fo ? ' › ' + fo.name : '') } });
+    GU.inbox.add({ files, scope: { kind: 'work', area, folderId: folder, payer: area === 'invoices' ? 'company' : null, name: 'Work' + (area ? ' › ' + labelOf(area) : '') + (fo ? ' › ' + fo.name : '') } });
   }
 
-  /* Puts things from elsewhere (your bills, documents…) under Work. */
-  function bringIn(area) {
+  /* Moves bills or documents from Home to Work, so each thing has one place. Bills ask who pays, once. */
+  function moveFromHome(area) {
     const s = store.state;
     const c = COLL[area];
-    const pool = area === 'bills' ? s.bills.filter((b) => !isWorkBill(b) && b.active !== false) : s.documents.filter((d) => d.context !== 'work');
-    if (!pool.length) return toast(area === 'bills' ? 'All your bills are already under Work.' : 'There are no other documents to choose from.');
+    const pool = area === 'bills' ? s.bills.filter((b) => !isWorkBill(b) && b.active !== false) : s.documents.filter((d) => !isWorkDoc(d));
+    if (!pool.length) return toast(area === 'bills' ? 'All your bills are already in Work.' : 'There are no Home documents to choose from.');
     const folder = curFolder();
+    const co1 = co();
+    const who = area === 'bills' ? '<div class="field"><span class="field__label">Who pays them?</span><div class="seg" role="radiogroup" aria-label="Who pays them?">' +
+      '<label><input type="radio" name="payer" value="me" checked><span>' + icon('coin') + esc('Out of my account, ' + co1 + ' pays me back') + '</span></label>' +
+      '<label><input type="radio" name="payer" value="company"><span>' + icon('briefcase') + esc(co(true) + ' pays directly') + '</span></label></div></div>' : '';
     const d = GU.ui.openDialog({
-      title: area === 'bills' ? 'Which bills are for work?' : 'Which documents are work contracts?',
-      body: '<p class="dlg__intro">Tick the ones to show under Work. They stay where they are too.</p><label class="search wk-pick__search">' + icon('search') + '<input type="search" data-pick-q placeholder="Search" aria-label="Search"></label><ul class="wk-pick" data-pick></ul>',
-      footer: '<span class="spacer"></span><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn--primary">Add to Work</button>',
+      title: area === 'bills' ? 'Move bills from Home' : 'Move documents from Home',
+      body: '<p class="dlg__intro">Tick the ones that are for ' + esc(co1) + '. They move to Work and leave your Home lists.</p>' + who +
+        '<label class="search wk-pick__search">' + icon('search') + '<input type="search" data-pick-q placeholder="Search" aria-label="Search"></label><ul class="wk-pick" data-pick></ul>',
+      footer: '<span class="spacer"></span><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn--primary">Move to Work</button>',
     });
     const box = d.body.querySelector('[data-pick]');
     const chosen = new Set();
@@ -585,7 +1105,7 @@
       const ql = (q || '').toLowerCase();
       const list = pool.filter((r) => !ql || [nameOf(c, r), r.payee, r.type, r.holder, r.category].join(' ').toLowerCase().includes(ql)).slice(0, 150);
       box.innerHTML = list.map((r) => '<li><label class="check"><input type="checkbox" value="' + esc(r.id) + '"' + (chosen.has(r.id) ? ' checked' : '') + '><span><b>' + esc(nameOf(c, r)) + '</b> <em class="muted">' +
-        esc(area === 'bills' ? money(r.amount) + ' · ' + F.freqLabel(r.frequency) + (r.category ? ' · ' + r.category : '') : [r.type, r.expiryDate ? 'ends ' + fmtDate(r.expiryDate, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></span></label></li>').join('') || '<li class="muted">Nothing matches.</li>';
+        esc(area === 'bills' ? money(r.amount) + ' · ' + F.freqLabel(r.frequency) + (r.category ? ' · ' + r.category : '') : [r.type, r.expiryDate ? 'ends ' + short(r.expiryDate) : ''].filter(Boolean).join(' · ')) + '</em></span></label></li>').join('') || '<li class="muted">Nothing matches.</li>';
     };
     draw('');
     box.addEventListener('change', (e) => {
@@ -597,17 +1117,38 @@
       e.preventDefault();
       if (!chosen.size) return d.close();
       const ids = Array.from(chosen);
+      const payerEl = d.form.querySelector('input[name="payer"]:checked');
+      const payer = payerEl ? payerEl.value : null;
+      const before = ids.map((id) => JSON.parse(JSON.stringify(store.find(c, id))));
+      let made = [];
       store.commit((st) => {
         for (const r of st[c]) {
           if (!ids.includes(r.id)) continue;
           r.context = 'work';
           if (folder) r.workFolder = folder;
+          if (area === 'bills') {
+            r.payer = payer;
+            r.category = F.WORK_OUT || 'Work expenses';
+          }
           if (area === 'contracts' && (!r.type || r.type === 'Other')) r.type = CONTRACT;
+        }
+        // Payments of a bill you pay from now on join Get paid back.
+        if (area === 'bills' && payer === 'me' && wm() && wm().billClaims) {
+          try {
+            made = wm().billClaims(st) || [];
+          } catch (err) {
+            made = [];
+          }
         }
       });
       d.close();
-      toast('Added ' + plural(ids.length, area === 'bills' ? 'bill' : 'document') + ' to Work', { action: 'Undo', onAction: () => store.commit((st) => {
-        for (const r of st[c]) if (ids.includes(r.id)) delete r.context;
+      const madeIds = made.map((p) => p.id);
+      toast('Moved ' + plural(ids.length, area === 'bills' ? 'bill' : 'document') + ' to Work', { action: 'Undo', onAction: () => store.commit((st) => {
+        for (const old of before) {
+          const i = st[c].findIndex((x) => x.id === old.id);
+          if (i >= 0) st[c][i] = old;
+        }
+        if (madeIds.length) st.paperwork = st.paperwork.filter((p) => !madeIds.includes(p.id));
       }) });
     });
   }
@@ -616,7 +1157,7 @@
   function projectFields(area) {
     const s = store.state;
     return [
-      { name: 'name', label: 'Project', required: true, placeholder: 'e.g. Website for Acme, Pharmacy shop launch' },
+      { name: 'name', label: 'Project', required: true, placeholder: 'e.g. Shop refit, New website' },
       { name: 'client', label: 'Client or who it’s for', half: true, optional: true },
       { name: 'status', label: 'Where it’s at', type: 'select', options: STATUSES, default: 'Planned', half: true },
       { name: 'start', label: 'Starts', type: 'date', half: true, optional: true },
@@ -645,69 +1186,102 @@
   }
 
   /* ---------- cost forecast ---------- */
-  function forecastHTML(s) {
+  /* When you can afford things. opts.context 'work' or 'home' marks and counts only those ideas (the line is
+     always all your money); Work leaves out ideas the business pays for, which aren't on your money. */
+  function forecastHTML(s, opts) {
+    s = s || store.state;
+    opts = opts || {};
+    const ctx = opts.context === 'home' || opts.context === 'work' ? opts.context : null;
     const plan = GU.costs.schedule(s);
     const b = plan.base;
     if (!b.known) {
       return '<section class="panel"><div class="panel__body cf-empty">' + icon('bank') + '<p>Put in what’s in your accounts first, and I’ll work out when you can afford each idea.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
     }
+    const results = plan.results.filter((r) => !ctx || ideaPart(r.idea) === ctx);
+    const outstanding = round2(sum(results, (r) => r.cost));
+    const notFitting = results.filter((r) => !r.date).length;
+    const allBy = results.length && results.every((r) => r.date) ? results.reduce((m, r) => (r.date > m ? r.date : m), '') : null;
     const n = b.dates.length;
     // Four month labels, with the year once it changes.
     const step = Math.max(1, Math.round(n / 4));
     const labels = [];
-    for (let i = 0; i < n - step / 2; i += step) labels.push({ i, text: GU.util.monthLabel(b.dates[i].slice(0, 7)) + (b.dates[i].slice(0, 4) !== today().slice(0, 4) ? ' ' + b.dates[i].slice(2, 4) : '') });
-    const marks = plan.results.filter((r) => r.date).map((r) => ({ i: b.dates.indexOf(r.date), tip: r.idea.name + ': ' + money(r.cost, { whole: true }) + ', ' + fmtDate(r.date, { short: true }) + (r.account ? ' from ' + r.account : '') })).filter((m) => m.i >= 0);
+    for (let i = 0; i < n - step / 2; i += step) labels.push({ i, text: monthLabel(b.dates[i].slice(0, 7)) + (b.dates[i].slice(0, 4) !== today().slice(0, 4) ? ' ' + b.dates[i].slice(2, 4) : '') });
+    const marks = results.filter((r) => r.date).map((r) => ({ i: b.dates.indexOf(r.date), tip: r.idea.name + ': ' + money(r.cost, { whole: true }) + ', ' + short(r.date) + (r.account ? ' from ' + r.account : '') + (r.back ? ', back about ' + short(r.back) : '') })).filter((m) => m.i >= 0);
     const keep = b.cfg.buffer ? money(b.cfg.buffer, { whole: true }) : '£0';
     const floorLabel = 'Keep ' + keep + (b.cfg.overdraft ? ', using your overdraft' : '');
     const spareTone = plan.spare < 0 ? 'is-crit' : 'is-in';
     const room = plan.months.slice(0, b.cfg.months);
+    const c = co();
+    const dips = results.filter((r) => r.dip).length;
+    let more = '';
+    if (ctx === 'work') more = ' Ideas ' + c + ' pays for aren’t counted. The ones you pay for first come back after about ' + plural(plan.repayDays || 14, 'day') + ', if ' + c + ' pays as usual.';
+    // Home › Plans says which work ideas are planned on your money in its own line, with a link.
+    else if (!ctx && plan.fronting && plan.fronting.length) more = ' Work ideas you pay for first come back after about ' + plural(plan.repayDays || 14, 'day') + '.';
     return '<section class="panel cf"><header class="panel__head"><h2>' + icon('trend') + 'When you can afford things</h2><span class="muted">next ' + b.cfg.months + ' months</span></header>' +
       '<div class="tally__sum">' +
       '<div><span>Spare each month</span><b class="' + spareTone + '">' + esc(money(plan.spare, { whole: true })) + '</b><em>' + esc(plan.spare < 0 ? 'more goes out than comes in' : 'on average, after bills, debts and everyday spending') + '</em></div>' +
       '<div><span>You could spend now</span><b>' + esc(money(plan.freeNow, { whole: true })) + '</b><em>' + esc('and never drop below ' + keep + (b.cfg.overdraft ? ' (with overdraft)' : '')) + '</em></div>' +
-      '<div><span>Ideas to fund</span><b>' + esc(money(plan.outstanding, { whole: true })) + '</b><em>' + esc(plural(plan.results.length, 'idea') + ' on the list') + '</em></div>' +
-      '<div><span>' + (plan.notFitting ? 'Don’t fit yet' : 'All done by') + '</span><b class="' + (plan.notFitting ? 'is-crit' : '') + '">' + esc(plan.notFitting ? String(plan.notFitting) : plan.allBy ? fmtDate(plan.allBy, { short: true }) : '–') + '</b><em>' + esc(plan.notFitting ? 'not affordable in ' + b.cfg.months + ' months at this rate' : plan.results.length ? 'at the earliest' : 'add an idea below') + '</em></div>' +
+      '<div><span>' + esc(ctx === 'work' ? 'On your money' : 'Ideas to fund') + '</span><b>' + esc(money(outstanding, { whole: true })) + '</b><em>' + esc(plural(results.length, 'idea') + (ctx === 'work' && dips ? ', ' + dips + ' paid back later' : ' on the list')) + '</em></div>' +
+      '<div><span>' + (notFitting ? 'Don’t fit yet' : 'All done by') + '</span><b class="' + (notFitting ? 'is-crit' : '') + '">' + esc(notFitting ? String(notFitting) : allBy ? short(allBy) : '–') + '</b><em>' + esc(notFitting ? 'not affordable in ' + b.cfg.months + ' months at this rate' : results.length ? 'at the earliest' : 'add an idea below') + '</em></div>' +
       '</div>' +
       '<div class="panel__body cf-chart">' + GU.charts.line(plan.after.map((v, i) => ({ value: v, tip: fmtDate(b.dates[i], { weekday: true }) + ': ' + money(v) + (plan.after[i] !== b.total[i] ? ' (' + money(b.total[i]) + ' before your ideas)' : '') })),
         { height: 170, labels, base: plan.results.some((r) => r.date) ? b.total : null, floor: { value: b.floor, label: floorLabel }, marks }) +
       '<p class="cf-legend"><span><i class="cf-key cf-key--after"></i>With your ideas</span><span><i class="cf-key cf-key--base"></i>Before them</span><span><i class="cf-key cf-key--mark"></i>When each idea happens</span></p></div>' +
       '<div class="cf-room"><h3>Room to spend, month by month</h3><p class="muted">The most you could spend from the start of each month, after the ideas above, without dropping below ' + esc(keep) + ' later on.</p><ol>' +
-      room.map((m) => '<li class="' + (m.room > 0 ? 'is-room' : '') + '"><span>' + esc(GU.util.monthLabel(m.key) + (m.key.slice(0, 4) !== today().slice(0, 4) ? ' ' + m.key.slice(0, 4) : '')) + '</span><b>' + esc(money(m.room, { whole: true })) + '</b></li>').join('') + '</ol></div>' +
+      room.map((m) => '<li class="' + (m.room > 0 ? 'is-room' : '') + '"><span>' + esc(monthLabel(m.key) + (m.key.slice(0, 4) !== today().slice(0, 4) ? ' ' + m.key.slice(0, 4) : '')) + '</span><b>' + esc(money(m.room, { whole: true })) + '</b></li>').join('') + '</ol></div>' +
       '<footer class="panel__foot cf-note">' + icon('info') + '<span>' + esc('Starts from ' + money(b.plan.start) + ' across your accounts. Counts your income, bills, debt and instalment payments and invoices due, plus about ' + money(b.everyday, { whole: true }) + ' a month of everyday spending' +
-        (b.cfg.everyday != null && b.cfg.everyday !== '' ? ' (your figure)' : b.est ? ' (from your last ' + plural(b.est.months.length, 'month') + ' of statements)' : '') + '. It keeps at least ' + keep + ' in your accounts' + (b.cfg.overdraft ? ', counting your overdraft' : '') + '. Must-haves are planned first. ') + '<button type="button" class="link link--btn" data-cf-settings>Change these</button></span></footer></section>';
+        (b.cfg.everyday != null && b.cfg.everyday !== '' ? ' (your figure)' : b.est ? ' (from your last ' + plural(b.est.months.length, 'month') + ' of statements)' : '') + '. It keeps at least ' + keep + ' in your accounts' + (b.cfg.overdraft ? ', counting your overdraft' : '') + '. Must-haves are planned first.' + more + ' ') + '<button type="button" class="link link--btn" data-cf-settings>Change these</button></span></footer></section>';
   }
 
+  /* A cost idea. opts.context 'home' (Home › Plans) or 'work' (where it's made, otherwise the part you're in);
+     work ideas also ask who pays. opts.folder, opts.payer: starting values. */
   function editIdea(id, opts) {
+    opts = opts || {};
     const s = store.state;
     const i = id ? store.find('costIdeas', id) : null;
+    const ctx = i ? ideaPart(i) : opts.context === 'home' || opts.context === 'work' ? opts.context : parts().get() === 'work' ? 'work' : 'home';
+    const work = ctx === 'work';
+    const c = co();
+    const fields = [
+      { name: 'name', label: 'What is it?', required: true, placeholder: work ? 'e.g. Shop signage, A new printer' : 'e.g. New laptop, A weekend away' },
+      work ? { name: 'payer', label: 'Who pays?', type: 'segmented', default: '', options: [
+        { value: 'company', label: paysLabel(), icon: 'briefcase' },
+        { value: 'me', label: 'I pay, ' + c + ' pays me back', icon: 'coin' },
+        { value: '', label: 'Not sure yet' },
+      ], help: 'If ' + c + ' pays, it’s listed for ' + c + ' to fund and not planned on your money.' } : null,
+      { name: 'cost', label: 'What it’ll cost', type: 'money', required: true, half: true },
+      { name: 'monthly', label: 'Ongoing cost a month', type: 'money', optional: true, half: true, help: 'For things that keep costing, like software or rent.' },
+      { name: 'priority', label: 'How important', type: 'segmented', options: PRIORITIES, default: 'should' },
+      { name: 'notBefore', label: 'Not before', type: 'date', optional: true, half: true, showIf: (v) => v.payer !== 'company' },
+      { name: 'wantBy', label: 'Want it by', type: 'date', optional: true, half: true },
+      { name: 'plannedDate', label: 'Already booked for', type: 'date', optional: true, half: true, help: 'Leave empty and I’ll find the earliest date you can afford it.', showIf: (v) => v.payer !== 'company' },
+      work ? { name: 'projectId', label: 'For project', type: 'select', options: [{ value: '', label: 'None' }].concat((s.projects || []).map((p) => ({ value: p.id, label: p.name }))), half: true } : null,
+      { name: 'status', label: 'Status', type: 'segmented', options: [{ value: 'open', label: 'To do' }, { value: 'done', label: 'Done' }, { value: 'dropped', label: 'Dropped' }], default: 'open' },
+      work ? { name: 'workFolder', label: 'Folder', type: 'select', options: [{ value: '', label: 'No folder' }].concat(foldersOf(s, 'costs').map((f) => ({ value: f.id, label: f.name }))), half: true } : null,
+      { name: 'files', label: 'Quotes or files', type: 'files', dropLabel: 'Add quotes, links saved as PDFs or photos' },
+      { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, optional: true },
+    ].filter(Boolean);
     formDialog({
-      title: i ? 'Edit idea' : 'New idea to cost',
-      intro: i ? null : 'Add what it is and what it’ll cost. I’ll find the earliest date you can afford it without dropping below what you keep, and which account it could come from.',
-      fields: [
-        { name: 'name', label: 'What is it?', required: true, placeholder: 'e.g. New laptop, Shop signage, Marketing campaign' },
-        { name: 'cost', label: 'What it’ll cost', type: 'money', required: true, half: true },
-        { name: 'monthly', label: 'Ongoing cost a month', type: 'money', optional: true, half: true, help: 'For things that keep costing, like software or rent.' },
-        { name: 'priority', label: 'How important', type: 'segmented', options: PRIORITIES, default: 'should' },
-        { name: 'notBefore', label: 'Not before', type: 'date', optional: true, half: true },
-        { name: 'wantBy', label: 'Want it by', type: 'date', optional: true, half: true },
-        { name: 'plannedDate', label: 'Already booked for', type: 'date', optional: true, half: true, help: 'Leave empty and I’ll find the earliest date you can afford it.' },
-        { name: 'projectId', label: 'For project', type: 'select', options: [{ value: '', label: 'None' }].concat((s.projects || []).map((p) => ({ value: p.id, label: p.name }))), half: true },
-        { name: 'status', label: 'Status', type: 'segmented', options: [{ value: 'open', label: 'To do' }, { value: 'done', label: 'Done' }, { value: 'dropped', label: 'Dropped' }], default: 'open' },
-        { name: 'workFolder', label: 'Folder', type: 'select', options: [{ value: '', label: 'No folder' }].concat(foldersOf(s, 'costs').map((f) => ({ value: f.id, label: f.name }))), half: true },
-        { name: 'files', label: 'Quotes or files', type: 'files', dropLabel: 'Add quotes, links saved as PDFs or photos' },
-        { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, optional: true },
-      ],
-      values: i ? Object.assign({ status: 'open' }, i) : { priority: 'should', status: 'open', workFolder: (opts && opts.folder) || '' },
-      submitLabel: i ? 'Save' : 'Add idea',
+      title: i ? 'Edit idea' : work ? 'New idea to cost' : 'Something to save for',
+      intro: i ? null : work ? esc('Add what it is, what it’ll cost and who pays. If you pay, I’ll find when you can afford it until ' + c + ' pays you back.')
+        : 'Add what it is and what it’ll cost. I’ll find the earliest date you can afford it without dropping below what you keep, and which account it could come from.',
+      fields,
+      values: i ? Object.assign({ status: 'open' }, i, { payer: ideaPayer(i) || '' }) : { priority: 'should', status: 'open', payer: opts.payer || '', workFolder: opts.folder || '' },
+      submitLabel: i ? 'Save' : work ? 'Add idea' : 'Add it',
       onSubmit: (v) => {
-        const rec = Object.assign(i ? Object.assign({}, i) : { id: 'ci-' + uid(), created: today() }, v, { updated: today() });
+        const rec = Object.assign(i ? Object.assign({}, i) : { id: 'ci-' + uid(), created: today() }, v, { context: ctx, updated: today() });
+        if (!work || (rec.payer !== 'me' && rec.payer !== 'company')) delete rec.payer;
+        if (!work) {
+          delete rec.workFolder;
+          delete rec.projectId;
+        }
         if (rec.status === 'done' && !rec.doneDate) rec.doneDate = today();
         if (rec.status !== 'done') delete rec.doneDate;
         store.upsert('costIdeas', rec);
-        if (!i) {
-          const r = GU.costs.schedule(store.state).results.find((x) => x.idea.id === rec.id);
-          toast(r && r.date ? rec.name + ': ' + (daysUntil(r.date) <= 0 ? 'you can afford it now' : 'earliest ' + fmtDate(r.date, { short: true })) + (r.account ? ', from ' + r.account : '') : rec.name + ' doesn’t fit in the time ahead yet');
-        }
+        if (i) return;
+        if (rec.payer === 'company') return toast(rec.name + ': added for ' + c + ' to fund');
+        const r = GU.costs.schedule(store.state).results.find((x) => x.idea.id === rec.id);
+        toast(r && r.date ? rec.name + ': ' + (daysUntil(r.date) <= 0 ? 'you can afford it now' : 'earliest ' + short(r.date)) + (r.account ? ', from ' + r.account : '') : rec.name + ' doesn’t fit in the time ahead yet');
       },
       onDelete: i ? () => store.remove('costIdeas', i.id, i.name) : null,
       deleteMessage: 'This deletes the idea. You can undo it, and it stays in Settings → Recently deleted for 30 days.',
@@ -747,6 +1321,7 @@
 
   /* ---------- notes ---------- */
   function editNote(id, opts) {
+    opts = opts || {};
     const s = store.state;
     const n = id ? store.find('workNotes', id) : null;
     const area = n ? n.area || 'general' : opts.area || 'general';
@@ -755,9 +1330,9 @@
       title: n ? 'Note' : 'New note',
       wide: true,
       fields: [
-        { name: 'title', label: 'Title', required: true, placeholder: 'e.g. Call with Acme, Ideas for the shop' },
-        { name: 'area', label: 'Category', type: 'select', options: [{ value: 'general', label: 'General' }].concat(AREAS.map((a) => ({ value: a.id, label: labelOf(a.id) }))), half: true },
-        { name: 'folder', label: 'Folder', type: 'select', options: folderOpts(area), half: true, help: 'Folders belong to a category. Save, then reopen to pick a folder after changing the category.' },
+        { name: 'title', label: 'Title', required: true, placeholder: 'e.g. Call with the supplier, Ideas for the shop' },
+        { name: 'area', label: 'Page', type: 'select', options: [{ value: 'general', label: 'Overview' }].concat(AREAS.map((a) => ({ value: a.id, label: labelOf(a.id) }))), half: true },
+        { name: 'folder', label: 'Folder', type: 'select', options: folderOpts(area), half: true, help: 'Folders belong to a page. Save, then reopen to pick a folder after changing the page.' },
         { name: 'body', label: 'Note', type: 'textarea', rows: 10 },
       ],
       values: n || { area, folder: opts.folder || '', title: '', body: '' },
@@ -775,9 +1350,10 @@
   /* ---------- folders and names ---------- */
   function newFolder(area, then) {
     const s = store.state;
+    area = area && AREAS.some((a) => a.id === area) ? area : null;
     formDialog({
       title: 'New folder',
-      fields: [{ name: 'name', label: 'Folder name', required: true, placeholder: 'e.g. Acme Ltd, 2026, Subscriptions' }].concat(area ? [] : [{ name: 'area', label: 'In', type: 'select', options: AREAS.map((a) => ({ value: a.id, label: labelOf(a.id) })) }]),
+      fields: [{ name: 'name', label: 'Folder name', required: true, placeholder: 'e.g. Suppliers, 2026, Subscriptions' }].concat(area ? [] : [{ name: 'area', label: 'On the page', type: 'select', options: AREAS.map((a) => ({ value: a.id, label: labelOf(a.id) })) }]),
       values: { area: 'tasks' },
       submitLabel: 'Create folder',
       onSubmit: (v) => {
@@ -793,7 +1369,8 @@
         else {
           ui.area = a;
           ui.folder = rec.id;
-          GU.render();
+          ui.q = '';
+          go(a);
         }
       },
     });
@@ -809,7 +1386,7 @@
   function rename(c, id) {
     const r = store.find(c, id);
     if (!r) return;
-    const field = c === 'bills' || c === 'projects' || c === 'workFolders' ? 'name' : 'title';
+    const field = c === 'bills' || c === 'projects' || c === 'workFolders' || c === 'costIdeas' ? 'name' : 'title';
     formDialog({
       title: 'Rename',
       fields: [{ name: 'name', label: 'Name', required: true }],
@@ -822,10 +1399,11 @@
     });
   }
   function renameArea(area) {
-    const def = AREAS.find((a) => a.id === area).label;
+    const def = (AREAS.find((a) => a.id === area) || {}).label;
+    if (!def || area === 'invoices') return;
     formDialog({
       title: 'Rename ' + labelOf(area),
-      fields: [{ name: 'name', label: 'Call it', required: true, help: 'Leave it as “' + def + '” to keep the usual name.' }],
+      fields: [{ name: 'name', label: 'Call it', required: true, help: 'Leave it as “' + esc(def) + '” to keep the usual name.' }],
       values: { name: labelOf(area) },
       submitLabel: 'Rename',
       onSubmit: (v) => store.commit((s) => {
@@ -836,38 +1414,55 @@
     });
   }
 
-  /* Move to a folder (or a new one), rename, edit, take out of Work or delete. */
+  /* Open, rename, move to a folder, say who pays, move to Home, or delete. */
   function moreMenu(anchor, c, id) {
     const s = store.state;
     const r = store.find(c, id);
     if (!r) return;
+    const W = wm();
+    const C = co(true);
     if (c === 'workNotes') {
       return menu(anchor, [
         { icon: 'edit', label: 'Open', onClick: () => editNote(id) },
         { icon: 'edit', label: 'Rename', onClick: () => rename(c, id) },
-        { icon: 'folder', label: 'Move to…', hint: 'Another folder or category', onClick: () => moveNote(anchor, id) },
+        { icon: 'folder', label: 'Move to…', hint: 'Another folder or page', onClick: () => moveNote(anchor, id) },
         { icon: 'trash', label: 'Delete', onClick: () => store.remove('workNotes', id, r.title || 'Note') },
       ]);
     }
     const area = AREA_OF[c];
+    const home = c === 'costIdeas' && ideaPart(r) === 'home';
     const items = [
       { icon: 'edit', label: 'Open and edit', onClick: () => GU.view.open({ c, id }) },
       { icon: 'edit', label: 'Rename', onClick: () => rename(c, id) },
-      { icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) },
     ];
-    if (c === 'costIdeas') {
+    if (!home) items.push({ icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) });
+    const setPayer = (who) => W && W.setPayer && W.setPayer(c, id, who);
+    if (c === 'paperwork') {
+      const ln = laneOf(r);
+      if (ln !== 'back') items.push({ icon: 'coin', label: 'I paid this myself', hint: 'Moves it to Get paid back, to send to ' + co(), onClick: () => setPayer('me') });
+      if (ln !== 'ktk') items.push({ icon: 'briefcase', label: C + ' paid this, not me', hint: 'Keeps it as ' + co() + '’s money', onClick: () => setPayer('company') });
+      if (isWaiting(r)) items.push({ icon: 'check', label: 'Paid by ' + co(), onClick: () => W && W.markKtkPaid(id) });
+      else if (ln === 'ktk' && r.kind === 'invoice-in') items.push({ icon: 'repeat', label: 'Not paid yet', hint: 'Back to waiting for ' + co(), onClick: () => notPaidYet(id) });
+    } else if (c === 'bills') {
+      if (billPayer(r) === 'company') items.push({ icon: 'coin', label: 'Comes out of my account', hint: co(true) + ' pays me back', onClick: () => setPayer('me') });
+      else items.push({ icon: 'briefcase', label: C + ' pays it directly', hint: 'Not from your account', onClick: () => setPayer('company') });
+    } else if (c === 'costIdeas') {
+      if (!home) {
+        const who = ideaPayer(r);
+        if (who !== 'company') items.push({ icon: 'briefcase', label: paysLabel(), hint: 'Listed for ' + co() + ' to fund', onClick: () => setPayer('company') });
+        if (who !== 'me') items.push({ icon: 'coin', label: 'I pay, ' + co() + ' pays me back', onClick: () => setPayer('me') });
+        if (who) items.push({ icon: 'info', label: 'Not sure who pays', onClick: () => setPayer(null) });
+      }
       if (GU.costs.isOpen(r)) {
         items.push({ icon: 'check', label: 'Mark done', onClick: () => ideaStatus(id, 'done') });
         items.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => ideaStatus(id, 'dropped') });
       } else items.push({ icon: 'repeat', label: 'Back to the plan', onClick: () => ideaStatus(id, 'open') });
-      items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove('costIdeas', id, r.name) });
     } else if (c === 'projects') {
       for (const st of ['In progress', 'Done'].filter((x) => x !== r.status)) items.push({ icon: st === 'Done' ? 'check' : 'clock', label: 'Mark ' + st.toLowerCase(), onClick: () => store.commit((x) => (x.projects.find((p) => p.id === id).status = st)) });
-      items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove('projects', id, r.name) });
-    } else {
-      items.push({ icon: 'x', label: 'Take out of Work', hint: 'It stays in ' + { tasks: 'To-do', paperwork: 'Receipts & invoices', bills: 'Bills', documents: 'Documents' }[c], onClick: () => takeOut(c, id) });
-      items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(c, id, nameOf(c, r)) });
     }
+    if (home) items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Moves it to Work › Cost forecast', onClick: () => toWork(c, id) });
+    else if (c !== 'projects') items.push({ icon: 'home', label: 'Move to Home', hint: c === 'costIdeas' ? 'It’s mine: Home › Plans' : 'It’s mine, not for work', onClick: () => takeOut(c, id) });
+    items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(c, id, nameOf(c, r)) });
     menu(anchor, items);
   }
   function moveMenu(anchor, c, id) {
@@ -883,7 +1478,7 @@
   }
   function moveNote(anchor, id) {
     const s = store.state;
-    const opts = [{ area: 'general', folder: '', label: 'General' }];
+    const opts = [{ area: 'general', folder: '', label: 'Overview' }];
     for (const a of AREAS) {
       opts.push({ area: a.id, folder: '', label: labelOf(a.id) });
       for (const f of foldersOf(s, a.id)) opts.push({ area: a.id, folder: f.id, label: labelOf(a.id) + ' › ' + f.name });
@@ -893,34 +1488,79 @@
       if (n) Object.assign(n, { area: o.area, folder: o.folder, updated: today() });
     }) })));
   }
+  /* An invoice marked paid by the business by mistake: back to waiting. */
+  function notPaidYet(id) {
+    const before = Object.assign({}, store.find('paperwork', id));
+    store.commit((s) => {
+      const p = s.paperwork.find((x) => x.id === id);
+      if (!p) return;
+      p.status = 'unpaid';
+      delete p.paidDate;
+    });
+    toast('Back to waiting for ' + co(), { action: 'Undo', onAction: () => store.upsert('paperwork', before) });
+  }
+  /* 'Move to Home': it's yours, not for work. Paperwork, bills and ideas lose who pays and any claim, and a
+     linked bank payment counts as your own spending again. */
   function takeOut(c, id) {
+    const W = wm();
+    if (['paperwork', 'bills', 'costIdeas'].includes(c) && W && W.moveToHome) return W.moveToHome(c, id);
     const before = Object.assign({}, store.find(c, id));
     store.commit((s) => {
       const r = s[c].find((x) => x.id === id);
       if (!r) return;
+      r.context = 'home';
       if (c === 'tasks') {
-        r.context = 'home';
         const wl = workListId(s);
         if (r.listId === wl) r.listId = (s.todoLists.find((l) => l.id !== wl) || {}).id || r.listId;
-      } else r.context = 'home';
+      }
+      delete r.payer;
       delete r.workFolder;
     });
-    toast('Taken out of Work', { action: 'Undo', onAction: () => store.upsert(c, before) });
+    toast('Moved to Home', { action: 'Undo', onAction: () => store.upsert(c, before) });
+  }
+  /* The other way, for one of your own ideas: it's for work after all. */
+  function toWork(c, id) {
+    const before = Object.assign({}, store.find(c, id));
+    store.commit((s) => {
+      const r = s[c].find((x) => x.id === id);
+      if (r) r.context = 'work';
+    });
+    toast('Moved to Work › Cost forecast', { action: 'Undo', onAction: () => store.upsert(c, before) });
   }
 
-  /* Opens a project or note (from anywhere, e.g. Home's timeline). */
+  /* Opens a project, note or idea (from anywhere, e.g. Home's timeline). */
   function edit(id, c) {
     if (c === 'workNotes') return editNote(id);
     if (c === 'costIdeas') return editIdea(id);
     return editProject(id);
   }
-  /* Opens Work on one area. */
-  function show(area) {
-    ui.area = area || 'overview';
-    ui.folder = 'all';
-    GU.view.go('work');
+  /* Opens Work on one area ('overview' or none for the Overview). opts.inv picks a tab on the business's page. */
+  function show(area, opts) {
+    if (opts && opts.inv) ui.inv = opts.inv;
+    if (area && area !== 'overview' && ui.area !== area) {
+      ui.area = area;
+      ui.folder = 'all';
+      ui.q = '';
+    }
+    go(area);
   }
 
-  GU.work = { AREAS, itemsOf, checks, dates, figures, workListId, ensureWorkList, isWorkBill, CONTRACT };
-  GU.tabs.work = { label: 'Work', short: 'Work', icon: 'briefcase', render, edit, show, editProject, editNote };
+  GU.work = {
+    AREAS, TAB_OF, CONTRACT, labelOf, itemsOf, checks, dates, figures, workListId, ensureWorkList,
+    isWorkBill: (b) => parts().isWorkBill(b), isWorkTask: (s, t) => parts().isWorkTask(s, t),
+    forecastHTML, editIdea, ideaStatus, forecastSettings, rowHTML, rowClick, newFolder, show, sendToCo, moveFromHome, takeOut,
+  };
+  GU.tabs.work = { label: 'Work overview', short: 'Overview', icon: 'briefcase', part: 'work', render: (r) => render(r, 'overview'), edit, show, editProject, editNote, editIdea, newFolder };
+  // Each area is its own page in the Work part. Get paid back ('work-back') is js/tabs/payback.js.
+  for (const a of AREAS) {
+    GU.tabs[TAB_OF[a.id]] = {
+      get label() { return labelOf(a.id); },
+      get short() { return labelOf(a.id); },
+      icon: a.icon,
+      part: 'work',
+      area: a.id,
+      render: (r) => render(r, a.id),
+      edit,
+    };
+  }
 })();

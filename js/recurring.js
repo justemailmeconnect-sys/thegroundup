@@ -193,12 +193,17 @@
         // A trial or part-month charge at the end isn't the real price: use the usual amount then.
         key: k, name, payee: name, amount: round2(Math.abs(-runEnd.amount - typical) > typical * 0.15 ? typical : -runEnd.amount), typical: round2(typical), varies: even < 0.75, low: round2(Math.min(...amounts)), high: round2(Math.max(...amounts)),
         frequency: f.value, anchorDay, nextDue: next, first: days[0].date, last: lastPay.date, count: days.length, account: lastPay.account,
-        category: cat || F.categorise(desc, -1, state.rules) || 'Bills & utilities', sure: run.length >= 4,
+        category: cat || F.categorise(desc, -1, state.rules, { spend: true }) || 'Bills & utilities', sure: run.length >= 4,
         history: days.slice(-24).map((d) => ({ date: d.date, amount: round2(-d.amount) })),
       });
     }
     return out.sort((a, b) => F.monthlyEquivalent(b.amount, b.frequency) - F.monthlyEquivalent(a.amount, a.frequency));
   }
+
+  const WORK_OUT = F.WORK_OUT || 'Work expenses';
+  /* A regular payment in 'Work expenses' comes out of your account for work: it's a work bill you pay and
+     get back from your employer. */
+  const isWorkFind = (b) => b.category === WORK_OUT;
 
   /* Adds what find() returned as bills to check. Returns the new bill ids. */
   function addAsBills(st, found) {
@@ -206,13 +211,13 @@
     for (const b of found) {
       const id = 'b-' + GU.util.uid();
       ids.push(id);
-      st.bills.push({
+      st.bills.push(Object.assign({
         id, created: today(), name: b.name, payee: b.payee, amount: b.amount, frequency: b.frequency, nextDue: b.nextDue, anchorDay: b.anchorDay,
         method: b.category === 'Subscriptions' ? 'Card (automatic)' : 'Direct debit', autopay: true, category: b.category, account: b.account, active: true,
         history: b.history, found: true, review: true, foundKey: b.key,
         notes: 'Found in your bank statements: ' + b.count + ' payments from ' + GU.util.fmtDate(b.first) + ' to ' + GU.util.fmtDate(b.last) + '.' +
           (b.varies ? ' The amount varies (' + GU.util.money(b.low) + ' to ' + GU.util.money(b.high) + '), so I used the latest.' : ''),
-      });
+      }, isWorkFind(b) ? { context: 'work', payer: 'me' } : {}));
     }
     return ids;
   }
@@ -232,10 +237,19 @@
       ids = addAsBills(st, found);
       st.meta.billsScanned = today();
     });
-    GU.ui.toast('I found ' + GU.util.plural(found.length, 'regular payment') + ' in your statements and added ' + (found.length === 1 ? 'it' : 'them') + ' to Bills. Have a quick look and tell me which aren’t right.', {
+    // Work bills live in Work › Bills, so say where each went.
+    const work = found.filter(isWorkFind).length;
+    const home = found.length - work;
+    const plural = GU.util.plural;
+    const workTab = GU.tabs && GU.tabs['work-bills'] ? 'work-bills' : 'work';
+    let msg;
+    if (!work) msg = 'I found ' + plural(found.length, 'regular payment') + ' in your statements and added ' + (found.length === 1 ? 'it' : 'them') + ' to Bills.';
+    else if (!home) msg = 'I found ' + plural(work, 'regular work payment') + ' in your statements and added ' + (work === 1 ? 'it' : 'them') + ' to Work › Bills.';
+    else msg = 'I found ' + plural(found.length, 'regular payment') + ' in your statements: ' + plural(home, 'bill') + ' added to Bills, and ' + work + ' for work added to Work › Bills.';
+    GU.ui.toast(msg + ' Have a quick look and tell me which aren’t right.', {
       timeout: 12000,
-      action: 'Check them',
-      onAction: () => GU.view.go('bills'),
+      action: found.length === 1 ? 'Check it' : 'Check them',
+      onAction: () => GU.view.go(home ? 'bills' : workTab),
     });
     return ids;
   }

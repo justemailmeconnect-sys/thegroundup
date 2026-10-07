@@ -20,22 +20,53 @@
   const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
   const DESTINATIONS = {
-    receipt: 'Receipts & invoices',
-    invoice_to_pay: 'Receipts & invoices',
-    invoice_owed_to_me: 'Receipts & invoices',
-    warranty: 'Receipts & invoices',
+    receipt: 'Receipts',
+    invoice_to_pay: 'Receipts',
+    invoice_owed_to_me: 'Receipts',
+    warranty: 'Receipts',
     bill: 'Bills',
     debt: 'Debts',
-    document: 'Important documents',
-    visa: 'Visa applications',
-    task: 'To-do lists',
-    transaction_out: 'Bank transactions',
-    transaction_in: 'Bank transactions',
-    bank_statement: 'Bank transactions',
-    order_history: 'Receipts & invoices',
+    document: 'Documents',
+    visa: 'Visas',
+    task: 'To-do',
+    transaction_out: 'Bank',
+    transaction_in: 'Bank',
+    bank_statement: 'Bank',
+    order_history: 'Receipts',
     section: 'Your sections',
     unsure: 'Inbox',
   };
+  const PAPER = ['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty'];
+  const PAYSLIPS = 'Employment and payslips';
+  const WORK_OUT = F.WORK_OUT || 'Work expenses';
+
+  /* ---------- work: the employer and whose money ---------- */
+  const wm = () => GU.workMoney || null;
+  /* The employer from Settings, read through GU.workMoney's defaults ({set:false} when none is chosen). */
+  function employer(s) {
+    s = s || store.state;
+    if (wm()) return wm().employer(s);
+    const e = (s.settings && s.settings.employer) || null;
+    const name = e && typeof e === 'object' ? String(e.name || e.short || '').trim() : '';
+    return { set: !!name, name, short: name ? String(e.short || name).trim() : '', label: name ? String(e.short || name).trim() : 'the company', match: [] };
+  }
+  const isEmployerText = (text) => !!(wm() && text && wm().isEmployerText(store.state, String(text)));
+  /* The receipts and invoices that need to know whose money paid (not a warranty, not an invoice you sent). */
+  const asksPayer = (r) => !!r && r.context === 'work' && (r.destination === 'receipt' || r.destination === 'invoice_to_pay');
+  const payerOk = (p) => p === 'me' || p === 'company';
+  /* Whose money paid for a work receipt or invoice: what it says, or 'me' when your bank shows a payment of
+     exactly that amount around its date (only when that's sure). null when it can't be told yet. */
+  function payerFor(r, s) {
+    if (!asksPayer(r)) return null;
+    if (payerOk(r.payer)) return r.payer;
+    if (!wm() || !(Number(r.amount) > 0) || !r.date || (r.destination === 'invoice_to_pay' && !r.paid)) return null;
+    try {
+      const m = wm().purchaseFor(s || store.state, { id: '', kind: 'receipt', context: 'work', amount: r.amount, date: r.date, party: r.party || '', title: r.title || '', notes: r.notes || '' });
+      return m && m.sure && m.tx ? 'me' : null;
+    } catch (e) {
+      return null;
+    }
+  }
   const DEST_LABEL = {
     receipt: 'Receipt', invoice_to_pay: 'Invoice to pay', invoice_owed_to_me: 'Invoice someone owes you', warranty: 'Warranty',
     bill: 'Regular bill', debt: 'Debt', document: 'Important document', visa: 'Visa application', task: 'Task', transaction_out: 'Money out',
@@ -110,15 +141,19 @@
   /* ---------- context the brain needs about your data ---------- */
   function context() {
     const s = store.state;
+    const e = employer(s);
+    const raw = (s.settings && s.settings.employer) || {};
     return {
       today: today(),
       name: s.settings.name || '',
       business: s.settings.business || '',
+      employer: e.set ? { name: e.name, short: e.short, about: String(raw.about || '').trim() } : null,
       currency: s.settings.currency || 'GBP',
       visas: s.visas.map((v) => ({ id: v.id, visa: v.visaType, country: v.country || '', applicant: v.applicant || '', status: v.status })),
       sections: (s.sections || []).map((x) => ({ id: x.id, name: x.name })),
       documentTypes: GU.tabs.documents.TYPES,
-      categories: F.EXPENSE.concat(F.INCOME),
+      // Work money categories are set by the site itself (work paperwork and bills, the employer's bank lines).
+      categories: F.EXPENSE.concat(F.INCOME).filter((c) => !(F.WORK || []).includes(c)),
     };
   }
 
@@ -127,7 +162,7 @@
   const SCHEMA = {
     type: 'object',
     additionalProperties: false,
-    required: ['destination', 'confidence', 'summary', 'title', 'party', 'amount', 'date', 'due_date', 'expiry_date', 'reference', 'context', 'category',
+    required: ['destination', 'confidence', 'summary', 'title', 'party', 'amount', 'date', 'due_date', 'expiry_date', 'reference', 'context', 'payer', 'category',
       'document_type', 'frequency', 'paid', 'visa_id', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes', 'monthly_payment', 'interest_rate', 'debt_type', 'term_months', 'borrowed_amount'],
     properties: {
       destination: { type: 'string', enum: Object.keys(DESTINATIONS) },
@@ -141,6 +176,7 @@
       expiry_date: NULLABLE('string'),
       reference: NULLABLE('string'),
       context: { type: 'string', enum: ['home', 'work'] },
+      payer: { anyOf: [{ type: 'string', enum: ['company', 'me'] }, { type: 'null' }] },
       category: NULLABLE('string'),
       document_type: NULLABLE('string'),
       frequency: { anyOf: [{ type: 'string', enum: F.FREQUENCIES.map((f) => f.value) }, { type: 'null' }] },
@@ -159,16 +195,34 @@
     },
   };
 
+  /* Who the user works for, and how to tell whose money paid for a work receipt. */
+  function workLines(ctx) {
+    const e = ctx.employer;
+    if (!e) {
+      return ['Work means the user\'s job or the business they work for. For a work receipt or invoice, set payer to "company" when the business paid or will pay, "me" when the user paid with their own card, account, cash, PayPal or Amazon and should get the money back, and null when you can\'t tell.'];
+    }
+    const named = '"' + e.name + '"' + (e.short && e.short !== e.name ? ' ("' + e.short + '")' : '');
+    const who = e.short || e.name;
+    return [
+      named + ' is the business the user works for' + (e.about ? ' (' + e.about + ')' : '') + '. Anything for it is work: invoices and receipts addressed to it, orders for its premises, shop or office, its contracts, suppliers and jobs. Everything else is home.',
+      'For a work receipt or invoice, set payer: "company" when ' + who + ' paid or will pay (its own card or account, or an invoice it will settle); "me" when the user\'s own card, account, cash, PayPal or Amazon shows they paid, so ' + who + ' owes them the money back; null when you can\'t tell.',
+      'Payslips, P60s and tax summaries from ' + who + ' are about the user\'s own pay, so they are home documents. Wages from ' + who + ' are Salary.',
+    ];
+  }
+
   function instructions(ctx) {
+    const e = ctx.employer;
     return [
       'You are the filing assistant inside a personal organiser app. The user throws things at you: photos of receipts, PDFs of invoices, letters, screenshots, pasted emails or quick notes. Decide where each one belongs and pull out the details so it can be filed without the user typing anything.',
       '',
-      'Today is ' + ctx.today + '. The user is ' + (ctx.name || 'not named') + '.' + (ctx.business ? ' Their business or trading name, used on invoices they send, is "' + ctx.business + '".' : '') + ' Their currency is ' + ctx.currency + '. Most users are in the UK, so read dates like 03/04/2026 as 3 April.',
+      'Today is ' + ctx.today + '. The user is ' + (ctx.name || 'not named') + '.' + (ctx.business ? ' Their OWN trading name, used only on invoices they send for their own side work (not their employer), is "' + ctx.business + '".' : '') + ' Their currency is ' + ctx.currency + '. Most users are in the UK, so read dates like 03/04/2026 as 3 April.',
+      '',
+      ...workLines(ctx),
       '',
       'Pick one destination:',
       '- receipt: proof of something already bought or paid for (till receipt, card slip, order confirmation, e-receipt).',
       '- invoice_to_pay: an invoice or one-off bill the user has to pay. If it shows it has already been paid, still use this and set paid to true. Invoices for online orders (Amazon, eBay and similar) are already paid: set paid to true and put the order number in reference.',
-      '- invoice_owed_to_me: an invoice the user or their business sent to someone else, so someone owes the user money.',
+      '- invoice_owed_to_me: an invoice the user (or their own business) sent to someone else, so someone owes the user money.',
       '- warranty: a warranty, guarantee or protection plan. Put the cover end date in expiry_date (work it out from the purchase date and length if needed).',
       '- debt: money the user owes and is paying off: a credit card or store card statement, loan or car finance agreement or statement, Klarna, PayPal Pay in 3, Clearpay or Monzo Flex plans and screenshots, overdraft letters, or money owed to a person. Put the balance still owed in amount (null if it only shows what was first borrowed, as a new agreement does), the date of that balance or of the agreement in date, the lender in party, the minimum or monthly payment in monthly_payment, the interest rate (APR) as a number in interest_rate, the number of monthly payments in term_months, the amount first borrowed in borrowed_amount, the next payment due date in due_date, and the account or agreement number in reference. Set debt_type to one of: ' + GU.debts.TYPES.join('; ') + '. A credit card statement is a debt, not a bank_statement.',
       '- bill: a regular payment being set up or changed (direct debit notice, subscription, contract with a monthly cost). Set frequency and put the next payment date in due_date.',
@@ -186,7 +240,8 @@
       '- amount: the total paid or to pay, as a plain number. null if there is none.',
       '- date: the date on it. due_date: when payment or action is due. All dates as YYYY-MM-DD.',
       '- category: for money items, one of: ' + ctx.categories.join('; ') + '.',
-      '- context: "work" if it is for the user\'s job or business, otherwise "home".',
+      '- context: "work" if it is for ' + (e ? (e.short || e.name) : 'the user\'s job or business') + ', otherwise "home".' + (ctx.business ? ' Invoices under the user\'s own trading name are "home".' : ''),
+      '- payer: for work receipts and invoices only, "company", "me" or null as described above. null for everything else.',
       '- task_title and task_due: if the item asks the user to do something by a date (reply, pay, book, renew, send documents) and the destination is not already task, describe that follow-up. Otherwise null.',
       '- summary: one short, friendly sentence to the user saying what it is, for example "Receipt from Currys for a Samsung TV, £549.00, with a 2-year guarantee."',
       '- confidence: 0 to 1, how sure you are about the destination.',
@@ -197,7 +252,7 @@
 
   function blankResult() {
     return { destination: 'unsure', confidence: 0.3, summary: '', title: '', party: null, amount: null, date: null, due_date: null, expiry_date: null, reference: null,
-      context: 'home', category: null, document_type: null, frequency: null, paid: false, visa_id: null, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null,
+      context: 'home', payer: null, category: null, document_type: null, frequency: null, paid: false, visa_id: null, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null,
       monthly_payment: null, interest_rate: null, debt_type: null, term_months: null, borrowed_amount: null };
   }
   function clean(r) {
@@ -219,6 +274,33 @@
     if (out.term_months != null) out.term_months = Math.round(out.term_months) || null;
     if (out.debt_type && !GU.debts.TYPES.includes(out.debt_type)) out.debt_type = 'Other';
     out.title = (out.title || '').trim() || (out.party || DEST_LABEL[out.destination]);
+    workSense(out);
+    return out;
+  }
+  /* Home or work, and whose money, made to fit how the site files things. */
+  function workSense(out) {
+    if (out.context !== 'work') out.context = 'home';
+    if (!payerOk(out.payer)) out.payer = null;
+    // A payslip or P60 is about your own pay, even when it comes from your employer.
+    if (out.destination === 'document' && out.document_type === PAYSLIPS) out.context = 'home';
+    if (out.context === 'work') {
+      const e = employer();
+      if (out.destination === 'invoice_owed_to_me') {
+        // An invoice you sent the business is money it owes you back; with no employer set it's your own side work.
+        if (e.set) Object.assign(out, { destination: 'receipt', payer: 'me' });
+        else out.context = 'home';
+      } else if (out.destination === 'transaction_out' && !isEmployerText(out.party)) {
+        // 'Paid £18 for printer paper' for work: something to get back, not your own spending.
+        const title = String(out.title || '').trim();
+        Object.assign(out, { destination: 'receipt', payer: 'me', date: out.date || today(), title: title.charAt(0).toUpperCase() + title.slice(1),
+          summary: 'You paid ' + (out.amount != null ? money(out.amount) + ' ' : '') + (out.party ? 'for ' + out.party + ' ' : '') + 'for ' + e.label + '. It goes in Get paid back.' });
+      }
+    }
+    if (out.context !== 'work') {
+      out.payer = null;
+      // Your own paperwork never sits in a work money category.
+      if ((F.WORK || []).includes(out.category) && !/^transaction/.test(out.destination)) out.category = null;
+    }
     return out;
   }
 
@@ -405,7 +487,7 @@
     [['residence permit', 'evisa', 'biometric residence', 'brp', 'share code'], 'Residence permit or eVisa'],
     [['birth certificate', 'marriage certificate', 'death certificate', 'civil partnership'], 'Birth, marriage or death certificate'],
     [['degree', 'diploma', 'transcript', 'certificate of achievement', 'qualification'], 'Education and qualifications'],
-    [['p60', 'p45', 'payslip', 'pay slip', 'contract of employment', 'offer letter', 'employment contract'], 'Employment and payslips'],
+    [['p60', 'p45', 'payslip', 'pay slip', 'contract of employment', 'offer letter', 'employment contract', 'taxable income', 'pay summary', 'earnings summary'], 'Employment and payslips'],
     [['hmrc', 'self assessment', 'tax return', 'tax code', 'unique taxpayer', 'utr'], 'Tax'],
     [['policy schedule', 'certificate of insurance', 'insurance policy', 'policy number', 'policy document'], 'Insurance policy'],
     [['tenancy agreement', 'lease agreement', 'mortgage offer', 'completion statement', 'deed', 'council tax'], 'Home and tenancy'],
@@ -484,7 +566,12 @@
     r.amount = findAmount(raw);
     r.reference = findReference(raw, paths.join(' '));
     r.party = findParty(raw, t);
-    r.context = /\b(my business|client|expenses claim|expense claim|for work|work expense|office supplies|freelance|bill to:? .{0,40}(ltd|limited))\b/.test(t) || (store.state.settings.business && t.includes(store.state.settings.business.toLowerCase())) ? 'work' : 'home';
+    // Work is the business you work for: its name anywhere, or plain work words. With no employer set, your own
+    // business, clients and freelance work count too (as they always did).
+    const emp = employer();
+    const ownBiz = (store.state.settings.business || '').toLowerCase().trim();
+    r.context = (emp.set && isEmployerText(raw + ' ' + names)) || /\b(expenses claim|expense claim|for work|work expense|office supplies)\b/.test(t) ||
+      (!emp.set && (/\b(my business|client|freelance|bill to:? .{0,40}(ltd|limited))\b/.test(t) || (ownBiz && t.includes(ownBiz)))) ? 'work' : 'home';
 
     // A spreadsheet is either a list of online orders or a bank statement.
     const sheetLike = !input.files.length || input.files.every((f) => /\.(csv|tsv|txt)$/i.test(f.name) || /^text\//.test(f.type));
@@ -500,15 +587,17 @@
     const noteLike = (!input.files.length || (input.files.every((f) => /\.txt$/i.test(f.name)) && raw.length < 240 && !/receipt|invoice|statement|total|policy|certificate|booking/i.test(raw))) && debtScore(raw) < 2;
     if (noteLike && raw.length < 240) {
       const amt = raw.match(/(?:£|\$|€)\s?(\d+(?:\.\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s?(?:quid|pounds|gbp)/i);
+      // 'printer paper for work' names the thing, not who it was for.
+      const whoOf = (m) => (m ? m[1].trim().split(/\s+(?:for|from|on|at)\s+/i)[0].trim() : null);
       if (amt && /\b(paid|spent|bought|gave|cost)\b/i.test(raw)) {
-        const who = raw.match(/\b(?:to|at|on|for)\s+(?:the\s+)?([a-z][\w' &-]{2,40})/i);
-        return Object.assign(r, { destination: 'transaction_out', confidence: 0.8, amount: parseFloat(amt[1] || amt[2]), party: who ? who[1].trim() : null, title: who ? who[1].trim() : raw,
-          date: r.date || today(), category: F.categorise(raw, -1, store.state.rules) || null, summary: 'Money out: ' + money(parseFloat(amt[1] || amt[2])) + (who ? ' to ' + who[1].trim() : '') + '.' });
+        const who = whoOf(raw.match(/\b(?:to|at|on|for)\s+(?:the\s+)?([a-z][\w' &-]{2,40})/i));
+        return clean(Object.assign(r, { destination: 'transaction_out', confidence: 0.8, amount: parseFloat(amt[1] || amt[2]), party: who, title: who || raw,
+          date: r.date || today(), category: F.categorise(raw, -1, store.state.rules) || null, summary: 'Money out: ' + money(parseFloat(amt[1] || amt[2])) + (who ? ' to ' + who : '') + '.' }));
       }
       if (amt && /\b(received|got paid|earned|was paid|refund)\b/i.test(raw)) {
-        const who = raw.match(/\bfrom\s+([a-z][\w' &-]{2,40})/i);
-        return Object.assign(r, { destination: 'transaction_in', confidence: 0.8, amount: parseFloat(amt[1] || amt[2]), party: who ? who[1].trim() : null, title: who ? who[1].trim() : raw,
-          date: r.date || today(), category: /refund/i.test(raw) ? 'Refunds' : null, summary: 'Money in: ' + money(parseFloat(amt[1] || amt[2])) + (who ? ' from ' + who[1].trim() : '') + '.' });
+        const who = whoOf(raw.match(/\bfrom\s+([a-z][\w' &-]{2,40})/i));
+        return clean(Object.assign(r, { destination: 'transaction_in', confidence: 0.8, amount: parseFloat(amt[1] || amt[2]), party: who, title: who || raw,
+          date: r.date || today(), category: /refund/i.test(raw) ? 'Refunds' : null, summary: 'Money in: ' + money(parseFloat(amt[1] || amt[2])) + (who ? ' from ' + who : '') + '.' }));
       }
       const q = GU.tabs.today.parseQuickTask(raw);
       const verb = /^(call|ring|email|text|book|buy|pay|renew|cancel|send|post|check|ask|remember|remind|don'?t forget|need to|sort|fix|clean|pick up|collect|order|apply|reply|chase|find|get|make|take|return|update|finish|write|print|sign|submit|arrange|organise|organize)\b/i.test(raw.trim());
@@ -558,11 +647,11 @@
     } else if (sc.invoice >= 4 || (sc.invoice >= 2 && (sc.invoice > sc.receipt || onlineOrder))) {
       const dest = fromMe ? 'invoice_owed_to_me' : 'invoice_to_pay';
       Object.assign(r, { destination: dest, confidence: 0.72 + Math.min(0.15, sc.invoice / 40), paid: !fromMe && paidWords > 0, title: r.party ? 'Invoice from ' + r.party : 'Invoice',
-        category: F.categorise(r.party + ' ' + t, -1, store.state.rules) || null,
+        category: F.categorise(r.party + ' ' + t, -1, store.state.rules, { spend: true }) || null,
         summary: (fromMe ? 'An invoice you sent' : paidWords ? 'A paid invoice' : 'An invoice to pay') + (r.party && !fromMe ? ' from ' + r.party : '') + (r.amount ? ' for ' + money(r.amount) : '') + (r.due_date && !paidWords ? ', due ' + fmtDate(r.due_date) : '') + '.' });
     } else if (sc.bill >= 2 && sc.bill >= sc.receipt) {
       Object.assign(r, { destination: 'bill', confidence: 0.7, frequency: /year|annual/.test(t) ? 'yearly' : /quarter/.test(t) ? 'quarterly' : /week/.test(t) ? 'weekly' : 'monthly',
-        title: r.party || 'New bill', due_date: r.due_date || r.date, category: F.categorise(r.party + ' ' + t, -1, store.state.rules) || 'Bills & utilities',
+        title: r.party || 'New bill', due_date: r.due_date || r.date, category: F.categorise(r.party + ' ' + t, -1, store.state.rules, { spend: true }) || 'Bills & utilities',
         summary: 'A regular payment' + (r.party ? ' to ' + r.party : '') + (r.amount ? ' of ' + money(r.amount) : '') + '.' });
     } else if (docType) {
       const firstLine = raw.split('\n').map((x) => x.trim()).find((l) => /[a-z]{3}/i.test(l) && l.length <= 60);
@@ -571,7 +660,7 @@
         summary: 'An important document (' + docType.toLowerCase() + ')' + (r.expiry_date ? ', expires ' + fmtDate(r.expiry_date) : '') + '.' });
     } else if (sc.receipt >= 1.3) {
       Object.assign(r, { destination: 'receipt', confidence: 0.6 + Math.min(0.3, sc.receipt / 12), title: r.party ? r.party + ' receipt' : 'Receipt',
-        category: F.categorise(r.party + ' ' + t, -1, store.state.rules) || null,
+        category: F.categorise(r.party + ' ' + t, -1, store.state.rules, { spend: true }) || null,
         expiry_date: warrantyYears ? addMonths(r.date || today(), 12 * +warrantyYears[1]) : null,
         summary: 'A receipt' + (r.party ? ' from ' + r.party : '') + (r.amount ? ' for ' + money(r.amount) : '') + (r.date ? ' on ' + fmtDate(r.date) : '') + '.' });
     } else if (topic && topic.n >= 1) {
@@ -692,44 +781,82 @@
   }
 
   /* ---------- public: file a result ---------- */
-  function where(result) {
-    const r = result;
-    if (r.destination === 'section') {
+  /* The page each thing is filed on: {tab, label}, e.g. 'Work › Get paid back' or 'Home › Documents › Passport'.
+     Work receipts and invoices go by whose money paid: yours to Get paid back, the business's to its own page. */
+  const tabOr = (id, fallback) => (GU.tabs && GU.tabs[id] ? id : fallback);
+  const homePage = (id, fallback) => 'Home › ' + ((GU.tabs && GU.tabs[id] && GU.tabs[id].short) || fallback);
+  function workPage(area, fallback) {
+    let name = '';
+    try {
+      name = GU.work && GU.work.labelOf ? GU.work.labelOf(area) : '';
+    } catch (e) {
+      name = '';
+    }
+    return 'Work › ' + (name || fallback);
+  }
+  const paysLabel = () => (GU.parts && GU.parts.paysLabel ? GU.parts.paysLabel(store.state) : 'Company pays');
+  function placeOf(result) {
+    const r = workSense(Object.assign({}, result));
+    const work = r.context === 'work';
+    const d = r.destination;
+    if (d === 'section') {
       const sec = r.section_id && (store.state.sections || []).find((x) => x.id === r.section_id);
-      return sec ? sec.name : (r.new_section_name ? r.new_section_name + ' (new section)' : 'A new section');
+      return { tab: sec ? 's-' + sec.id : null, label: sec ? sec.name : (r.new_section_name ? r.new_section_name + ' (new section)' : 'A new section') };
     }
-    if (r.destination === 'visa') {
+    if (d === 'visa') {
       const v = r.visa_id && store.find('visas', r.visa_id);
-      return v ? 'Visa applications › ' + v.visaType : 'Visa applications › new application';
+      return { tab: 'visas', label: homePage('visas', 'Visas') + ' › ' + (v ? v.visaType : 'new application') };
     }
-    if (r.destination === 'document') return 'Important documents › ' + (r.document_type || 'Other');
-    if (r.destination === 'debt') return 'Debts › ' + (r.party || r.title || 'new debt');
-    if (['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty'].includes(r.destination)) return 'Receipts & invoices › ' + (r.context === 'work' ? 'Work' : 'Home');
-    return DESTINATIONS[r.destination];
+    if (PAPER.includes(d)) {
+      if (!work) return { tab: 'receipts', label: homePage('receipts', 'Receipts') + (d === 'invoice_owed_to_me' ? ' › Owed to you' : '') };
+      if (d !== 'warranty' && r.payer === 'me') return { tab: tabOr('work-back', 'work'), label: workPage('back', 'Get paid back') };
+      if (d === 'warranty' || r.payer === 'company') return { tab: tabOr('work-ktk', 'work'), label: workPage('invoices', paysLabel()) };
+      return { tab: tabOr('work-ktk', 'work'), label: 'Work › Who paid?' };
+    }
+    if (d === 'bill') return work ? { tab: tabOr('work-bills', 'work'), label: workPage('bills', 'Bills') } : { tab: 'bills', label: homePage('bills', 'Bills') };
+    if (d === 'document') {
+      return work ? { tab: tabOr('work-docs', 'work'), label: workPage('contracts', 'Contracts & documents') }
+        : { tab: 'documents', label: homePage('documents', 'Documents') + ' › ' + (r.document_type || 'Other') };
+    }
+    if (d === 'task') return work ? { tab: tabOr('work-tasks', 'work'), label: workPage('tasks', 'Tasks') } : { tab: 'todos', label: homePage('todos', 'To-do') };
+    if (d === 'debt') return { tab: 'debts', label: homePage('debts', 'Debts') + ' › ' + (r.party || r.title || 'new debt') };
+    if (d === 'transaction_out' || d === 'transaction_in' || d === 'bank_statement') return { tab: 'transactions', label: homePage('transactions', 'Bank') };
+    if (d === 'order_history') return { tab: 'receipts', label: homePage('receipts', 'Receipts') };
+    return { tab: null, label: DESTINATIONS[d] || 'Inbox' };
+  }
+  function where(result) {
+    return placeOf(result).label;
   }
 
   /* Files the item. metas: already-stored file metadata. Returns {tab, ref, label, undo} or null if it needs the user. */
   function file(result, metas, note) {
-    const r = result;
+    // Home or work, and whose money, settled first so it lands on the page the Inbox showed.
+    const r = workSense(Object.assign({}, result));
     if (r.destination === 'debt') {
       const res = GU.tabs.debts.fromInbox(Object.assign({}, r, { notes: [r.notes, note && note !== r.title ? note : ''].filter(Boolean).join('\n') || null }), metas);
-      return { tab: 'debts', ref: { c: 'debts', id: res.rec.id }, label: 'Debts › ' + res.rec.name + (res.added ? '' : ' (updated)'), undo: res.undo };
+      return { tab: 'debts', ref: { c: 'debts', id: res.rec.id }, label: homePage('debts', 'Debts') + ' › ' + res.rec.name + (res.added ? '' : ' (updated)'), undo: res.undo };
     }
-    const s = store.state;
     const created = [];
     const t = today();
     const notes = [r.notes, note && note !== r.title ? note : ''].filter(Boolean).join('\n') || '';
+    const work = r.context === 'work';
     let tab = null;
     let ref = null;
     let visaUndo = null;
     let attachUndo = null;
+    let txUndo = null;
     let sameTitle = '';
+    let sameLabel = '';
     store.commit((st) => {
       const add = (c, rec) => {
         st[c].push(rec);
         created.push({ c, id: rec.id });
         return rec;
       };
+      // Work tasks go in the Work list (made if it isn't there); your own never do.
+      const workList = () => (GU.work && GU.work.ensureWorkList ? GU.work.ensureWorkList(st) : (GU.parts && GU.parts.workListId(st)) || (st.todoLists[0] || {}).id);
+      const wl = GU.parts && GU.parts.workListId ? GU.parts.workListId(st) : null;
+      const homeLists = st.todoLists.filter((l) => l.id !== wl);
       switch (r.destination) {
         case 'receipt':
         case 'invoice_to_pay':
@@ -745,14 +872,33 @@
             if (same.amount == null && r.amount != null) same.amount = r.amount;
             attachUndo = { id: same.id, fileIds: metas.map((m) => m.id) };
             sameTitle = same.title;
-            tab = 'receipts';
+            const at = placeOf({ destination: r.destination, context: same.context === 'work' ? 'work' : 'home', payer: wm() ? wm().payerOf(same, 'paperwork') : same.payer });
+            tab = at.tab;
+            sameLabel = at.label;
             ref = { c: 'paperwork', id: same.id };
             break;
           }
-          const rec = add('paperwork', { id: 'p-' + uid(), created: t, kind, context: r.context, title: r.title, party: r.party || '', amount: r.amount, date: r.date || t,
+          // Whose money paid: what it said, or yours when your bank shows the payment.
+          const payer = asksPayer(r) ? payerFor(r, st) : work && kind !== 'invoice-out' && payerOk(r.payer) ? r.payer : null;
+          const rec = { id: 'p-' + uid(), created: t, kind, context: work ? 'work' : 'home', title: r.title, party: r.party || '', amount: r.amount, date: r.date || t,
             dueDate: inv ? r.due_date || '' : '', status: inv ? (r.paid ? 'paid' : 'unpaid') : '', paidDate: inv && r.paid ? r.date || t : '',
-            warrantyUntil: r.destination === 'warranty' || r.expiry_date ? r.expiry_date || '' : '', reference: r.reference || '', category: r.category || '', notes, files: metas, via: r.via, folder: r.folder || '' });
-          tab = 'receipts';
+            warrantyUntil: r.destination === 'warranty' || r.expiry_date ? r.expiry_date || '' : '', reference: r.reference || '', category: work ? WORK_OUT : r.category || '', notes, files: metas, via: r.via, folder: r.folder || '' };
+          if (work && payer) rec.payer = payer;
+          if (wm()) {
+            wm().normalise(rec);
+            // Yours to get back: link your bank payment when it's sure, so it leaves your own spending.
+            if (wm().isClaim(rec) && !rec.purchaseTx && (rec.kind !== 'invoice-in' || rec.status === 'paid')) {
+              const m = wm().purchaseFor(st, rec);
+              if (m.sure && m.tx) {
+                txUndo = { id: m.tx.id, was: m.tx.category };
+                rec.purchaseTx = m.tx.id;
+                rec.purchaseWas = m.tx.category || '';
+                m.tx.category = WORK_OUT;
+              }
+            }
+          }
+          add('paperwork', rec);
+          tab = placeOf(Object.assign({}, r, { payer: rec.payer || null })).tab;
           ref = { c: 'paperwork', id: rec.id };
           break;
         }
@@ -763,21 +909,25 @@
             existingBill.files = (existingBill.files || []).concat(metas);
             attachUndo = { id: existingBill.id, fileIds: metas.map((m) => m.id), c: 'bills' };
             sameTitle = existingBill.name;
-            tab = 'bills';
+            const at = placeOf({ destination: 'bill', context: GU.parts && GU.parts.isWorkBill(existingBill) ? 'work' : 'home' });
+            tab = at.tab;
+            sameLabel = at.label;
             ref = { c: 'bills', id: existingBill.id };
             break;
           }
           const due = r.due_date || r.date || t;
           const rec = add('bills', { id: 'b-' + uid(), created: t, name: r.title, payee: r.party || '', amount: r.amount || 0, frequency: r.frequency || 'monthly', nextDue: due < t ? F.nextDate(due, r.frequency || 'monthly', +due.slice(8)) || t : due,
-            anchorDay: +due.slice(8), method: 'Direct debit', autopay: true, category: r.category || 'Bills & utilities', account: (st.accounts[0] || {}).id, notes, files: metas, history: [], active: true });
-          tab = 'bills';
+            anchorDay: +due.slice(8), method: 'Direct debit', autopay: true, category: work ? WORK_OUT : r.category || 'Bills & utilities', context: work ? 'work' : 'home', account: (st.accounts[0] || {}).id, notes, files: metas, history: [], active: true });
+          // Who pays a work bill: left out until it's known, and read as the business's (the form always asks).
+          if (work && payerOk(r.payer)) rec.payer = r.payer;
+          tab = placeOf(r).tab;
           ref = { c: 'bills', id: rec.id };
           break;
         }
         case 'document': {
-          const rec = add('documents', { id: 'd-' + uid(), created: t, title: r.title, type: r.document_type || 'Other', holder: '', reference: r.reference || '', location: '',
+          const rec = add('documents', { id: 'd-' + uid(), created: t, title: r.title, type: r.document_type || 'Other', context: work ? 'work' : 'home', holder: '', reference: r.reference || '', location: '',
             issueDate: r.date || '', expiryDate: r.expiry_date || '', notes: [r.summary, notes].filter(Boolean).join('\n'), files: metas, folder: r.folder || '' });
-          tab = 'documents';
+          tab = placeOf(r).tab;
           ref = { c: 'documents', id: rec.id };
           break;
         }
@@ -799,8 +949,9 @@
           break;
         }
         case 'task': {
-          const rec = add('tasks', { id: 'k-' + uid(), created: t, listId: (st.todoLists[0] || {}).id, title: r.title, due: r.due_date || '', priority: 'normal', notes: [notes, metas.length ? plural(metas.length, 'file') + ' attached in Inbox history' : ''].filter(Boolean).join('\n'), done: false });
-          tab = 'todos';
+          const rec = add('tasks', Object.assign({ id: 'k-' + uid(), created: t, listId: work ? workList() : (homeLists[0] || st.todoLists[0] || {}).id, title: r.title, due: r.due_date || '', priority: 'normal',
+            notes: [notes, metas.length ? plural(metas.length, 'file') + ' attached in Inbox history' : ''].filter(Boolean).join('\n'), done: false }, work ? { context: 'work' } : {}));
+          tab = placeOf(r).tab;
           ref = { c: 'tasks', id: rec.id };
           break;
         }
@@ -834,11 +985,13 @@
           return;
       }
       if (r.task_title && r.destination !== 'task') {
-        add('tasks', { id: 'k-' + uid(), created: t, listId: (st.todoLists.find((l) => /admin/i.test(l.name)) || st.todoLists[0] || {}).id, title: r.task_title, due: r.task_due || '', priority: 'normal', notes: 'From: ' + r.title, done: false });
+        const listId = work ? workList() : (homeLists.find((l) => /admin/i.test(l.name)) || homeLists[0] || st.todoLists[0] || {}).id;
+        add('tasks', Object.assign({ id: 'k-' + uid(), created: t, listId, title: r.task_title, due: r.task_due || '', priority: 'normal', notes: 'From: ' + r.title, done: false }, work ? { context: 'work' } : {}));
       }
     });
     if (!ref) return null;
-    const label = sameTitle ? (tab === 'bills' ? 'Bills › ' : 'Receipts & invoices › ') + sameTitle + ' (added to it)' : where(r);
+    const filed = ref.c === 'paperwork' && !sameTitle ? store.find('paperwork', ref.id) : null;
+    const label = sameTitle ? sameLabel + ' › ' + sameTitle + ' (added to it)' : where(filed ? Object.assign({}, r, { payer: filed.payer || null }) : r);
     return {
       tab,
       ref,
@@ -856,6 +1009,10 @@
               v.files = (v.files || []).filter((f) => !visaUndo.fileIds.includes(f.id));
               v.log = (v.log || []).filter((l) => l.id !== visaUndo.logId);
             }
+          }
+          if (txUndo) {
+            const tx = st.transactions.find((x) => x.id === txUndo.id);
+            if (tx && tx.category === WORK_OUT) tx.category = txUndo.was || '';
           }
         });
       },
@@ -890,8 +1047,12 @@
         if (el.tagName === 'SELECT' || !el.value || el.type === 'date') el.value = name === 'amount' ? Number(value).toFixed(2) : value;
       };
       if (scope === 'paperwork' && kindMap[r.destination]) {
-        set('kind', kindMap[r.destination]);
-        set('context', r.context);
+        // Opened in Work, it stays for work; whose money paid comes from the file, or from your bank.
+        const inWork = (form.elements.context && form.elements.context.value === 'work') || (GU.parts && GU.parts.get() === 'work');
+        const fit = workSense(Object.assign({}, r, inWork ? { context: 'work' } : {}));
+        set('kind', kindMap[fit.destination] || kindMap[r.destination]);
+        set('context', fit.context);
+        if (fit.context === 'work') set('payer', payerFor(fit));
         set('title', r.title);
         set('party', r.party);
         set('amount', r.amount);
@@ -1002,5 +1163,5 @@
     return { lender: null, payments: GU.debts.parseSchedule(all), via: 'offline' };
   }
 
-  GU.brain = { readSchedule, readStatement, quick, analyse, file, where, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS };
+  GU.brain = { readSchedule, readStatement, quick, analyse, file, where, placeOf, asksPayer, payerFor, workSense, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS };
 })();

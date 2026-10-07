@@ -12,6 +12,12 @@
   ];
   const INCOME = ['Salary', 'Freelance & side work', 'Benefits', 'Refunds', 'Interest', 'Gifts received', 'Rental income', 'Other income'];
   const TRANSFER = 'Transfers';
+  /* Work money: what you spend for your employer and what they pay you back. Real money in your accounts,
+     but not yours to spend, so it's kept out of income, spending, budgets and charts. */
+  const WORK_OUT = 'Work expenses';
+  const WORK_IN = 'Work reimbursements';
+  const WORK = [WORK_OUT, WORK_IN];
+  INCOME.push(WORK_IN); // so it validates as a money-in category; WORK_OUT stays in EXPENSE for old records
 
   /* Keyword rules for common UK merchants. User rules always win over these. Order matters. */
   const DEFAULT_RULES = [
@@ -36,7 +42,7 @@
   ];
   const DEFAULT_INCOME_RULES = [
     [['refund', 'reversal'], 'Refunds'],
-    [['salary', 'payroll', 'wages', 'pay '], 'Salary'],
+    [['salary', 'payroll', 'wages', 'wage ', 'pay '], 'Salary'],
     [['interest'], 'Interest'],
     [['universal credit', 'dwp', 'child benefit', 'hmrc'], 'Benefits'],
   ];
@@ -46,9 +52,15 @@
     return (' ' + desc + ' ').toLowerCase().includes(kw);
   }
 
-  /* Picks a category for a bank description. Returns '' when unsure. */
-  function categorise(description, amount, rules) {
+  /* Picks a category for a bank description. Returns '' when unsure.
+     Money to or from your employer is split first (wages or work money), before your own rules. */
+  /* opts.spend: the text is a receipt, invoice or bill, not a bank line, so the employer split (wages or
+     money paid back) doesn't apply to it. */
+  function categorise(description, amount, rules, opts) {
     const d = String(description || '');
+    const wm = GU.workMoney;
+    const e = !(opts && opts.spend) && wm && typeof wm.employerCategory === 'function' ? wm.employerCategory(d, amount) : '';
+    if (e) return e;
     for (const r of rules || []) {
       if (r.match && matches(d, r.match.toLowerCase())) return r.category;
     }
@@ -59,7 +71,9 @@
   }
 
   const isTransfer = (t) => t.category === TRANSFER;
-  const counts = (t) => !isTransfer(t);
+  const isWork = (t) => !!t && WORK.includes(t.category);
+  /* Whether a bank line counts towards your own money in and out (not a transfer, not work money). */
+  const counts = (t) => !isTransfer(t) && !isWork(t);
   const moneyIn = (list) => sum(list.filter((t) => t.amount > 0 && counts(t)), (t) => t.amount);
   const moneyOut = (list) => sum(list.filter((t) => t.amount < 0 && counts(t)), (t) => -t.amount);
 
@@ -197,12 +211,13 @@
   }
 
   function categoryOptions(kind) {
-    const exp = { group: 'Money out', options: EXPENSE };
-    const inc = { group: 'Money in', options: INCOME };
+    const exp = { group: 'Money out', options: EXPENSE.filter((c) => !WORK.includes(c)) };
+    const inc = { group: 'Money in', options: INCOME.filter((c) => !WORK.includes(c)) };
+    const work = { group: 'Work money (kept out of your own totals)', options: WORK };
     const other = { group: 'Neither', options: [TRANSFER] };
-    if (kind === 'in') return [inc, other];
-    if (kind === 'out') return [exp, other];
-    return [exp, inc, other];
+    if (kind === 'in') return [inc, work, other];
+    if (kind === 'out') return [exp, work, other];
+    return [exp, inc, work, other];
   }
 
   /* ---------- invoices you've sent: what's still owed to you ---------- */
@@ -219,12 +234,21 @@
     if (p.status === 'paid' && rest > 0) out.push({ date: p.paidDate || p.date || '', amount: rest });
     return out;
   }
-  /* Everything still owed to you, soonest due first (no due date last), each with the running total up to it. */
+  /* Everything still owed to you, soonest due first (no due date last), each with the running total up to it.
+     Home invoices unless you ask for another context. A work invoice-out (an old way of claiming expenses
+     back from your employer) only shows with context 'all': that money is in Get paid back instead. */
   function owedToMe(state, context) {
     const t = today();
+    const ctx = context === undefined ? 'home' : context;
+    const inCtx = (p) => {
+      const c = p.context || 'home';
+      if (ctx === 'all') return true;
+      if (c === 'work') return false;
+      return !ctx || c === ctx;
+    };
     let run = 0;
     return (state.paperwork || [])
-      .filter((p) => p.kind === 'invoice-out' && p.status !== 'paid' && (!context || context === 'all' || (p.context || 'home') === context))
+      .filter((p) => p.kind === 'invoice-out' && p.status !== 'paid' && inCtx(p))
       .map((p) => ({ p, left: outstanding(p), paid: paidSoFar(p), late: !!(p.dueDate && p.dueDate < t), noAmount: p.amount == null || p.amount === '' }))
       .filter((x) => x.left > 0 || x.noAmount)
       .sort((a, b) => (a.p.dueDate || '9').localeCompare(b.p.dueDate || '9') || (a.p.date || '').localeCompare(b.p.date || ''))
@@ -250,22 +274,27 @@
   }
 
   /* ---------- work expenses to claim back ---------- */
-  /* Everything marked to claim back and not claimed yet, oldest first, each with the running total up to it. */
+  /* Things you paid for work and haven't sent to your employer yet, oldest first, each with the running total
+     up to it. Kept for older callers: the list comes from GU.workMoney.claims(state, 'to-send'). */
   function toClaim(state) {
+    const wm = GU.workMoney;
+    const list = wm && typeof wm.claims === 'function'
+      ? wm.claims(state, 'to-send') || []
+      : (state.paperwork || []) // before work money is loaded: the old claim / claimed flags
+        .filter((p) => p.claim && !p.claimed)
+        .sort((a, b) => (a.date || '9').localeCompare(b.date || '9') || (a.created || '').localeCompare(b.created || ''));
     let run = 0;
-    return (state.paperwork || [])
-      .filter((p) => p.claim && !p.claimed)
-      .sort((a, b) => (a.date || '9').localeCompare(b.date || '9') || (a.created || '').localeCompare(b.created || ''))
-      .map((p) => {
-        const amount = Math.abs(Number(p.amount) || 0);
-        return { p, amount, noAmount: p.amount == null || p.amount === '', running: (run = round2(run + amount)) };
-      });
+    return list.map((x) => {
+      const p = x && x.p ? x.p : x;
+      const amount = x && x.p && Number.isFinite(x.amount) ? x.amount : Math.abs(Number(p.amount) || 0);
+      return Object.assign({}, x && x.p ? x : {}, { p, amount, noAmount: p.amount == null || p.amount === '', running: (run = round2(run + amount)) });
+    });
   }
 
   GU.finance = {
     outstanding, received, owedToMe, paymentFor, toClaim,
-    EXPENSE, INCOME, TRANSFER, FREQUENCIES, PERIODS,
-    categorise, isTransfer, moneyIn, moneyOut, inMonth, monthSeries, byCategory, periodFilter,
+    EXPENSE, INCOME, TRANSFER, WORK, WORK_IN, WORK_OUT, FREQUENCIES, PERIODS,
+    categorise, isTransfer, isWork, counts, moneyIn, moneyOut, inMonth, monthSeries, byCategory, periodFilter,
     freqLabel, nextDate, monthlyEquivalent, occurrences, rollForward, categoryOptions,
   };
 })();

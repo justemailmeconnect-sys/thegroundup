@@ -1,71 +1,122 @@
 /* The Ground Up: styles.
    Layout: a slim dark icon rail on the left (a bottom bar on phones), a calm reading column for the
    daily briefing, and a side column for numbers and things you're waiting on. */
+/* ---------- palette: "Stone & Paper" ----------
+   One warm-paper neutral base shared by both parts; each part brings its own accent family.
+   html[data-part="home"]  Damson   (your own life and money)
+   html[data-part="work"]  Petrol   (KTK Healthcare)
+   With no data-part set, the Home accent is used. Every contrast pair is computed (WCAG 2.x). */
 :root {
-  --bg: #f8faf8;
-  --bg-2: #f1f5f2;
-  --surface: #ffffff;
-  --surface-2: #eef3f0;
-  --line: #e1e9e4;
-  --line-strong: #c9d6ce;
-  --ink: #17201c;
-  --ink-2: #4d5c55;
-  --ink-3: #75847c;
-  --accent: #24563f;
-  --accent-2: #3f8f6a;
-  --accent-ink: #ffffff;
-  --accent-soft: #e4efe8;
-  --rail: #17201c;
-  --rail-ink: #a9bdb2;
-  --rail-hover: #24302a;
-  --rail-active: #3f8f6a;
-  --good: #1b7a44;
-  --good-soft: #e1f2e7;
-  --warn: #8a5a00;
-  --warn-soft: #fbefd5;
-  --crit: #b3302b;
-  --crit-soft: #fbe5e2;
-  --info: #2f4fae;
-  --info-soft: #e7ecfb;
-  --k-task: #24563f; --k-task-bg: #e4efe8;
-  --k-money: #8a4b12; --k-money-bg: #fbeee0;
-  --k-in: #1f5f9e; --k-in-bg: #e3eefa;
-  --k-visa: #3a3f9e; --k-visa-bg: #e9eafb;
-  --k-doc: #6b3d8f; --k-doc-bg: #f2eafa;
-  --series-in: #2a78d6;
-  --series-out: #eb6834;
-  --grid: #e8eeea;
-  --axis: #c9d6ce;
-  --shadow: 0 1px 2px rgba(23, 32, 28, 0.05), 0 6px 20px rgba(23, 32, 28, 0.06);
+  --bg: #f5f2ec; --bg-2: #eeeae2; --surface: #fcfbf8; --surface-2: #f1ede6; --line: #e5dfd5; --line-strong: #d0c8bb;
+  --ink: #181b21; --ink-2: #484c55; --ink-3: #64676e;
+  --accent: #6b3a6e; --accent-2: #85588c; --accent-ink: #fdf9fd; --accent-soft: #f1eaf4; --part-tint: #f7f1f8; --part-ink: #301631;
+  --rail: #1a1c21; --rail-ink: #a6a8ae; --rail-hover: #272a31; --rail-active: #754779;
+  --rail-ink-hover: #ecebe8; --rail-ink-active: #ffffff; --rail-badge: #ba362e; --rail-badge-ink: #ffffff;
+  --good: #307043; --good-soft: #e4eee0;
+  --warn: #8a5a0a; --warn-soft: #f6ebd3;
+  --crit: #932320; --crit-soft: #f9e2dc;
+  --info: #41479a; --info-soft: #e8e8f4;
+  --k-task: #3a4557; --k-task-bg: #e7e9ec;
+  --k-money: #87491f; --k-money-bg: #f5e8dc;
+  --k-in: #26578b; --k-in-bg: #dfebf8;
+  --k-visa: #41428c; --k-visa-bg: #e7e8f8;
+  --k-doc: #545621; --k-doc-bg: #ecedd8;
+  --series-in: #2a76bf; --series-out: #c8631b; --grid: #ebe6dd; --axis: #cfc7ba;
+  --home-door-bg: #f4ebf5; --home-door-ink: #301631; --home-door-accent: #6b3a6e;
+  --work-door-bg: #e2f1f2; --work-door-ink: #03272c; --work-door-accent: #11484e; --work-door-grid: #d9e8ea;
+  --backdrop: rgba(26, 24, 21, 0.45);
+  --shadow: 0 1px 2px rgba(40, 33, 24, 0.05), 0 6px 20px rgba(40, 33, 24, 0.07);
   --font-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-door-home: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-door-work: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
   --radius: 12px;
   --rail-w: 84px;
+  --partbar-h: 56px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #101613; --bg-2: #0c110f; --surface: #161e1a; --surface-2: #1d2722; --line: #26322c; --line-strong: #36453e;
-    --ink: #e3ebe6; --ink-2: #a8b8b0; --ink-3: #75867d; --accent: #6cc69a; --accent-2: #4fae80; --accent-ink: #0b1a12; --accent-soft: #1b3127;
-    --rail: #0a0e0c; --rail-ink: #8ea59a; --rail-hover: #18211d; --rail-active: #2f7a57;
-    --good: #5fd08f; --good-soft: #14291d; --warn: #e8b54e; --warn-soft: #2c2410; --crit: #f07d72; --crit-soft: #351a18; --info: #93a8ff; --info-soft: #1c2440;
-    --k-task: #8fd6b2; --k-task-bg: #1b3127; --k-money: #f0b27a; --k-money-bg: #33230f; --k-in: #8fc0f5; --k-in-bg: #14263a;
-    --k-visa: #a9adff; --k-visa-bg: #20223f; --k-doc: #d0a8f0; --k-doc-bg: #2b1f38;
-    --series-in: #3987e5; --series-out: #d95926; --grid: #222c27; --axis: #36453e;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+    --bg: #141311; --bg-2: #0f0e0d; --surface: #1b1a18; --surface-2: #24221f; --line: #2e2b27; --line-strong: #403c36;
+    --ink: #ede8e0; --ink-2: #b7b1a7; --ink-3: #948e85;
+    --accent: #cfb3d3; --accent-2: #b793bc; --accent-ink: #24122a; --accent-soft: #2d222f; --part-tint: #1f1920; --part-ink: #f3e6f5;
+    --rail: #0c0c0e; --rail-ink: #9f9b95; --rail-hover: #1e1d1c; --rail-active: #6d446f;
+    --rail-ink-hover: #ecebe8; --rail-ink-active: #ffffff; --rail-badge: #c13d34; --rail-badge-ink: #ffffff;
+    --good: #8fd6a1; --good-soft: #16261a;
+    --warn: #e0b25e; --warn-soft: #2b2312;
+    --crit: #eb817f; --crit-soft: #351a1a;
+    --info: #a5b2ef; --info-soft: #1e2238;
+    --k-task: #b8c1cf; --k-task-bg: #242a33;
+    --k-money: #e8b88b; --k-money-bg: #32251a;
+    --k-in: #96bfe9; --k-in-bg: #142537;
+    --k-visa: #b3b9f1; --k-visa-bg: #202139;
+    --k-doc: #cccc8f; --k-doc-bg: #262510;
+    --series-in: #4f90d8; --series-out: #d0612c; --grid: #272522; --axis: #403c36;
+    --home-door-bg: #281d2a; --home-door-ink: #f3e6f5; --home-door-accent: #cfb3d3;
+    --work-door-bg: #102628; --work-door-ink: #d6edef; --work-door-accent: #83bcc4; --work-door-grid: #172b2e;
+    --backdrop: rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #101613; --bg-2: #0c110f; --surface: #161e1a; --surface-2: #1d2722; --line: #26322c; --line-strong: #36453e;
-  --ink: #e3ebe6; --ink-2: #a8b8b0; --ink-3: #75867d; --accent: #6cc69a; --accent-2: #4fae80; --accent-ink: #0b1a12; --accent-soft: #1b3127;
-  --rail: #0a0e0c; --rail-ink: #8ea59a; --rail-hover: #18211d; --rail-active: #2f7a57;
-  --good: #5fd08f; --good-soft: #14291d; --warn: #e8b54e; --warn-soft: #2c2410; --crit: #f07d72; --crit-soft: #351a18; --info: #93a8ff; --info-soft: #1c2440;
-  --k-task: #8fd6b2; --k-task-bg: #1b3127; --k-money: #f0b27a; --k-money-bg: #33230f; --k-in: #8fc0f5; --k-in-bg: #14263a;
-  --k-visa: #a9adff; --k-visa-bg: #20223f; --k-doc: #d0a8f0; --k-doc-bg: #2b1f38;
-  --series-in: #3987e5; --series-out: #d95926; --grid: #222c27; --axis: #36453e;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+  --bg: #141311; --bg-2: #0f0e0d; --surface: #1b1a18; --surface-2: #24221f; --line: #2e2b27; --line-strong: #403c36;
+  --ink: #ede8e0; --ink-2: #b7b1a7; --ink-3: #948e85;
+  --accent: #cfb3d3; --accent-2: #b793bc; --accent-ink: #24122a; --accent-soft: #2d222f; --part-tint: #1f1920; --part-ink: #f3e6f5;
+  --rail: #0c0c0e; --rail-ink: #9f9b95; --rail-hover: #1e1d1c; --rail-active: #6d446f;
+  --rail-ink-hover: #ecebe8; --rail-ink-active: #ffffff; --rail-badge: #c13d34; --rail-badge-ink: #ffffff;
+  --good: #8fd6a1; --good-soft: #16261a;
+  --warn: #e0b25e; --warn-soft: #2b2312;
+  --crit: #eb817f; --crit-soft: #351a1a;
+  --info: #a5b2ef; --info-soft: #1e2238;
+  --k-task: #b8c1cf; --k-task-bg: #242a33;
+  --k-money: #e8b88b; --k-money-bg: #32251a;
+  --k-in: #96bfe9; --k-in-bg: #142537;
+  --k-visa: #b3b9f1; --k-visa-bg: #202139;
+  --k-doc: #cccc8f; --k-doc-bg: #262510;
+  --series-in: #4f90d8; --series-out: #d0612c; --grid: #272522; --axis: #403c36;
+  --home-door-bg: #281d2a; --home-door-ink: #f3e6f5; --home-door-accent: #cfb3d3;
+  --work-door-bg: #102628; --work-door-ink: #d6edef; --work-door-accent: #83bcc4; --work-door-grid: #172b2e;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
+}
+
+/* ---------- parts: accent families (light) ---------- */
+:root[data-part="home"] {
+  --accent: #6b3a6e; --accent-2: #85588c; --accent-ink: #fdf9fd; --accent-soft: #f1eaf4;
+  --rail-active: #754779; --part-tint: #f7f1f8; --part-ink: #301631;
+}
+:root[data-part="work"] {
+  --accent: #11484e; --accent-2: #256f77; --accent-ink: #f4fcfc; --accent-soft: #deefef;
+  --rail-active: #276870; --part-tint: #ecf6f6; --part-ink: #03272c;
+}
+
+/* ---------- parts: accent families (dark) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-part="home"] {
+    --accent: #cfb3d3; --accent-2: #b793bc; --accent-ink: #24122a; --accent-soft: #2d222f;
+    --rail-active: #6d446f; --part-tint: #1f1920; --part-ink: #f3e6f5;
+  }
+  :root:not([data-theme="light"])[data-part="work"] {
+    --accent: #83bcc4; --accent-2: #63a5ad; --accent-ink: #031a1d; --accent-soft: #152b2c;
+    --rail-active: #265f66; --part-tint: #151e1e; --part-ink: #d6edef;
+  }
+}
+:root[data-theme="dark"][data-part="home"] {
+  --accent: #cfb3d3; --accent-2: #b793bc; --accent-ink: #24122a; --accent-soft: #2d222f;
+  --rail-active: #6d446f; --part-tint: #1f1920; --part-ink: #f3e6f5;
+}
+:root[data-theme="dark"][data-part="work"] {
+  --accent: #83bcc4; --accent-2: #63a5ad; --accent-ink: #031a1d; --accent-soft: #152b2c;
+  --rail-active: #265f66; --part-tint: #151e1e; --part-ink: #d6edef;
+}
+
+/* The two parts' own colours, the same in either part: Home (yours) and Work (the company's).
+   Money pills use these so "yours" always reads in the Home colour, even on a Work page. */
+:root {
+  --home-accent: var(--home-door-accent);
+  --work-accent: var(--work-door-accent);
 }
 
 /* ---------- base ---------- */
@@ -96,22 +147,23 @@ img { max-width: 100%; }
 /* ---------- shell ---------- */
 .app { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); min-height: 100%; background: linear-gradient(90deg, var(--rail) 0 var(--rail-w), transparent var(--rail-w)); }
 .rail { background: var(--rail); position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 14px 0; z-index: 30; }
-.rail__brand { width: 44px; height: 44px; border-radius: 12px; background: var(--rail-active); display: grid; place-items: center; text-decoration: none; margin-bottom: 14px; flex: none; }
-.rail__brand span { font: 800 22px/1 var(--font-display); color: #fff; }
+.rail__brand { width: 44px; height: 44px; border-radius: 12px; background: var(--rail-active); display: grid; place-items: center; text-decoration: none; margin-bottom: 12px; flex: none; transition: background 0.2s; }
+.rail__brand span { font: 800 22px/1 var(--font-display); color: var(--rail-ink-active); }
 .rail__items { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; overflow-y: auto; flex: 1; scrollbar-width: none; padding-bottom: 4px; }
 .rail__items::-webkit-scrollbar { display: none; }
 .rail__item { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 72px; padding: 6px 2px; border-radius: 12px; color: var(--rail-ink); text-decoration: none; background: none; border: 0; cursor: pointer; flex: none; }
 .rail__ico { position: relative; width: 38px; height: 32px; border-radius: 10px; display: grid; place-items: center; transition: background 0.15s; }
 .rail__ico .ico { width: 19px; height: 19px; }
-.rail__label { font-size: 10.5px; line-height: 1.2; font-weight: 500; text-align: center; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail__label { font-size: 10.5px; line-height: 1.2; font-weight: 500; text-align: center; max-width: 70px; overflow: hidden; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; text-wrap: balance; }
 .rail__item:hover .rail__ico { background: var(--rail-hover); }
-.rail__item:hover { color: #e6efe9; }
-.rail__item[aria-current="page"] { color: #fff; }
+.rail__item:hover { color: var(--rail-ink-hover); }
+.rail__item[aria-current="page"] { color: var(--rail-ink-active); }
 .rail__item[aria-current="page"] .rail__ico { background: var(--rail-active); }
 .rail__add .rail__ico { border: 1.5px dashed var(--rail-ink); }
 .rail__settings { margin-top: auto; }
 .rail__sep { width: 32px; height: 1px; background: var(--rail-hover); margin: 6px 0; flex: none; }
-.rail__badge { position: absolute; top: -4px; right: -6px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #d9483f; color: #fff; font: 600 10.5px/17px var(--font-body); text-align: center; box-shadow: 0 0 0 2px var(--rail); }
+.rail__sep em { display: none; }
+.rail__badge { position: absolute; top: -4px; right: -6px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--rail-badge); color: var(--rail-badge-ink); font: 600 10.5px/17px var(--font-body); text-align: center; box-shadow: 0 0 0 2px var(--rail); }
 .main { min-width: 0; padding: 30px clamp(16px, 3.5vw, 48px) 72px; }
 .view__inner { max-width: 1240px; margin: 0 auto; }
 .banner-slot { max-width: 1240px; margin: 0 auto; }
@@ -330,7 +382,7 @@ button.doc-row__main:hover b, .doc-row__title:hover b { color: var(--accent); }
 .money-input input:focus { outline: none; }
 dialog.dlg { border: 1px solid var(--line); border-radius: 16px; padding: 0; width: min(600px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); background: var(--surface); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3); }
 dialog.dlg--wide { width: min(880px, calc(100vw - 24px)); }
-dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
+dialog.dlg::backdrop { background: var(--backdrop); }
 .dlg__inner { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
 .dlg__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
 .dlg__head h2 { font-size: 18px; }
@@ -540,7 +592,7 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .tick { appearance: none; -webkit-appearance: none; width: 21px; height: 21px; border: 1.8px solid var(--line-strong); border-radius: 6px; margin: 1px 0 0; display: grid; place-items: center; cursor: pointer; background: var(--surface); }
 .tick:hover { border-color: var(--accent-2); }
 .tick:checked { background: var(--accent-2); border-color: var(--accent-2); }
-.tick:checked::after { content: ""; width: 10px; height: 5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px, -1px); }
+.tick:checked::after { content: ""; width: 10px; height: 5px; border-left: 2px solid var(--accent-ink); border-bottom: 2px solid var(--accent-ink); transform: rotate(-45deg) translate(1px, -1px); }
 .task.is-high .tick { border-color: color-mix(in srgb, var(--crit) 60%, var(--line-strong)); }
 .task__main { display: grid; gap: 2px; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; min-width: 0; }
 .task__main b { font-weight: 500; font-size: 14.5px; overflow-wrap: anywhere; }
@@ -689,6 +741,10 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .tally__sum b { font: 600 20px/1.25 var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .tally__sum b.is-crit { color: var(--crit); }
 .tally__sum em { font-style: normal; font-size: 12px; color: var(--ink-3); }
+/* Two to a row on a phone: an odd last box takes the whole row rather than leaving a gap. */
+@media (max-width: 460px) {
+  .tally__sum > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .tally__list { list-style: none; margin: 0; padding: 0; }
 .tally-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto auto auto; gap: 6px 16px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--line); }
 .tally-row.is-late { background: color-mix(in srgb, var(--crit) 5%, transparent); }
@@ -772,10 +828,11 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
   .rail__brand { display: none; }
   .rail__items { flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 2px; padding: 0; }
   .rail__item { width: 64px; padding: 4px 2px; }
-  .rail__label { font-size: 10px; max-width: 62px; }
+  .rail__label { font-size: 10px; max-width: 62px; line-height: 1.15; }
   .rail__settings { margin-top: 0; }
   .rail__sep { width: 1px; height: 32px; margin: 0 4px; align-self: center; }
-  .main { padding: calc(20px + env(safe-area-inset-top, 0px)) 16px calc(100px + env(safe-area-inset-bottom, 0px)); }
+  .main { padding: calc(var(--partbar-h) + 20px + env(safe-area-inset-top, 0px)) 16px calc(100px + env(safe-area-inset-bottom, 0px)); }
+  .rail__add { display: none; }
   .split { grid-template-columns: minmax(0, 1fr); }
   .lists { position: static; display: flex; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
   .lists__item { grid-template-columns: auto auto auto; white-space: nowrap; flex: none; }
@@ -951,7 +1008,7 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 }
 
 /* ---------- Ask Claude ---------- */
-.rail__claude .rail__ico { background: linear-gradient(135deg, color-mix(in srgb, var(--accent-2) 55%, transparent), color-mix(in srgb, var(--accent) 35%, transparent)); color: #fff; }
+.rail__claude .rail__ico { background: linear-gradient(135deg, color-mix(in srgb, var(--accent-2) 55%, transparent), color-mix(in srgb, var(--accent) 35%, transparent)); color: var(--rail-ink-active); }
 .rail__claude[aria-pressed="true"] .rail__ico { background: var(--rail-active); }
 .chat { position: fixed; top: 0; right: 0; bottom: 0; z-index: 800; width: min(440px, 100vw); display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -18px 0 40px rgba(0, 0, 0, 0.12); }
 .chat[hidden] { display: none; }
@@ -990,4 +1047,429 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .chat__foot { margin: 0; padding: 0 14px 12px; font-size: 11.5px; color: var(--ink-3); }
 @media (max-width: 860px) {
   .chat { width: 100vw; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); border-left: 0; }
+}
+
+/* ---------- Home | Work: the switch ---------- */
+/* In the rail on a computer (two stacked pills under the G), in a slim top bar on a phone. The pressed half
+   takes the part's colour; the other half shows a count when something there needs doing. */
+.partswitch { display: grid; gap: 2px; padding: 3px; border-radius: 13px; background: var(--rail-hover); flex: none; }
+.partswitch--rail { width: 72px; margin: 0 0 10px; }
+.partswitch__btn { position: relative; display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; height: 30px; padding: 0 6px; border: 0; border-radius: 10px; background: transparent; color: var(--rail-ink); font: 600 11.5px/1 var(--font-body); letter-spacing: 0.01em; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.partswitch__btn:hover { color: var(--rail-ink-hover); }
+.partswitch__btn[aria-pressed="true"] { background: var(--rail-active); color: var(--rail-ink-active); box-shadow: 0 1px 2px color-mix(in srgb, var(--rail) 60%, transparent); }
+.partswitch__ico { display: grid; place-items: center; }
+.partswitch__ico .ico { width: 15px; height: 15px; }
+.partswitch__count { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--rail-badge); color: var(--rail-badge-ink); font: 600 10px/16px var(--font-body); text-align: center; box-shadow: 0 0 0 2px var(--rail); }
+.partbar { display: none; }
+@media (min-width: 861px) and (max-height: 980px) {
+  .partswitch--rail { margin-bottom: 6px; }
+  .partswitch__btn { height: 27px; }
+}
+@media (min-width: 861px) and (min-height: 1100px) {
+  /* Room to name the groups in the rail: 'Money ahead', 'Paperwork'… */
+  .rail__sep--titled { width: 62px; height: auto; background: none; margin: 8px 0 2px; padding-top: 7px; border-top: 1px solid var(--rail-hover); }
+  .rail__sep--titled em { display: block; font: 500 8.5px/1.25 var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; font-style: normal; color: color-mix(in srgb, var(--rail-ink) 72%, transparent); text-align: center; text-wrap: balance; }
+}
+@media (max-width: 860px) {
+  .partswitch--rail { display: none; }
+  .partbar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; display: flex; align-items: center; gap: 12px; height: calc(var(--partbar-h) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 16px 0; background: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: saturate(1.4) blur(14px); backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid var(--line); }
+  .partbar__brand { width: 34px; height: 34px; border-radius: 10px; background: var(--rail-active); display: grid; place-items: center; text-decoration: none; flex: none; transition: background 0.2s; }
+  .partbar__brand span { font: 800 17px/1 var(--font-display); color: var(--rail-ink-active); }
+  .partswitch--bar { display: flex; flex: 1 1 auto; min-width: 0; max-width: 300px; margin: 0 auto; padding: 3px; border-radius: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .partswitch--bar .partswitch__btn { flex: 1 1 0; height: 36px; gap: 7px; border-radius: 9px; color: var(--ink-2); font-size: 14px; }
+  .partswitch--bar .partswitch__btn:hover { color: var(--ink); }
+  .partswitch--bar .partswitch__btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent); }
+  .partswitch--bar .partswitch__ico .ico { width: 16px; height: 16px; }
+  .partswitch--bar .partswitch__count { top: -4px; right: -2px; box-shadow: 0 0 0 2px var(--surface-2); }
+  .partbar__add { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); color: var(--accent); cursor: pointer; box-shadow: var(--shadow); }
+  .partbar__add .ico { width: 19px; height: 19px; }
+  .partbar__add:hover { border-color: var(--accent-2); }
+}
+
+/* ---------- Home | Work: the two doors at the top of each Overview ---------- */
+/* Side by side, with the G on the seam between them; the part you're in is wider. They stack on phones,
+   the part you're in first. */
+.doors { display: flex; align-items: stretch; gap: 10px; margin: 0 0 16px; }
+.door { --door-bg: var(--surface); --door-ink: var(--ink); --door-accent: var(--accent);
+  position: relative; isolation: isolate; flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 10px 12px;
+  padding: 22px 26px 24px; border-radius: 20px; background: var(--door-bg); color: var(--door-ink); overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--door-accent) 14%, transparent); transition: flex-grow 0.25s ease; }
+.door--home { --door-bg: var(--home-door-bg); --door-ink: var(--home-door-ink); --door-accent: var(--home-door-accent); }
+.door--work { --door-bg: var(--work-door-bg); --door-ink: var(--work-door-ink); --door-accent: var(--work-door-accent); }
+.door--active { flex-grow: 1.65; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--door-accent) 26%, transparent), var(--shadow); }
+/* Home: a soft glow in the corner. Work: a faint grid, fading out from the top corner. */
+.door--home::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--door-accent) 12%, transparent), transparent 58%); }
+.door--work::before { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(var(--work-door-grid) 1px, transparent 1px), linear-gradient(90deg, var(--work-door-grid) 1px, transparent 1px); background-size: 24px 24px; background-position: -1px -1px;
+  -webkit-mask-image: radial-gradient(140% 120% at 100% 0%, var(--ink) 35%, transparent 85%); mask-image: radial-gradient(140% 120% at 100% 0%, var(--ink) 35%, transparent 85%); }
+.door > .door__eyebrow, .door > .door__word, .door > .door__line { flex: 0 0 100%; margin: 0; }
+.door__eyebrow { font: 500 11px/1.35 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--door-ink) 66%, transparent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.door__word { font-size: clamp(50px, 5.6vw, 78px); line-height: 0.95; color: var(--door-ink); padding: 4px 0 2px; white-space: nowrap; }
+.door:not(.door--active) .door__word { font-size: clamp(42px, 4.4vw, 60px); }
+.door--home .door__word { font-family: var(--font-door-home); font-style: italic; font-weight: 500; letter-spacing: -0.02em; font-optical-sizing: auto; font-variation-settings: "opsz" 144; }
+.door--work .door__word { font-family: var(--font-door-work); font-weight: 800; letter-spacing: -0.035em; }
+.door__dot { color: var(--door-accent); }
+.door--home .door__dot { font-style: normal; font-family: var(--font-door-work); font-weight: 800; letter-spacing: 0; margin-left: 0.02em; }
+.door__line { font-size: 15px; line-height: 1.45; color: color-mix(in srgb, var(--door-ink) 82%, transparent); margin: 0 0 6px !important; font-variant-numeric: tabular-nums; }
+.door__btn { min-height: 40px; padding: 0 17px; border-radius: 999px; font-weight: 600; background: color-mix(in srgb, var(--surface) 70%, transparent); border-color: color-mix(in srgb, var(--door-accent) 40%, transparent); color: var(--door-accent); }
+.door__btn:hover { background: var(--surface); border-color: var(--door-accent); }
+.door__btn.btn--primary { background: var(--door-accent); border-color: var(--door-accent); color: var(--door-bg); }
+.door__btn.btn--primary:hover { background: color-mix(in srgb, var(--door-accent) 88%, var(--door-ink)); }
+.door__chips { flex: 1 1 auto; gap: 6px; min-width: 0; }
+.door__chips .chip { text-decoration: none; padding: 6px 13px; background: color-mix(in srgb, var(--surface) 55%, transparent); border-color: color-mix(in srgb, var(--door-accent) 22%, transparent); color: var(--door-ink); }
+.door__chips .chip:hover { border-color: var(--door-accent); background: color-mix(in srgb, var(--surface) 85%, transparent); }
+.doors__seam { position: relative; z-index: 2; flex: none; align-self: center; width: 50px; height: 50px; margin: 0 -30px; border-radius: 50%; display: grid; place-items: center; background: var(--rail); color: var(--rail-ink-active); font: 800 22px/1 var(--font-display); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rail-ink) 22%, transparent), 0 0 0 6px var(--bg), var(--shadow); user-select: none; }
+@media (max-width: 1100px) {
+  .door--active { flex-grow: 1.3; }
+}
+/* Side by side, the G sits over the inner edges, so the text keeps clear of it. */
+@media (min-width: 721px) {
+  .doors > .door:first-child { padding-right: 44px; }
+  .doors__seam + .door { padding-left: 44px; }
+}
+.doors__where { background: var(--part-tint); box-shadow: inset 0 0 0 1px var(--line); margin: -2px 0 18px; padding: 8px 8px 8px 14px; }
+.doors__where > .ico { color: var(--accent-2); }
+.doors__where .icon-btn { margin-left: auto; }
+@media (max-width: 720px) {
+  .doors { flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .door { flex: none; padding: 18px 18px 20px; border-radius: 18px; }
+  .door--active { order: 1; }
+  .doors__seam { order: 2; align-self: center; width: 40px; height: 40px; margin: -25px 0; font-size: 17px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rail-ink) 22%, transparent), 0 0 0 5px var(--bg); }
+  .door:not(.door--active) { order: 3; padding: 24px 18px 16px; gap: 8px 10px; }
+  .door__eyebrow { font-size: 10.5px; letter-spacing: 0.1em; }
+  .door__word { font-size: 46px; padding-top: 2px; }
+  .door:not(.door--active) .door__word { font-size: 34px; }
+  .door:not(.door--active) .door__chips { display: none; }
+  .door__line { font-size: 14px; margin-bottom: 2px !important; }
+  .door__btn { min-height: 38px; padding: 0 15px; }
+  .door__chips { flex-basis: 100%; gap: 5px; }
+  .door__chips .chip { padding: 5px 11px; font-size: 12.5px; }
+}
+
+/* ---------- money pills: whose money ---------- */
+/* 'Your money · get it back' is always the Home colour, outlined, with a coin; the company's money is filled
+   in the Work colour. The same on every page. */
+.pill--mine { background: transparent; color: var(--home-accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--home-accent) 60%, transparent); }
+.pill--mine::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; background: radial-gradient(circle, currentColor 0 1.3px, transparent 1.8px); }
+.pill--mine:has(.ico)::before { display: none; }
+.pill--ktk { background: var(--work-accent); color: var(--work-door-bg); }
+
+/* Plain .steps (the visa progress bars) works for any number of stages. */
+.steps { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+
+/* ---------- 'Check these': one-tap questions ---------- */
+/* <section class="ask-card"><header class="ask-card__head"><h2>…</h2><button class="btn btn--sm">Use my suggestions</button></header>
+   <ul class="ask-card__list"><li class="ask-card__item"><div class="ask-card__q"><b>…</b><em>…</em></div>
+   <div class="ask-card__opts"><button class="btn btn--sm is-suggested">…</button>…</div></li></ul></section> */
+.ask-card { background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent-2) 35%, var(--line)); border-radius: var(--radius); box-shadow: var(--shadow); min-width: 0; overflow: hidden; }
+.ask-card__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 13px 18px; background: var(--part-tint); border-bottom: 1px solid var(--line); }
+.ask-card__head h2 { font-size: 15.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.ask-card__head h2 .ico { color: var(--accent); }
+.ask-card__head p { flex-basis: 100%; font-size: 13px; color: var(--ink-2); }
+.ask-card__list, .ask-card > ul { list-style: none; margin: 0; padding: 0; }
+.ask-card__item, .ask-card > ul > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 16px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.ask-card__item:last-child, .ask-card > ul > li:last-child { border-bottom: 0; }
+.ask-card__q { display: grid; gap: 2px; min-width: 0; }
+.ask-card__q b { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.ask-card__q em { font-style: normal; font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.ask-card__opts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.ask-card .is-suggested, .ask-card [data-suggested="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; color: var(--accent); background: var(--accent-soft); }
+.ask-card .is-suggested::after, .ask-card [data-suggested="true"]::after { content: "Suggested"; font: 600 9.5px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.75; margin-left: 2px; }
+.ask-card__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 18px 12px; background: var(--bg-2); font-size: 12.5px; color: var(--ink-3); }
+@media (max-width: 720px) {
+  .ask-card__item, .ask-card > ul > li { grid-template-columns: minmax(0, 1fr); }
+  .ask-card__opts { justify-content: flex-start; }
+}
+
+/* ---------- Home overview: due back from the company ---------- */
+.now-card--back b { color: var(--good); }
+.now-card--back i { display: flex; align-items: center; gap: 4px; margin-top: 3px; font-style: normal; font-weight: 600; color: var(--warn); }
+.now-card--back i .ico { width: 13px; height: 13px; }
+.now-card--back.is-warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn-soft) 45%, var(--surface)); }
+.note-line--back { background: var(--accent-soft); }
+.note-line--back > .ico { color: var(--accent); }
+.note-line--back .btn { flex: none; }
+/* Under the doors the greeting steps down a size: the doors are the page's headline. */
+.doors ~ .brief .brief__title { font-size: clamp(25px, 2.7vw, 32px); max-width: 26ch; }
+
+/* ---------- 'Where does it go?' guide ---------- */
+.where { display: grid; gap: 16px; font-size: 14px; }
+.where .dlg__intro { margin: 0; }
+.where h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+.where h3 .ico { width: 17px; height: 17px; }
+.where__rule { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: rule; }
+.where__rule > li { counter-increment: rule; position: relative; padding: 12px 14px 12px 50px; border-radius: var(--radius); background: var(--bg-2); border: 1px solid var(--line); }
+.where__rule > li::before { content: counter(rule); position: absolute; left: 14px; top: 11px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--bg); font: 600 12px/1 var(--font-mono); }
+.where__rule ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); }
+.where__rule ul li::before { content: "→ "; color: var(--ink-3); }
+.where__cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.where__col { --where-bg: var(--surface-2); --where-accent: var(--accent); border-radius: 16px; background: var(--where-bg); padding: 14px 16px 6px; min-width: 0; }
+.where__col--work { --where-bg: var(--work-door-bg); --where-accent: var(--work-door-accent); }
+.where__col--home { --where-bg: var(--home-door-bg); --where-accent: var(--home-door-accent); }
+.where__col h3 { color: var(--where-accent); padding-bottom: 8px; }
+.where__list { list-style: none; margin: 0; padding: 0; display: grid; }
+.where__list > li { display: grid; gap: 1px; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--where-accent, var(--ink)) 14%, transparent); }
+.where__list > li > b { font-weight: 600; line-height: 1.4; }
+.where__to { font-size: 13px; color: var(--ink-2); }
+.where__to .link--btn { color: var(--where-accent, var(--accent)); font-weight: 600; }
+.where__list > li > em { font-style: normal; font-size: 12.5px; color: var(--ink-3); line-height: 1.45; }
+.where__list--plain > li { display: list-item; list-style: disc inside; padding: 3px 0; border: 0; color: var(--ink-2); }
+@media (max-width: 720px) {
+  .where__cols { grid-template-columns: minmax(0, 1fr); }
+  .where__rule > li { padding-left: 46px; }
+}
+
+/* forecast: kind pills for work money (GU.agenda.KINDS ktk / reclaim), in the timeline and Money ahead. */
+.kind--ktk { background: color-mix(in srgb, var(--work-accent, var(--accent)) 14%, transparent); color: var(--work-accent, var(--accent)); }
+.kind--reclaim { background: var(--k-in-bg); color: var(--k-in); }
+.kind--project { background: color-mix(in srgb, var(--work-accent, var(--accent)) 10%, transparent); color: var(--work-accent, var(--accent)); }
+
+/* ---------- 'Check these' (GU.refile.cardHTML): questions with several things to decide ---------- */
+.rf-card .rf-group { grid-template-columns: minmax(0, 1fr); background: var(--bg-2); padding-top: 10px; padding-bottom: 10px; }
+.rf-card .rf-sub { padding-left: 30px; }
+.rf-card .rf-sub .ask-card__q b { font-weight: 500; font-size: 14px; }
+.rf-card .ask-card__foot .link--btn { margin-left: auto; }
+@media (max-width: 720px) {
+  .rf-card .rf-sub { padding-left: 24px; }
+}
+
+/* ---------- Work pages (js/tabs/work.js) ---------- */
+/* Each area is its own page now: the summary boxes sit in the page's stack, not under a side menu. */
+.wk-tally { margin: 0; }
+.wk-figline { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.wk-tell { margin: 0; }
+/* A short line under a group title ('These come out of your account…'). */
+.wk-group__note { margin: 0; padding: 0 18px 8px; font-size: 12.5px; color: var(--ink-3); max-width: 72ch; }
+/* Overview cards and checks: amber when something is waiting too long. */
+.wk-card.is-warn { border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); background: color-mix(in srgb, var(--warn-soft) 40%, var(--surface)); }
+.wk-card > b.is-warn { color: var(--warn); }
+.wk-check__list li.is-warn > button { border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); }
+/* One-tap answers under a check ('Who paid?'). The list styles every button as a row, so these are put back to small buttons. */
+.wk-check__list li.has-acts { display: grid; gap: 6px; }
+.wk-check__acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 2px 48px; }
+.wk-check__list .wk-check__acts button { display: inline-flex; grid-template-columns: none; width: auto; min-height: 30px; padding: 0 10px; gap: 5px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 13px; font-weight: 500; }
+.wk-check__list .wk-check__acts button.btn--soft { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.wk-check__list .wk-check__acts button .ico { width: 14px; height: 14px; color: currentColor; }
+/* Rows with answer buttons ('Send to …', 'Paid by …', who pays) put them on their own line before the screen gets tight. */
+@media (max-width: 1100px) {
+  .wk-row--acts .wk-row__act { grid-column: 2 / -1; justify-content: flex-start; flex-wrap: wrap; }
+}
+.wk-footnote { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.wk-footnote .ico { width: 15px; height: 15px; flex: none; margin-top: 1px; }
+@media (max-width: 560px) {
+  .wk-check__acts { padding-left: 0; }
+  .wk-check__acts .btn { flex: 1 1 auto; justify-content: center; }
+}
+/* The card lines can be long ('£385.04 not sent · £0.00 waiting'): let them wrap rather than cut off. */
+.wk-card__lines span { white-space: normal; overflow-wrap: anywhere; }
+/* Phones: the Overview cards two to a row, so the page isn't seven screens long. */
+@media (max-width: 560px) {
+  .wk-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .wk-card { padding: 12px; }
+  .wk-card > b { font-size: 19px; }
+  .wk-card__head { font-size: 12.5px; }
+  .wk-card__lines { font-size: 12px; }
+}
+
+/* ---------- Work › Get paid back (js/tabs/payback.js) ---------- */
+.page-head__sub .pill { margin-left: 2px; vertical-align: 1px; }
+.pb-n { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); color: var(--ink-2); font: 600 12px/1 var(--font-mono); }
+.pb-lane .panel__head h2 .pb-n { background: var(--accent-soft); color: var(--accent); }
+.pb-lane .panel__head .muted { margin-right: auto; font-size: 12.5px; }
+
+/* The tally and the three steps under it */
+.pb-tally .tally__sum em.is-warn { color: var(--warn); font-weight: 600; }
+.pb-tally .tally__sum em.is-crit { color: var(--crit); font-weight: 600; }
+.pb-steps { list-style: none; margin: 0; padding: 10px 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; border-bottom: 1px solid var(--line); counter-reset: none; }
+.pb-steps li { position: relative; min-width: 0; }
+.pb-steps li + li::before { content: ""; position: absolute; left: -6px; top: 50%; width: 6px; border-top: 1.5px solid var(--line-strong); }
+.pb-steps__btn { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pb-steps__btn:hover { border-color: var(--accent-2); }
+.pb-steps__text { display: grid; min-width: 0; }
+.pb-steps__text b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-steps__text em { font: 500 12px/1.3 var(--font-mono); font-style: normal; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-steps li.is-now .pb-steps__btn { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); }
+.pb-steps li.is-now .pb-n { background: var(--accent); color: var(--accent-ink); }
+.pb-steps li.is-alert .pb-n { background: var(--warn); color: var(--surface); }
+.pb-tally__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding: 10px 18px 12px; font-size: 13px; color: var(--ink-2); }
+.pb-tally__foot .ico { width: 15px; height: 15px; color: var(--ink-3); }
+
+/* The lanes */
+.pb .stack { gap: 16px; }
+.pb-lane__note { margin: 0; padding: 0 18px 6px; font-size: 13px; color: var(--ink-2); }
+.pb-lane__empty { margin: 0; padding: 18px; font-size: 13.5px; color: var(--ink-2); }
+.pb-lane__more { margin: 0; padding: 10px 18px 14px; }
+.pb-lane__foot { flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.pb-lane__foot span { margin-right: auto; }
+.pb-rows { list-style: none; margin: 0; padding: 0; }
+.pb-row { display: grid; grid-template-columns: 22px 44px minmax(0, 1fr) auto 34px; grid-template-areas: "tick thumb main amt more" "tick thumb proof proof proof" ". . offer offer offer"; gap: 4px 12px; align-items: start; padding: 11px 14px 11px 18px; border-bottom: 1px solid var(--line); }
+.pb-rows > .pb-row:last-child { border-bottom: 0; }
+.pb-row--sent, .pb-row--paid, .pb-row--first { grid-template-columns: 44px minmax(0, 1fr) auto 34px; grid-template-areas: "thumb main amt more" "thumb proof proof proof" ". offer offer offer"; }
+.pb-row__tick { grid-area: tick; padding-top: 16px; display: grid; }
+.pb-row__thumb { grid-area: thumb; align-self: start; }
+.pb-row__thumb .thumb { width: 44px; height: 54px; }
+.pb-row__main { grid-area: main; display: grid; gap: 1px; min-width: 0; background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.pb-row__main b { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.pb-row__main em { font-style: normal; font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.pb-row__main:hover b { text-decoration: underline; }
+.pb-row__amt { grid-area: amt; display: grid; justify-items: end; text-align: right; }
+.pb-row__amt b { font: 500 14.5px/1.25 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pb-row__amt em { font-style: normal; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.pb-row__more { grid-area: more; margin-top: -4px; }
+.pb-row__proof { grid-area: proof; align-self: center; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.pb-row__proof:empty { display: none; }
+.pb-row .pb-row__offer { grid-area: offer; margin: 4px 0 0; }
+.pb-row.is-off .pb-row__main, .pb-row.is-off .pb-row__amt, .pb-row.is-off .pb-row__thumb { opacity: 0.55; }
+.pb-link { display: inline-flex; align-items: center; gap: 5px; padding: 2px 0; border: 0; background: none; color: var(--accent); font: 600 12.5px/1.4 var(--font-body); cursor: pointer; text-align: left; }
+.pb-link .ico { width: 14px; height: 14px; }
+.pb-link:hover { text-decoration: underline; }
+.pb-link--quiet { color: var(--ink-2); font-weight: 500; padding: 5px 4px; }
+.pb-tx__act { align-items: center; }
+
+/* Lane 2: packs sent together */
+.pb-prompts { display: grid; gap: 8px; padding: 12px 18px 4px; }
+.pb-prompts .pb-prompt { margin: 0; }
+.pb-pack { border-bottom: 1px solid var(--line); }
+.pb-pack:last-child { border-bottom: 0; }
+.pb-pack__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 18px; background: var(--bg-2); }
+.pb-pack__title { display: grid; flex: 1 1 180px; min-width: 0; }
+.pb-pack__title b { font-size: 14.5px; font-weight: 700; }
+.pb-pack__title em { font-style: normal; font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.pb-pack__amt { font: 600 16px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pb-pack__btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.pb-pack.is-late .pb-pack__head { background: color-mix(in srgb, var(--warn) 8%, var(--bg-2)); }
+.pb-pack.is-chase .pb-pack__head { background: color-mix(in srgb, var(--crit) 7%, var(--bg-2)); }
+.pb-pack__note { display: flex; gap: 8px; align-items: flex-start; margin: 10px 18px 0; padding: 8px 12px; border-radius: 10px; font-size: 13px; }
+.pb-pack__note .ico { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+.pb-pack__note.is-crit { background: var(--crit-soft); color: var(--crit); font-weight: 500; }
+.pb-pack__note.is-warn { background: var(--warn-soft); color: var(--ink); }
+.pb-pack__note.is-warn .ico { color: var(--warn); }
+.pb-pack > .pb-prompt { margin: 10px 18px 0; }
+
+/* Lane 3: folded away until opened */
+.pb-paid > summary { cursor: pointer; list-style: none; }
+.pb-paid > summary::-webkit-details-marker { display: none; }
+.pb-paid > summary .muted { margin-right: auto; font-size: 12.5px; }
+.pb-paid:not([open]) > summary { border-bottom: 0; }
+.pb-paid__chev { width: 16px; height: 16px; color: var(--ink-3); transition: transform 0.15s; }
+.pb-paid[open] .pb-paid__chev { transform: rotate(90deg); }
+
+/* From your bank */
+.pb-bank__group { padding: 12px 18px 14px; border-bottom: 1px solid var(--line); }
+.pb-bank__group:last-child { border-bottom: 0; }
+.pb-bank__group h3 { display: flex; align-items: baseline; gap: 6px; font-size: 13.5px; font-weight: 700; }
+.pb-bank__sub { margin: 2px 0 4px; font-size: 12.5px; color: var(--ink-3); }
+.pb-bank__tools { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 0; font-size: 13px; }
+.pb-txs { list-style: none; margin: 0; padding: 0; }
+.pb-tx { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: start; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.pb-tx:last-child { border-bottom: 0; }
+.pb-tx__main { display: grid; gap: 1px; min-width: 0; background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.pb-tx__main b { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.pb-tx__main em { font-style: normal; font-size: 12px; color: var(--ink-3); overflow-wrap: anywhere; }
+.pb-tx__main:hover b { text-decoration: underline; }
+.pb-tx__amt { font: 500 13.5px/1.3 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pb-tx__act { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.pb-how { margin-top: 20px; }
+
+/* Send dialog */
+.pb-send { list-style: none; margin: 0 0 14px; padding: 0; border-top: 1px solid var(--line); }
+.pb-send li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto; gap: 4px 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.pb-send__date { font: 500 12.5px/1.3 var(--font-mono); color: var(--ink-3); white-space: nowrap; }
+.pb-send__main { display: grid; min-width: 0; }
+.pb-send__main b { font-weight: 600; overflow-wrap: anywhere; }
+.pb-send__main em { font-style: normal; font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.pb-send__proof { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.pb-send__amt { font: 500 14px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; min-width: 64px; }
+.dlg--send .note-line { margin: 0 0 12px; }
+.dlg--send textarea { width: 100%; }
+.pb-send__mark { margin-top: 12px; }
+.pb-done { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 8px 0; }
+.pb-done__ico { width: 34px; height: 34px; color: var(--good); }
+.pb-done h3 { font-size: 18px; }
+.pb-done p { max-width: 52ch; color: var(--ink-2); font-size: 14px; }
+.pb-done__msg { width: 100%; max-height: 220px; overflow: auto; margin: 6px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--bg-2); color: var(--ink); font: 13.5px/1.5 var(--font-body); text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Picking bank lines and claims */
+.pb-pick li { padding: 0; }
+.pb-pick__row { display: flex; width: 100%; align-items: flex-start; gap: 10px; padding: 8px 4px; }
+.pb-pick__main { flex: 1 1 auto; display: grid; min-width: 0; }
+.pb-pick__main b { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.pb-pick__main em { font-style: normal; font-size: 12px; color: var(--ink-3); overflow-wrap: anywhere; }
+.pb-pick__amt { font: 500 14px/1.3 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pb-pick__note { margin: 10px 0 6px; }
+.pb-pick__note:empty { display: none; }
+.pb-pick__use { margin-top: 12px; }
+.pb-pick__manual { margin-top: 12px; }
+.pb-pick__sum { font-size: 13px; }
+
+@media (max-width: 720px) {
+  .pb-steps { grid-template-columns: minmax(0, 1fr); padding: 10px 12px; }
+  .pb-steps li + li::before { left: 21px; top: -6px; width: 0; height: 6px; border-top: 0; border-left: 1.5px solid var(--line-strong); }
+}
+@media (max-width: 560px) {
+  .pb-row { grid-template-columns: 22px 40px minmax(0, 1fr) auto; grid-template-areas: "tick thumb main amt" "tick thumb proof more" ". offer offer offer"; gap: 4px 10px; padding: 10px 12px 10px 14px; }
+  .pb-row--sent, .pb-row--paid, .pb-row--first { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "thumb main amt" "thumb proof more" "offer offer offer"; }
+  .pb-row__thumb .thumb { width: 40px; height: 50px; }
+  .pb-row__more { justify-self: end; }
+  .pb-pack__head { padding: 12px 14px; }
+  .pb-pack__btns { width: 100%; }
+  .pb-pack__btns .btn { flex: 1 1 auto; }
+  .pb-pack__note, .pb-pack > .pb-prompt { margin-left: 14px; margin-right: 14px; }
+  .pb-prompts { padding: 12px 14px 4px; }
+  .pb-bank__group { padding: 12px 14px 14px; }
+  .pb-send li { grid-template-columns: minmax(0, 1fr) auto; }
+  .pb-send__date { grid-column: 1; grid-row: 2; }
+  .pb-send__main { grid-column: 1; grid-row: 1; }
+  .pb-send__amt { grid-column: 2; grid-row: 1; }
+  .pb-send__proof { grid-column: 2; grid-row: 2; }
+}
+
+/* ---------- signposts: 'Receipts for KTK are in Work (n)', '1 work bill (…) is in Work › Bills' ---------- */
+/* A quiet one-line pointer from a Home page to where its work items live now. Not a warning, so it uses the
+   part tint rather than the amber of a plain .note-line. */
+.note-line--signpost { background: var(--part-tint); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-2); margin: -2px 0 16px; padding: 9px 14px; }
+.note-line--signpost > .ico { color: var(--work-accent); }
+.note-line--signpost > span { overflow-wrap: anywhere; }
+.note-line--signpost .link { font-weight: 600; display: inline; }
+
+
+/* ---------- Bank, Income and Spending: work money ---------- */
+/* Bank: the category and whose money it is ('For <employer>', 'Back from <employer>', 'Wages from <employer>'), wrapping on phones. */
+.tx-pills { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 100%; }
+/* Income: 'Wages from <employer>' next to the regular income it comes in as. */
+.row-item__text b .pill { margin-left: 6px; vertical-align: 1px; font-weight: 500; }
+/* Income and Spending: the 'isn't counted here' line, also in the side column. */
+.flows-note { margin: -4px 0 18px; }
+.stack > .flows-note { margin: 0; }
+.flows-note > span b { font-weight: 600; }
+.flows-note .btn { flex: none; }
+@media (max-width: 560px) {
+  .flows-note .btn { margin-left: auto; }
+}
+
+/* ---------- Inbox: Home or Work, and whose money paid ---------- */
+/* The Home / Work chip on each card (a button: tap to move it to the other part), in that part's own colour. */
+.inbox-card__part { padding: 2px 10px 2px 8px; font-size: 12.5px; font-weight: 600; gap: 5px; }
+.inbox-card__part .ico { width: 13px; height: 13px; }
+.inbox-card__part--home { color: var(--home-accent); border-color: color-mix(in srgb, var(--home-accent) 45%, var(--line)); }
+.inbox-card__part--work { color: var(--work-accent); border-color: color-mix(in srgb, var(--work-accent) 45%, var(--line)); }
+.inbox-card__part:hover { color: var(--ink); }
+.inbox-card__ask { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 2px; }
+/* [Company's money] filled in the Work colour; [Mine, get it back] outlined in the Home colour, like the money pills. */
+.btn--ktk { background: var(--work-accent); border-color: var(--work-accent); color: var(--work-door-bg); }
+.btn--ktk:hover { background: color-mix(in srgb, var(--work-accent) 86%, var(--ink)); border-color: transparent; color: var(--work-door-bg); }
+.btn--mine { background: var(--surface); border-color: color-mix(in srgb, var(--home-accent) 60%, var(--line)); color: var(--home-accent); }
+.btn--mine:hover { background: color-mix(in srgb, var(--home-accent) 10%, var(--surface)); border-color: var(--home-accent); color: var(--home-accent); }
+.inbox-ask { margin-bottom: 18px; }
+.inbox-ask .ask-card__opts { justify-content: flex-start; }
+/* 'You're in Work…' above the Sort it row. */
+.thrower__part { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--ink-2); padding: 0 2px; }
+.thrower__part .ico { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--work-accent); }
+.thrower__part .link--btn { font-weight: 600; }
+
+/* ---------- Settings › Work: the three 'days' boxes side by side, stacked on phones ---------- */
+.emp-days { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.emp-days__cell { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.emp-days__cell input { max-width: 140px; }
+@media (max-width: 720px) {
+  .emp-days { grid-template-columns: minmax(0, 1fr); }
 }

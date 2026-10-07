@@ -1,9 +1,11 @@
-/* The Ground Up: Important documents. Passports, licences, certificates, contracts and policies,
-   with expiry reminders, where the paper copy lives, and scans attached. */
+/* The Ground Up: Important documents, in Home. Passports, licences, certificates, contracts and policies,
+   with expiry reminders, where the paper copy lives, and scans attached.
+   Documents for work (context 'work') live in Work › Contracts & documents, so this page leaves them out and
+   says where they are. The form is shared with Work: its 'For' field moves a document across. */
 (function () {
   'use strict';
   const GU = window.GU;
-  const { esc, uid, today, fmtDate, relDays, daysUntil, mask, debounce } = GU.util;
+  const { esc, uid, today, fmtDate, relDays, daysUntil, mask, debounce, plural } = GU.util;
   const { icon, pill, emptyState, chips, formDialog, toast, thumbHTML, viewFiles } = GU.ui;
   const store = GU.store;
 
@@ -14,6 +16,21 @@
   ];
   const ui = { type: 'all', q: '' };
   const revealed = new Set();
+  const isWork = (d) => (GU.parts ? GU.parts.isWorkDoc(d) : !!d && d.context === 'work');
+  const workDocsTab = () => (GU.tabs['work-docs'] ? 'work-docs' : 'work');
+  const WORK_PAGE = 'Work › Contracts & documents';
+  function employer() {
+    return GU.workMoney ? GU.workMoney.employer(store.state) : { set: false, short: '', label: 'the company' };
+  }
+
+  /* One line pointing to Work, so work documents don't look lost. */
+  function signpostHTML(work) {
+    if (!work.length) return '';
+    const names = work.map((d) => d.title).filter(Boolean);
+    const shown = names.slice(0, 2).join(', ') + (names.length > 2 ? ' and ' + (names.length - 2) + ' more' : '');
+    return '<p class="note-line note-line--signpost">' + icon('briefcase') + '<span>' + esc(plural(work.length, 'work document') + (shown ? ' (' + shown + ')' : '') + (work.length === 1 ? ' is' : ' are') + ' in ') +
+      '<a class="link" href="#' + workDocsTab() + '">' + esc(WORK_PAGE) + '</a>.</span></p>';
+  }
 
   function expiryPill(d) {
     if (!d.expiryDate) return pill('No expiry', 'muted');
@@ -38,7 +55,8 @@
   function render(root) {
     const s = store.state;
     const warn = s.settings.docWarnDays || 90;
-    const docs = s.documents.slice().sort((a, b) => a.title.localeCompare(b.title));
+    const docs = s.documents.filter((d) => !isWork(d)).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    const work = s.documents.filter(isWork);
     const soon = docs.filter((d) => d.expiryDate && daysUntil(d.expiryDate) <= warn).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
     const present = TYPES.filter((t) => docs.some((d) => d.type === t));
     const q = ui.q.toLowerCase();
@@ -51,6 +69,7 @@
       text: 'Passports, licences, certificates, contracts and policies. Keep a scan of each, note where the original is, and I’ll warn you ' + warn + ' days before anything expires.',
       actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add document</button>',
     }) +
+      signpostHTML(work) +
       GU.ui.dropbar('Drop documents here, or a whole folder of them', 'Scans, photos and PDFs. I’ll read each one for its type, number and expiry date. Subfolders like Passports or Insurance set the type.') +
       (soon.length ? '<section class="panel panel--alert"><header class="panel__head"><h2>' + icon('alert') + 'Renew soon</h2></header><ul class="doc-rows">' + soon.map(rowHTML).join('') + '</ul></section>' : '') +
       '<div class="toolbar">' + chips('type', [{ value: 'all', label: 'All', count: docs.length }].concat(present.map((t) => ({ value: t, label: t, count: docs.filter((d) => d.type === t).length }))), ui.type) +
@@ -76,7 +95,7 @@
         ui.type = c.dataset.value;
         return GU.render();
       }
-      if (e.target.closest('[data-add]')) return create();
+      if (e.target.closest('[data-add]')) return create({ context: 'home' });
       const r = e.target.closest('[data-reveal]');
       if (r) {
         const id = r.dataset.reveal;
@@ -97,8 +116,12 @@
   }
 
   function fields() {
+    const e = employer();
     return [
       { name: 'title', label: 'Document', required: true, placeholder: 'e.g. Passport, Tenancy agreement, Car insurance' },
+      { name: 'context', label: 'For', type: 'segmented', default: 'home',
+        options: [{ value: 'home', label: 'Home', icon: 'home' }, { value: 'work', label: e.set ? 'Work (' + e.short + ')' : 'Work', icon: 'briefcase' }],
+        help: 'Payslips, P60s and tax papers ' + (e.set ? 'from ' + e.short + ' ' : '') + 'are about your own pay, so they stay in Home.' },
       { name: 'type', label: 'Type', type: 'select', options: TYPES, default: 'Other', half: true },
       { name: 'holder', label: 'Whose is it?', placeholder: 'e.g. Me, Mum, the car', half: true, optional: true },
       { name: 'reference', label: 'Number or reference', half: true, optional: true, help: 'Hidden on screen until you choose to show it.' },
@@ -110,18 +133,31 @@
     ];
   }
 
+  const goWork = () => GU.view.go(workDocsTab());
+  /* Says where a document went when it isn't on the page you're looking at. */
+  function filedToast(rec, verb, undo) {
+    const work = rec.context === 'work';
+    const here = (GU.parts ? GU.parts.get() : 'home') === (work ? 'work' : 'home');
+    if (here && !undo) return toast('Added ' + rec.title);
+    toast(verb + ' ' + rec.title + ' to ' + (work ? WORK_PAGE : 'Home › Documents'),
+      undo ? { action: 'Undo', onAction: undo } : { action: 'Open', onAction: work ? goWork : () => GU.view.go('documents') });
+  }
+
+  /* prefill.context says Home or Work; with none, it's the part you're in. */
   function create(prefill, opts) {
     opts = opts || {};
+    prefill = Object.assign({}, prefill || {});
+    const context = prefill.context === 'work' || prefill.context === 'home' ? prefill.context : GU.parts && GU.parts.get() === 'work' ? 'work' : 'home';
     formDialog({
-      title: 'Add a document',
+      title: context === 'work' ? 'Add a work document' : 'Add a document',
       fields: fields(),
-      values: Object.assign({ type: 'Other' }, prefill || {}),
+      values: Object.assign({ type: 'Other' }, prefill, { context }),
       initialFiles: opts.files,
       submitLabel: 'Add document',
       onSubmit: (v) => {
         const rec = Object.assign({ id: 'd-' + uid(), created: today() }, v);
         store.upsert('documents', rec);
-        toast('Added ' + rec.title);
+        filedToast(rec, 'Added');
         if (opts.onSaved) opts.onSaved(rec);
       },
     });
@@ -130,11 +166,16 @@
   function edit(id) {
     const d = store.find('documents', id);
     if (!d) return;
+    const was = isWork(d) ? 'work' : 'home';
     formDialog({
       title: 'Edit ' + d.title,
       fields: fields(),
-      values: d,
-      onSubmit: (v) => store.upsert('documents', Object.assign({}, d, v)),
+      values: Object.assign({}, d, { context: was }),
+      onSubmit: (v) => {
+        const rec = Object.assign({}, d, v);
+        store.upsert('documents', rec);
+        if (v.context !== was) filedToast(rec, 'Moved', () => store.upsert('documents', d));
+      },
       onDelete: () => {
         store.remove('documents', id, d.title);
       },
@@ -142,5 +183,5 @@
     });
   }
 
-  GU.tabs.documents = { label: 'Important documents', short: 'Documents', icon: 'folder', render, create, edit, TYPES };
+  GU.tabs.documents = { label: 'Important documents', short: 'Documents', icon: 'folder', part: 'home', render, create, edit, TYPES };
 })();

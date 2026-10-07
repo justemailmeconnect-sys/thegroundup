@@ -1,9 +1,13 @@
 /* The Ground Up: example data, so a first visit shows how everything works.
-   Every example record is marked demo: true and can be cleared in one click. */
+   Every example record is marked demo: true and can be cleared in one click.
+   Home is an ordinary London life with a little freelance work on the side (invoices you send are Home).
+   Work is a made-up employer, Acme Care Ltd: one invoice Acme pays itself, things you paid for and are
+   getting back (one already sent, with Acme's repayment waiting to be confirmed), and a monthly work bill
+   that comes out of your account. */
 (function () {
   'use strict';
   const GU = window.GU;
-  const { today, addDays, addMonths, uid, money } = GU.util;
+  const { today, addDays, addMonths, uid, money, monthLabel } = GU.util;
   const store = GU.store;
 
   function rng(seed) {
@@ -58,16 +62,25 @@
     const D = { demo: true, created: t };
     const cur = 'acc-demo-current';
     const sav = 'acc-demo-savings';
+    const WORK_OUT = (GU.finance && GU.finance.WORK_OUT) || 'Work expenses';
+    const WORK_IN = (GU.finance && GU.finance.WORK_IN) || 'Work reimbursements';
+    // The work bill you pay yourself: paid 5 days ago, and a month before that.
+    const rotaId = 'b-' + uid();
+    const rotaDay = d(-5);
+    const rotaLast = addMonths(rotaDay, -1);
 
     /* transactions: about six months of an ordinary London life */
     const tx = [];
     const push = (date, description, amount, category, account) => {
-      if (date <= t) tx.push(Object.assign({ id: 't-' + uid(), date, description, amount, category, account: account || cur, notes: '', source: 'import' }, D));
+      if (date > t) return null;
+      const rec = Object.assign({ id: 't-' + uid(), date, description, amount, category, account: account || cur, notes: '', source: 'import' }, D);
+      tx.push(rec);
+      return rec;
     };
     for (let k = -5; k <= 0; k++) {
       const m = addMonths(t.slice(0, 8) + '01', k).slice(0, 8);
       const at = (dd) => m + String(dd).padStart(2, '0');
-      push(at(25), 'NORTHBRIDGE LTD SALARY', 2850, 'Salary');
+      push(at(25), 'ACME CARE LTD SALARY', 2850, 'Salary');
       push(at(1), 'HARTLEY LETTINGS RENT', -1150, 'Housing');
       push(at(1), 'LAMBETH COUNCIL TAX', -142, 'Bills & utilities');
       push(at(14), 'OCTOPUS ENERGY', -96, 'Bills & utilities');
@@ -118,29 +131,56 @@
       bill({ name: 'Car insurance', payee: 'Admiral', amount: 412, frequency: 'yearly', nextDue: d(5), method: 'Pay manually', category: 'Insurance', notes: 'Renewal quote came by email. Compare before paying.' }),
       bill({ name: 'TV Licence', payee: 'TV Licensing', amount: 174.5, frequency: 'yearly', nextDue: d(40), method: 'Pay manually', category: 'Bills & utilities' }),
       bill({ name: 'Window cleaner', payee: 'Dave’s Windows', amount: 20, frequency: 'monthly', nextDue: d(-3), method: 'Pay manually', category: 'Other spending' }),
+      // A work cost that comes out of your account: Acme pays it back, and each payment joins Get paid back.
+      bill({ id: rotaId, name: 'Staff rota app', payee: 'RotaCloud', amount: 35, frequency: 'monthly', nextDue: addMonths(rotaDay, 1), method: 'Card (automatic)', category: WORK_OUT, context: 'work', payer: 'me',
+        history: [{ date: rotaLast, amount: 35 }, { date: rotaDay, amount: 35 }] }),
     ];
 
+    const salaryId = 'i-' + uid();
     const incomeSources = [
-      Object.assign({ id: 'i-' + uid(), name: 'Salary', from: 'Northbridge Ltd', amount: 2850, frequency: 'monthly', nextDate: nextDay(25), anchorDay: 25, account: cur }, D),
+      Object.assign({ id: salaryId, name: 'Salary', from: 'Acme Care Ltd', amount: 2850, frequency: 'monthly', nextDate: nextDay(25), anchorDay: 25, account: cur }, D),
       Object.assign({ id: 'i-' + uid(), name: 'Freelance retainer', from: 'Kite Cycles', amount: 300, frequency: 'monthly', nextDate: nextDay(15), anchorDay: 15, account: cur }, D),
     ];
 
+    /* Work money with Acme. A monthly rota app comes out of your account and Acme pays it back: last month's is
+       paid back, this month's is waiting to be sent. A train ticket was sent with a claim and Acme's payment
+       for it has just come in (I ask before ticking it off, as the reference doesn't name it). */
+    const rotaOut = [push(rotaLast, 'ROTACLOUD.COM', -35, WORK_OUT), push(rotaDay, 'ROTACLOUD.COM', -35, WORK_OUT)];
+    const rotaBack = push(addDays(rotaLast, 9), 'ACME CARE LTD ROTACLOUD', 35, WORK_IN);
+    const trainOut = push(d(-16), 'TRAINLINE.COM', -48.6, WORK_OUT);
+    push(d(-2), 'ACME CARE LTD EXPENSES', 48.6, WORK_IN);
+    const lunchOut = push(d(-2), 'PRET A MANGER KINGS CROSS', -18.45, WORK_OUT);
+    const pack = 'ACME-' + d(-12);
+
     const P = (o) => Object.assign({ id: 'p-' + uid(), status: '', dueDate: '', paidDate: '', warrantyUntil: '', reference: '', notes: '', files: [] }, D, o);
+    // Things you paid for and get back: payer 'me', at a stage, linked to your bank payment (and Acme's repayment).
+    const claim = (o) => P(Object.assign({ kind: 'receipt', context: 'work', payer: 'me', claim: true, claimed: o.claimStatus !== 'to-send' }, o));
     const paperwork = [
       P({ kind: 'receipt', context: 'home', title: 'Samsung 55in TV', party: 'Currys', amount: 549, date: d(-240), warrantyUntil: addMonths(d(-240), 24), category: 'Shopping', reference: 'CUR-88412',
         files: await attach('currys-tv-receipt.svg', { shop: 'CURRYS', sub: 'Croydon Megastore', date: GU.util.fmtDate(d(-240)), lines: [['SAMSUNG 55" QLED', '549.00'], ['2 YR GUARANTEE', 'INCL']], total: '£549.00', foot: 'Keep this receipt for your guarantee' }) }),
       P({ kind: 'receipt', context: 'home', title: 'Weekly shop', party: 'Tesco', amount: 64.2, date: d(-4), category: 'Groceries',
         files: await attach('tesco-receipt.svg', { shop: 'TESCO', sub: 'Brixton Superstore', date: GU.util.fmtDate(d(-4)), lines: [['SEMI SKIMMED MILK', '1.45'], ['SOURDOUGH LOAF', '1.90'], ['CHICKEN THIGHS', '4.75'], ['MIXED VEG', '6.10'], ['OTHER ITEMS x23', '50.00']], total: '£64.20' }) }),
-      P({ kind: 'receipt', context: 'work', title: 'Client lunch', party: 'Pret A Manger', amount: 18.45, date: d(-2), category: 'Eating out', claim: true,
+      claim({ title: 'Lunch for the training day', party: 'Pret A Manger', amount: 18.45, date: d(-2), claimStatus: 'to-send', purchaseTx: lunchOut && lunchOut.id, purchaseWas: 'Eating out',
         files: await attach('pret-receipt.svg', { shop: 'PRET A MANGER', sub: 'Kings Cross', date: GU.util.fmtDate(d(-2)), lines: [['CHICKEN CAESAR', '6.95'], ['FLAT WHITE x2', '7.30'], ['CROISSANT', '4.20']], total: '£18.45' }) }),
+      claim({ title: 'Train to the Leeds office', party: 'Trainline', amount: 48.6, date: d(-16), claimStatus: 'sent', claimedDate: d(-12), packId: pack, purchaseTx: trainOut && trainOut.id, purchaseWas: 'Transport',
+        files: await attach('trainline-ticket.svg', { kind: 'E-TICKET', shop: 'TRAINLINE', sub: 'London Kings Cross to Leeds', date: GU.util.fmtDate(d(-16)), lines: [['Off-peak return', '48.60'], ['Railcard', 'none']], total: '£48.60' }) }),
+      claim({ id: 'p-bill-' + rotaId + '-' + rotaLast, title: 'Staff rota app (' + monthLabel(rotaLast.slice(0, 7)) + ')', party: 'RotaCloud', amount: 35, date: rotaLast, billId: rotaId,
+        claimStatus: 'paid-back', claimedDate: addDays(rotaLast, 1), packId: 'ACME-' + addDays(rotaLast, 1), repaidDate: addDays(rotaLast, 9), repaidTx: rotaBack && rotaBack.id, purchaseTx: rotaOut[0] && rotaOut[0].id }),
+      claim({ id: 'p-bill-' + rotaId + '-' + rotaDay, title: 'Staff rota app (' + monthLabel(rotaDay.slice(0, 7)) + ')', party: 'RotaCloud', amount: 35, date: rotaDay, billId: rotaId,
+        claimStatus: 'to-send', purchaseTx: rotaOut[1] && rotaOut[1].id }),
+      // Acme's own money: an order waiting for Acme to pay, and something Acme has paid for.
+      P({ kind: 'invoice-in', context: 'work', payer: 'company', title: 'Office chairs', party: 'Viking', amount: 318, date: d(-6), dueDate: d(8), status: 'unpaid', reference: 'VK-55120',
+        files: await attach('viking-invoice.svg', { kind: 'INVOICE VK-55120', shop: 'VIKING', sub: 'Office supplies', date: GU.util.fmtDate(d(-6)), lines: [['Mesh office chair x2', '265.00'], ['VAT', '53.00']], total: '£318.00', foot: 'Bill to: Acme Care Ltd' }) }),
+      P({ kind: 'receipt', context: 'work', payer: 'company', title: 'First aid kits', party: 'St John Ambulance', amount: 64.8, date: d(-20) }),
       P({ kind: 'invoice-in', context: 'home', title: 'Boiler repair', party: 'Hart & Sons Plumbing', amount: 180, date: d(-10), dueDate: d(4), status: 'unpaid', reference: 'HS-2231', category: 'Housing',
         files: await attach('hart-invoice.svg', { kind: 'INVOICE HS-2231', shop: 'HART & SONS PLUMBING', sub: 'Gas Safe reg. 512345', date: GU.util.fmtDate(d(-10)), lines: [['Call-out', '60.00'], ['Replace diverter valve', '120.00']], total: '£180.00', foot: 'Payment due within 14 days' }) }),
-      P({ kind: 'invoice-in', context: 'work', title: 'Self assessment 2025/26', party: 'Clarke Accountancy', amount: 240, date: d(-36), dueDate: d(-6), status: 'unpaid', reference: 'CA-1093', category: 'Work expenses' }),
+      P({ kind: 'invoice-in', context: 'home', title: 'Self assessment 2025/26', party: 'Clarke Accountancy', amount: 240, date: d(-36), dueDate: d(-6), status: 'unpaid', reference: 'CA-1093', category: 'Fees & charges' }),
       P({ kind: 'invoice-in', context: 'home', title: 'Kitchen sockets', party: 'Spark Electrical', amount: 95, date: d(-40), dueDate: d(-26), status: 'paid', paidDate: d(-33), reference: 'SE-772', category: 'Housing' }),
-      P({ kind: 'invoice-out', context: 'work', title: 'Website redesign', party: 'Bloom Bakery', amount: 650, date: d(-40), dueDate: d(-10), status: 'unpaid', reference: 'INV-0042' }),
-      P({ kind: 'invoice-out', context: 'work', title: 'Logo refresh', party: 'Kite Cycles', amount: 300, date: d(-48), dueDate: d(-18), status: 'paid', paidDate: d(-20), reference: 'INV-0041' }),
+      // Your own side work: invoices you send are Home (Owed to you), not Work.
+      P({ kind: 'invoice-out', context: 'home', title: 'Website redesign', party: 'Bloom Bakery', amount: 650, date: d(-40), dueDate: d(-10), status: 'unpaid', reference: 'INV-0042' }),
+      P({ kind: 'invoice-out', context: 'home', title: 'Logo refresh', party: 'Kite Cycles', amount: 300, date: d(-48), dueDate: d(-18), status: 'paid', paidDate: d(-20), reference: 'INV-0041' }),
       P({ kind: 'warranty', context: 'home', title: 'Dyson V11 vacuum', party: 'Dyson', amount: 399.99, date: d(-710), warrantyUntil: d(20), reference: 'DY-V11-55821', notes: 'Two-year guarantee, registered online.' }),
-      P({ kind: 'warranty', context: 'work', title: 'MacBook Air (AppleCare+)', party: 'Apple', amount: 1199, date: d(-300), warrantyUntil: d(430), category: 'Work expenses' }),
+      P({ kind: 'warranty', context: 'work', payer: 'company', title: 'Work laptop (AppleCare+)', party: 'Apple', amount: 1199, date: d(-300), warrantyUntil: d(430) }),
     ];
 
     const DOC = (o) => Object.assign({ id: 'd-' + uid(), holder: 'Me', reference: '', location: '', issueDate: '', expiryDate: '', notes: '', files: [] }, D, o);
@@ -153,22 +193,29 @@
       DOC({ title: 'Birth certificate', type: 'Birth, marriage or death certificate', location: 'Blue folder' }),
       DOC({ title: 'P60 2025/26', type: 'Employment and payslips', issueDate: d(-120), location: 'Scanned' }),
       DOC({ title: 'Degree certificate', type: 'Education and qualifications', issueDate: d(-3300), location: 'Frame in the study' }),
-      DOC({ title: 'Freelance agreement with Bloom Bakery', type: 'Contract or agreement', holder: 'Bloom Bakery', issueDate: d(-120), expiryDate: d(50), context: 'work', notes: '30 days’ notice either side. Day rate £300.' }),
+      DOC({ title: 'Freelance agreement with Bloom Bakery', type: 'Contract or agreement', holder: 'Bloom Bakery', issueDate: d(-120), expiryDate: d(50), context: 'home', notes: '30 days’ notice either side. Day rate £300.' }),
+      // Acme's own papers live in Work › Contracts & documents.
+      DOC({ title: 'Employers’ liability insurance', type: 'Insurance policy', holder: 'Acme Care Ltd', reference: 'EL-2209184', expiryDate: d(48), location: 'Office filing cabinet', context: 'work' }),
+      DOC({ title: 'Lease for the new office', type: 'Contract or agreement', holder: 'Acme Care Ltd', issueDate: d(-20), expiryDate: d(1075), location: 'Scanned', context: 'work', notes: 'Three months’ notice. Rent reviewed every year.' }),
     ];
-    const clientsFolder = { id: 'wf-demo-clients', area: 'projects', name: 'Clients', created: d(-20), demo: true };
+    const officeFolder = { id: 'wf-demo-office', area: 'projects', name: 'Office move', created: d(-20), demo: true };
     const projects = [
-      { id: 'pj-' + uid(), name: 'Bloom Bakery online shop', client: 'Bloom Bakery', status: 'Booked', start: d(12), deadline: d(55), value: 1800, workFolder: clientsFolder.id, notes: 'Phase 2 after the redesign. Needs product photos by the start date.', files: [], created: d(-14), demo: true },
-      { id: 'pj-' + uid(), name: 'Kite Cycles brand guide', client: 'Kite Cycles', status: 'In progress', start: d(-9), deadline: d(6), value: 450, workFolder: clientsFolder.id, notes: '', files: [], created: d(-20), demo: true },
-      { id: 'pj-' + uid(), name: 'Portfolio website refresh', status: 'Idea', notes: 'Add the bakery and cycles work once they’re live.', files: [], created: d(-5), demo: true },
+      { id: 'pj-' + uid(), name: 'Move to the new office', client: 'Acme Care', status: 'Booked', start: d(12), deadline: d(55), workFolder: officeFolder.id, notes: 'Book the van, and tell suppliers and the bank the new address.', files: [], created: d(-14), demo: true },
+      { id: 'pj-' + uid(), name: 'New staff rota', client: 'Acme Care', status: 'In progress', start: d(-9), deadline: d(6), notes: 'Everyone on the rota app by the end of the month.', files: [], created: d(-20), demo: true },
+      { id: 'pj-' + uid(), name: 'Get ready for the next inspection', status: 'Idea', notes: 'Training records and policies in one folder.', files: [], created: d(-5), demo: true },
     ];
+    // Ideas to cost. Home ones are in Home › Plans; work ones in Work › Cost forecast, by who pays.
+    const idea = (o) => Object.assign({ id: 'ci-' + uid(), status: 'open', files: [], demo: true }, o);
     const costIdeas = [
-      { id: 'ci-' + uid(), name: 'New laptop', cost: 1200, priority: 'must', wantBy: d(75), status: 'open', notes: 'The old one is slowing down on design work.', files: [], created: d(-6), demo: true },
-      { id: 'ci-' + uid(), name: 'Product photography kit', cost: 350, priority: 'should', projectId: projects[0].id, notBefore: d(5), status: 'open', files: [], created: d(-4), demo: true },
-      { id: 'ci-' + uid(), name: 'Co-working desk', cost: 0, monthly: 180, priority: 'could', status: 'open', notes: 'Two days a week would do.', files: [], created: d(-2), demo: true },
-      { id: 'ci-' + uid(), name: 'Trade show stand', cost: 2400, priority: 'could', wantBy: d(150), status: 'open', files: [], created: d(-1), demo: true },
+      idea({ context: 'home', name: 'New laptop', cost: 1200, priority: 'must', wantBy: d(75), notes: 'The old one is slowing down.', created: d(-6) }),
+      idea({ context: 'home', name: 'Weekend in Lisbon', cost: 450, priority: 'could', wantBy: d(120), created: d(-3) }),
+      idea({ context: 'work', payer: 'company', name: 'Sign-in tablet for reception', cost: 350, priority: 'should', projectId: projects[0].id, wantBy: d(55), created: d(-4) }),
+      idea({ context: 'work', payer: 'company', name: 'Stand at the care show', cost: 2400, priority: 'could', wantBy: d(150), created: d(-1) }),
+      idea({ context: 'work', payer: 'me', name: 'First aid course', cost: 95, priority: 'should', wantBy: d(30), notes: 'I’ll book it and claim it back.', created: d(-2) }),
+      idea({ context: 'work', name: 'Label printer', cost: 60, priority: 'could', created: d(-2) }),
     ];
     const workNotes = [
-      { id: 'wn-' + uid(), area: 'projects', folder: clientsFolder.id, title: 'Call with Bloom Bakery', body: 'They want online ordering for cakes, click and collect only.\nBudget agreed at £1,800. Send the quote by Friday.', created: d(-3), updated: d(-3), demo: true },
+      { id: 'wn-' + uid(), area: 'projects', folder: officeFolder.id, title: 'Call with the landlord', body: 'Keys on the 1st. Two parking spaces.\nSend the signed lease back by Friday.', created: d(-3), updated: d(-3), demo: true },
     ];
 
     const C = (texts, doneN) => texts.map((text, i) => ({ id: uid(), text, done: i < doneN }));
@@ -188,12 +235,15 @@
 
     const lists = store.state.todoLists;
     const L = (re) => (lists.find((l) => re.test(l.name)) || lists[0] || {}).id;
+    const workList = (GU.parts && GU.parts.workListId(store.state)) || 'list-work';
     const K = (o) => Object.assign({ id: 'k-' + uid(), priority: 'normal', notes: '', done: false, due: '' }, D, o);
     const tasks = [
       K({ title: 'Book passport photos for Schengen application', due: d(1), listId: L(/admin/i), priority: 'high' }),
       K({ title: 'Call Octopus about the meter reading', due: d(-2), listId: L(/admin/i) }),
-      K({ title: 'Pay Clarke Accountancy invoice', due: d(-1), listId: L(/work/i), priority: 'high' }),
-      K({ title: 'Chase Bloom Bakery for invoice INV-0042', due: t, listId: L(/work/i), priority: 'high' }),
+      K({ title: 'Pay Clarke Accountancy invoice', due: d(-1), listId: L(/admin/i), priority: 'high' }),
+      K({ title: 'Chase Bloom Bakery for invoice INV-0042', due: t, listId: L(/admin/i), priority: 'high' }),
+      K({ title: 'Update the staff rota for half term', due: d(-1), listId: workList, context: 'work', priority: 'high' }),
+      K({ title: 'Order chairs for the new office', due: d(2), listId: workList, context: 'work' }),
       K({ title: 'Buy birthday present for Priya', due: d(5), listId: L(/personal/i) }),
       K({ title: 'Renew driving licence photo', due: d(20), listId: L(/admin/i), notes: 'Do it on GOV.UK, costs £14.' }),
       K({ title: 'Book dentist check-up', listId: L(/personal/i) }),
@@ -216,9 +266,11 @@
           date: t, due_date: d(18), expiry_date: null, reference: null, context: 'home', category: 'Family & kids', document_type: null, frequency: null, paid: false, visa_id: null, section_id: null,
           new_section_name: 'Kids & school', task_title: 'Pay £35 and sign consent slip for school trip', task_due: d(16), notes: null, via: 'offline' } }, D),
     ];
+    const byTitle = (title) => (paperwork.find((p) => p.title === title) || {}).id;
     const filedLog = [
-      Object.assign({ id: 'log-' + uid(), date: d(-4), summary: 'Receipt from Tesco for your weekly shop, £64.20.', title: 'Weekly shop', label: 'Receipts & invoices › Home', tab: 'receipts', ref: { c: 'paperwork', id: paperwork[1].id }, via: 'offline' }, D),
-      Object.assign({ id: 'log-' + uid(), date: d(-10), summary: 'Invoice from Hart & Sons Plumbing for a boiler repair, £180.00, due in 14 days.', title: 'Boiler repair', label: 'Receipts & invoices › Home', tab: 'receipts', ref: { c: 'paperwork', id: paperwork[3].id }, via: 'offline' }, D),
+      Object.assign({ id: 'log-' + uid(), date: d(-2), summary: 'Receipt from Pret A Manger for lunch on the training day, £18.45. You paid, so it’s in Get paid back.', title: 'Lunch for the training day', label: 'Work › Get paid back', tab: 'work-back', ref: { c: 'paperwork', id: byTitle('Lunch for the training day') }, via: 'offline' }, D),
+      Object.assign({ id: 'log-' + uid(), date: d(-4), summary: 'Receipt from Tesco for your weekly shop, £64.20.', title: 'Weekly shop', label: 'Home › Receipts', tab: 'receipts', ref: { c: 'paperwork', id: byTitle('Weekly shop') }, via: 'offline' }, D),
+      Object.assign({ id: 'log-' + uid(), date: d(-10), summary: 'Invoice from Hart & Sons Plumbing for a boiler repair, £180.00, due in 14 days.', title: 'Boiler repair', label: 'Home › Receipts', tab: 'receipts', ref: { c: 'paperwork', id: byTitle('Boiler repair') }, via: 'offline' }, D),
       Object.assign({ id: 'log-' + uid(), date: d(-30), summary: 'Your MOT certificate. I started a Car section for it.', title: 'MOT certificate', label: 'Car', tab: 's-' + carId, ref: { c: 'sectionItems', id: sectionItems[0].id }, via: 'offline' }, D),
     ];
 
@@ -234,7 +286,7 @@
       s.visas.push(...visas);
       s.tasks.push(...tasks);
       s.projects.push(...projects);
-      s.workFolders.push(clientsFolder);
+      s.workFolders.push(officeFolder);
       s.workNotes.push(...workNotes);
       s.costIdeas.push(...costIdeas);
       s.sections.push(...sections);
@@ -245,6 +297,15 @@
         s.settings.budgets = { Groceries: 320, 'Eating out': 120, Shopping: 90, Transport: 140 };
         s.meta.demoBudgets = true;
       }
+      if (!s.todoLists.some((l) => l.id === workList)) s.todoLists.push({ id: workList, name: 'Work' });
+      // The example employer, unless you've set up your own. Marked demo so clearing the examples removes it.
+      if (!s.settings.employer) {
+        s.settings.employer = { name: 'Acme Care Ltd', short: 'Acme', about: 'Family business', match: ['acme care'], wageSource: salaryId, payInto: cur,
+          repayDays: 10, nudgeDays: 3, chaseDays: 21, since: t, demo: true };
+      }
+      // The examples are already sorted into Home and Work, so the one-off re-sort has nothing to do. Cleared
+      // with the examples, so it can still sort your own records later.
+      if (!s.meta.refileV1) s.meta.refileV1 = { at: t, skipped: true, demo: true };
     });
   }
 
@@ -252,18 +313,30 @@
   function clear(silent) {
     const s = store.state;
     const files = [];
-    for (const c of COLLECTIONS) for (const x of s[c] || []) if (x.demo) (x.files || []).forEach((f) => files.push(f.id));
+    // Claims made later by an example work bill go with it.
+    const demoBills = new Set((s.bills || []).filter((b) => b.demo).map((b) => b.id));
+    const isDemo = (c, x) => x.demo || (c === 'paperwork' && x.billId && demoBills.has(x.billId));
+    for (const c of COLLECTIONS) for (const x of s[c] || []) if (isDemo(c, x)) (x.files || []).forEach((f) => files.push(f.id));
     store.commit((st) => {
-      for (const c of COLLECTIONS) st[c] = (st[c] || []).filter((x) => !x.demo);
+      for (const c of COLLECTIONS) st[c] = (st[c] || []).filter((x) => !isDemo(c, x));
       st.accounts = st.accounts.filter((a) => !a.demo || st.transactions.some((t) => t.account === a.id));
       if (!st.accounts.length) st.accounts.push({ id: 'acc-main', name: 'Current account' });
       if (st.meta.demoBudgets) {
         st.settings.budgets = {};
         delete st.meta.demoBudgets;
       }
+      if (st.settings.employer && st.settings.employer.demo) st.settings.employer = null;
+      if (st.meta.refileV1 && st.meta.refileV1.demo) delete st.meta.refileV1;
     });
     files.forEach((id) => GU.files.remove(id));
-    if (!silent) GU.ui.toast('Examples cleared. Everything you added yourself is still here.');
+    if (silent) return;
+    GU.ui.toast('Examples cleared. Everything you added yourself is still here.');
+    // The one-off Home/Work re-sort waits while there are examples; with only your own records left, it can run.
+    try {
+      if (GU.refile && GU.refile.run) GU.refile.run();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   GU.sample = { load, clear };

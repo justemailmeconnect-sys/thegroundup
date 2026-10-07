@@ -25,6 +25,7 @@
         model: '',
         autoFile: true,
         ocr: true,
+        employer: null, // the business you work for: {name, short, match, wageSource, payInto, repayDays, nudgeDays, chaseDays, since}
       },
       accounts: [{ id: 'acc-main', name: 'Current account' }],
       transactions: [],
@@ -57,6 +58,7 @@
   function migrate(s) {
     const b = blank();
     for (const k of Object.keys(b)) if (s[k] === undefined) s[k] = b[k];
+    if (!s.meta || typeof s.meta !== 'object' || Array.isArray(s.meta)) s.meta = b.meta;
     s.settings = Object.assign({}, b.settings, s.settings);
     s.settings.budgets = s.settings.budgets || {};
     return s;

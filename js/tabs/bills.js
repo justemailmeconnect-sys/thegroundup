@@ -1,5 +1,7 @@
 /* The Ground Up: Bills. Regular payments with their next due date. Direct debits and standing
-   orders move on by themselves; bills you pay by hand wait for you to mark them paid. */
+   orders move on by themselves; bills you pay by hand wait for you to mark them paid.
+   This page lists your own (Home) bills. Work bills are in Work › Bills, which uses the same form and
+   'Paid' here: a work bill says who pays, you (and the business pays you back) or the business itself. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -11,6 +13,22 @@
   const METHODS = ['Direct debit', 'Standing order', 'Card (automatic)', 'Pay manually'];
   const isAuto = (m) => m !== 'Pay manually';
   let showStopped = false;
+
+  /* ---------- home or work ---------- */
+  const WORK_OUT = F.WORK_OUT || 'Work expenses';
+  const WORK = F.WORK || [WORK_OUT, 'Work reimbursements'];
+  const wm = () => GU.workMoney || null;
+  const parts = () => GU.parts || null;
+  const co = (cap) => (parts() ? parts().co(store.state, cap) : cap ? 'The company' : 'the company');
+  const isWorkBill = (b) => (parts() && parts().isWorkBill ? parts().isWorkBill(b) : !!b && (b.context === 'work' || (!b.context && b.category === WORK_OUT)));
+  /* Who pays a work bill: 'me' (it leaves your account, the business pays you back) or 'company'. */
+  const payerOf = (b) => (wm() ? wm().payerOf(b, 'bills') : b.payer || (b.foundKey || (b.history || []).length ? 'me' : 'company'));
+  const companyPays = (b) => isWorkBill(b) && payerOf(b) === 'company';
+  const workBillsTab = () => (GU.tabs && GU.tabs['work-bills'] ? 'work-bills' : 'work');
+  /* 'Added to Work › Bills', with Open unless you're on that page. */
+  function partToast(msg, tab) {
+    toast(msg, location.hash === '#' + tab ? {} : { action: 'Open', onAction: () => GU.view.go(tab) });
+  }
 
   function status(b) {
     if (b.active === false) return pill(b.endedAs === 'once' ? 'One-off' : 'Stopped', 'muted');
@@ -30,7 +48,7 @@
       '<span class="row-item__date">' + (b.active === false ? '' : '<b>' + esc(fmtDate(b.nextDue, { weekday: true })) + '</b><em>' + esc(relDays(b.nextDue)) + '</em>') + '</span>' +
       '<span class="row-item__status">' + status(b) + '</span>' +
       '<span class="row-item__amt">' + esc(money(b.amount)) + '</span>' +
-      '<span class="row-item__act">' + GU.ui.dlButton(b.files, b.name) + (canPay ? '<button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(b.id) + '">' + icon('check') + 'Paid</button>' : '') + '</span></li>';
+      '<span class="row-item__act">' + GU.ui.dlButton(b.files, b.name) + (canPay ? '<button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(b.id) + '">' + icon('check') + esc(companyPays(b) ? co(true) + ' paid' : 'Paid') + '</button>' : '') + '</span></li>';
   }
 
   /* Bills found in your statements, waiting for you to say whether they're right. */
@@ -84,12 +102,23 @@
       '<p class="panel__foot muted inst-note">From your payment schedules on the Debts page. Each payment is already in Money ahead on Home, so nothing is counted twice.</p></section>';
   }
 
+  /* One line pointing to Work › Bills, so work bills don't look lost. */
+  function signpostHTML(work) {
+    if (!work.length) return '';
+    const names = work.map((b) => b.name).filter(Boolean);
+    const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ' and ' + (names.length - 3) + ' more' : '');
+    return '<p class="note-line note-line--signpost">' + icon('briefcase') + '<span>' + esc(plural(work.length, 'work bill') + (shown ? ' (' + shown + ')' : '') + (work.length === 1 ? ' is' : ' are') + ' in ') +
+      '<a class="link" href="#' + workBillsTab() + '">Work › Bills</a>.</span></p>';
+  }
+
   function render(root) {
     const s = store.state;
     const t = today();
-    const review = s.bills.filter((b) => b.review && b.active !== false);
-    const active = s.bills.filter((b) => b.active !== false).sort((a, b) => (a.nextDue < b.nextDue ? -1 : 1));
-    const stopped = s.bills.filter((b) => b.active === false);
+    const home = s.bills.filter((b) => !isWorkBill(b));
+    const work = s.bills.filter((b) => isWorkBill(b) && b.active !== false);
+    const review = home.filter((b) => b.review && b.active !== false);
+    const active = home.filter((b) => b.active !== false).sort((a, b) => (a.nextDue < b.nextDue ? -1 : 1));
+    const stopped = home.filter((b) => b.active === false);
     const monthly = sum(active, (b) => F.monthlyEquivalent(b.amount, b.frequency));
     const week = active.filter((b) => daysUntil(b.nextDue) >= 0 && daysUntil(b.nextDue) <= 7);
     const overdue = active.filter((b) => !b.autopay && b.nextDue < t);
@@ -111,10 +140,11 @@
     root.innerHTML = GU.view.head({
       eyebrow: 'Money ahead',
       title: 'Bills',
-      text: 'Your regular payments' + (plans.length ? ', plus your instalment plans (Klarna, PayPal, Amazon and the like) with the stage each one is at' : '') + '. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on Home until you mark them paid.',
+      text: 'Your regular payments' + (plans.length ? ', plus your instalment plans (Klarna, PayPal, Amazon and the like) with the stage each one is at' : '') + '. Direct debits and standing orders roll on by themselves; bills you pay by hand wait on your Overview until you mark them paid.',
       actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +
+      signpostHTML(work) +
       GU.ui.dropbar('Drop bills and contracts here, or a whole folder', 'Each new company becomes a bill. Letters from a company you already have are added to its bill, not duplicated.') +
       reviewHTML(review) +
       '<div class="ledger">' +
@@ -194,42 +224,84 @@
     }) });
   }
 
-  function fields() {
+  /* The fields. values: what the form opens with (a Home category list keeps an older bill's own category). */
+  function fields(values) {
+    values = values || {};
+    const c = co();
+    const e = wm() ? wm().employer(store.state) : { set: false };
     return [
       { name: 'name', label: 'What is it?', required: true, placeholder: 'e.g. Electricity, Netflix, Rent' },
       { name: 'payee', label: 'Paid to', placeholder: 'e.g. Octopus Energy', optional: true },
+      { name: 'context', label: 'For', type: 'segmented', options: [{ value: 'home', label: 'Home', icon: 'home' }, { value: 'work', label: e.set ? 'Work (' + c + ')' : 'Work', icon: 'briefcase' }] },
+      { name: 'payer', label: 'Who pays?', type: 'segmented', default: '', showIf: (v) => v.context === 'work',
+        options: [{ value: 'me', label: 'Comes out of my account, ' + c + ' pays me back' }, { value: 'company', label: co(true) + ' pays it directly' }],
+        help: 'When it comes out of your account, each payment joins Get paid back by itself.' },
       { name: 'amount', label: 'Amount', type: 'money', required: true, half: true },
       { name: 'frequency', label: 'How often', type: 'select', options: F.FREQUENCIES, default: 'monthly', half: true },
       { name: 'nextDue', label: 'Next payment date', type: 'date', required: true, half: true },
       { name: 'method', label: 'How it’s paid', type: 'select', options: METHODS, default: 'Direct debit', half: true },
-      { name: 'category', label: 'Category', type: 'select', options: F.EXPENSE, default: 'Bills & utilities', half: true },
-      { name: 'account', label: 'From account', type: 'select', options: store.state.accounts.map((a) => ({ value: a.id, label: a.name })), half: true },
+      { name: 'category', label: 'Category', type: 'select', options: F.EXPENSE.filter((x) => !WORK.includes(x) || x === values.category), default: 'Bills & utilities', half: true, showIf: (v) => v.context !== 'work' },
+      { name: 'account', label: 'From account', type: 'select', options: store.state.accounts.map((a) => ({ value: a.id, label: a.name })), half: true, showIf: (v) => v.context !== 'work' || v.payer === 'me' },
       { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, optional: true, placeholder: 'Account number, contract end date, how to cancel…' },
       { name: 'files', label: 'Paperwork', type: 'files', dropLabel: 'Attach the contract or latest bill' },
       { name: 'active', label: 'Active', type: 'checkbox', checkLabel: 'I still pay this bill' },
     ];
   }
 
+  /* A work bill has to say who pays: the form asks every time. */
+  function needsPayer(v) {
+    if (v.context !== 'work' || v.payer === 'me' || v.payer === 'company') return false;
+    toast('Say who pays for it: you, or ' + co() + ' directly.');
+    return true;
+  }
+
+  /* Saves the form. A work bill is in 'Work expenses' and says who pays; a Home bill has no payer. A work bill you
+     pay yourself adds its payments since you set up work to Get paid back, in the same commit. */
   function save(v, existing) {
     const rec = Object.assign(existing ? Object.assign({}, existing) : { id: 'b-' + uid(), history: [], created: today() }, v, { review: false }, {
       autopay: isAuto(v.method),
       anchorDay: +String(v.nextDue).slice(8, 10),
       active: existing ? v.active : true,
     });
-    store.upsert('bills', rec);
-    return rec;
+    if (rec.context === 'work') {
+      rec.category = WORK_OUT;
+      if (rec.payer !== 'me' && rec.payer !== 'company') delete rec.payer;
+      if (rec.payer === 'company' && existing) rec.account = existing.account || ''; // not asked: kept for if it changes back
+    } else {
+      rec.context = 'home';
+      delete rec.payer;
+    }
+    let claims = [];
+    store.commit((s) => {
+      const i = s.bills.findIndex((x) => x.id === rec.id);
+      if (i >= 0) s.bills[i] = rec;
+      else s.bills.push(rec);
+      if (rec.context === 'work' && rec.payer === 'me' && wm()) {
+        claims = wm().billClaims(s);
+        linkClaims(s, claims, {});
+      }
+    });
+    return { rec, claims };
   }
+  const claimNote = (claims) => (claims.length ? '. ' + (claims.length === 1 ? '1 payment' : claims.length + ' payments') + ' added to Get paid back' : '');
 
+  /* prefill: values to start with ({context: 'work'} for a work bill). opts.onSaved(rec): called after saving. */
   function create(prefill, opts) {
     opts = opts || {};
+    prefill = prefill || {};
+    const ctx = prefill.context || (isWorkBill(prefill) || (parts() && parts().get() === 'work') ? 'work' : 'home');
+    const values = Object.assign({ nextDue: today(), frequency: 'monthly', method: 'Direct debit', category: 'Bills & utilities' }, prefill, { context: ctx });
+    if (ctx === 'work' && WORK.includes(values.category)) values.category = 'Bills & utilities';
     formDialog({
-      title: 'Add a bill',
-      fields: fields().filter((f) => f.name !== 'active'),
-      values: Object.assign({ nextDue: today(), frequency: 'monthly', method: 'Direct debit', category: 'Bills & utilities' }, prefill || {}),
+      title: ctx === 'work' ? 'Add a work bill' : 'Add a bill',
+      fields: fields(values).filter((f) => f.name !== 'active'),
+      values,
       submitLabel: 'Add bill',
       onSubmit: (v) => {
-        const rec = save(v, null);
-        toast('Added ' + rec.name);
+        if (needsPayer(v)) return false;
+        const { rec, claims } = save(v, null);
+        if (rec.context === 'work') partToast('Added ' + rec.name + ' to Work › Bills' + claimNote(claims), workBillsTab());
+        else toast('Added ' + rec.name);
         if (opts.onSaved) opts.onSaved(rec);
       },
     });
@@ -238,12 +310,20 @@
   function edit(id) {
     const b = store.find('bills', id);
     if (!b) return;
+    const work = isWorkBill(b);
+    const values = Object.assign({}, b, { active: b.active !== false, context: work ? 'work' : 'home', payer: work ? payerOf(b) : '' });
+    // The category is only asked for Home bills: one moving back to Home starts from the usual one.
+    if (work && WORK.includes(values.category)) values.category = 'Bills & utilities';
     formDialog({
-      title: 'Edit bill',
-      fields: fields(),
-      values: Object.assign({}, b, { active: b.active !== false }),
+      title: work ? 'Edit work bill' : 'Edit bill',
+      fields: fields(values),
+      values,
       onSubmit: (v) => {
-        save(v, b);
+        if (needsPayer(v)) return false;
+        const { rec, claims } = save(v, b);
+        if (rec.context === 'work' && !work) partToast('Moved ' + rec.name + ' to Work › Bills' + claimNote(claims), workBillsTab());
+        else if (rec.context !== 'work' && work) partToast('Moved ' + rec.name + ' to Home › Bills', 'bills');
+        else if (claims.length) toast(claimNote(claims).slice(2));
       },
       onDelete: () => {
         store.remove('bills', id, b.name);
@@ -252,43 +332,110 @@
     });
   }
 
+  /* Inside a commit: links new claims from a bill to your bank payments. own {txId, billId, date}: the payment
+     just added by hand, for that bill's claim on that day; the rest only when the match is sure. was collects
+     each linked line's old category, for Undo. */
+  function linkClaims(s, created, was, own) {
+    const W = wm();
+    if (!W || !created.length) return;
+    const taken = new Set();
+    for (const p of created) {
+      if (own && p.billId === own.billId && p.date === own.date) {
+        p.purchaseTx = own.txId;
+        p.purchaseWas = '';
+        taken.add(own.txId);
+        continue;
+      }
+      const r = W.purchaseFor(s, p, taken);
+      if (!r.sure || !r.tx) continue;
+      if (!(r.tx.id in was)) was[r.tx.id] = r.tx.category;
+      p.purchaseTx = r.tx.id;
+      p.purchaseWas = r.tx.category || '';
+      r.tx.category = WORK_OUT;
+      taken.add(r.tx.id);
+    }
+  }
+
+  /* Moves a bill on to its next date. Call inside a commit. */
+  function moveOn(bill) {
+    const n = F.nextDate(bill.nextDue, bill.frequency, bill.anchorDay);
+    if (n) bill.nextDue = n;
+    else bill.active = false;
+  }
+  const nextNote = (id) => {
+    const nb = store.find('bills', id);
+    return nb && nb.active !== false ? '. Next due ' + fmtDate(nb.nextDue, { short: true }) : '';
+  };
+
+  /* Marks a bill paid. Home bills as always. A work bill the business pays just moves on to its next date:
+     it isn't your money, so nothing is recorded. A work bill you pay is recorded, and its payment joins
+     Get paid back in the same commit (one claim per payment, however often it's marked). */
   function markPaid(id) {
     const b = store.find('bills', id);
     if (!b) return;
+    const work = isWorkBill(b);
+    if (work && payerOf(b) === 'company') return companyPaid(id);
+    const c = co();
     formDialog({
       title: 'Mark ' + b.name + ' as paid',
+      intro: work ? esc('It came out of your account, so it’s added to Get paid back for ' + c + ' to pay you back.') : undefined,
       fields: [
         { name: 'amount', label: 'Amount paid', type: 'money', required: true, half: true },
         { name: 'date', label: 'Date paid', type: 'date', required: true, half: true },
-        { name: 'record', label: 'Also add', type: 'checkbox', checkLabel: 'Add this payment to my bank transactions' },
+        { name: 'record', label: 'Also add', type: 'checkbox', checkLabel: 'Add this payment to my bank transactions', help: 'Only if it won’t be in a statement you import.' },
       ],
       values: { amount: b.amount, date: today(), record: false },
       submitLabel: 'Mark paid',
       onSubmit: (v) => {
         const before = JSON.parse(JSON.stringify(b));
+        const W = wm();
+        const was = {}; // bank lines linked as your payment, with their old category for Undo
         let txId = null;
+        let created = [];
         store.commit((s) => {
           const bill = s.bills.find((x) => x.id === id);
           bill.history = (bill.history || []).concat([{ date: v.date, amount: v.amount }]).slice(-60);
-          const n = F.nextDate(bill.nextDue, bill.frequency, bill.anchorDay);
-          if (n) bill.nextDue = n;
-          else bill.active = false;
+          moveOn(bill);
           if (v.record) {
             txId = 't-' + uid();
-            s.transactions.push({ id: txId, date: v.date, description: bill.payee || bill.name, amount: -Math.abs(v.amount), category: bill.category || 'Bills & utilities', account: bill.account || (s.accounts[0] || {}).id, notes: 'Bill: ' + bill.name, source: 'bill', created: today() });
+            s.transactions.push({ id: txId, date: v.date, description: bill.payee || bill.name, amount: -Math.abs(v.amount), category: work ? WORK_OUT : bill.category || 'Bills & utilities', account: bill.account || (s.accounts[0] || {}).id, notes: 'Bill: ' + bill.name, source: 'bill', created: today() });
           }
+          if (!work || !W) return;
+          created = W.billClaims(s);
+          linkClaims(s, created, was, txId && { txId, billId: id, date: v.date });
         });
-        const nb = store.find('bills', id);
-        toast(b.name + ' paid' + (nb.active !== false ? '. Next due ' + fmtDate(nb.nextDue, { short: true }) : ''), {
+        const ids = new Set(created.map((p) => p.id));
+        const mine = created.find((p) => p.billId === id && p.date === v.date);
+        const when = v.date === today() ? 'today' : 'on ' + fmtDate(v.date, { short: true });
+        toast(mine ? b.name + ' ' + money(v.amount) + ' left your account ' + when + '. Added to Get paid back' : b.name + ' paid' + nextNote(id), {
           action: 'Undo',
           onAction: () => store.commit((s) => {
             s.bills = s.bills.map((x) => (x.id === id ? before : x));
             if (txId) s.transactions = s.transactions.filter((t) => t.id !== txId);
+            if (ids.size) s.paperwork = s.paperwork.filter((p) => !ids.has(p.id));
+            for (const tid in was) {
+              const t = s.transactions.find((x) => x.id === tid);
+              if (t) t.category = was[tid];
+            }
           }),
         });
       },
     });
   }
 
-  GU.tabs.bills = { label: 'Bills', short: 'Bills', icon: 'bills', render, create, edit, markPaid, METHODS };
+  /* The business paid a work bill itself: just move it on to the next date. */
+  function companyPaid(id) {
+    const b = store.find('bills', id);
+    if (!b) return;
+    const before = JSON.parse(JSON.stringify(b));
+    store.commit((s) => moveOn(s.bills.find((x) => x.id === id)));
+    toast(co(true) + ' paid ' + b.name + nextNote(id), {
+      action: 'Undo',
+      onAction: () => store.commit((s) => {
+        s.bills = s.bills.map((x) => (x.id === id ? before : x));
+      }),
+    });
+  }
+
+  GU.tabs.bills = { label: 'Bills', short: 'Bills', icon: 'bills', part: 'home', render, create, edit, markPaid, METHODS };
 })();
