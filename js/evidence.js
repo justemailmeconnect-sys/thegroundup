@@ -1,6 +1,6 @@
 /* The Ground Up: the evidence pack (GU.evidence).
-   One zip of the papers an application may ask for: your bank statements, payslips and employment papers, a
-   month-by-month summary of the wages that reached your account, and a visa's own files and checklist.
+   One zip of the papers an application may ask for (a mortgage, tenancy or visa, say): your bank statements,
+   payslips and employment papers, and a month-by-month summary of the wages that reached your account.
    You choose the period and what goes in, and a preview shows what's there and what's missing before anything
    is built. Only what you tick goes in, and the contents list uses titles and dates, never bank descriptions.
    It's a tidy copy of your own papers, not advice: what an application needs is for you to check. */
@@ -12,7 +12,7 @@
 
   const BANK_TYPE = 'Bank, savings and pension';
   const PAYSLIPS = 'Employment and payslips';
-  const FOLDERS = { statements: '1 Bank statements', payslips: '2 Payslips', wages: '3 Wages summary', visa: '4 Visa documents' };
+  const FOLDERS = { statements: '1 Bank statements', payslips: '2 Payslips', wages: '3 Wages summary' };
   const pad = (n) => String(n).padStart(2, '0');
   const long = (iso) => fmtDate(iso);
   const span = (a, b) => (a === b ? long(a) : long(a) + ' to ' + long(b));
@@ -169,12 +169,12 @@
   }
 
   /* ---------- the preview: what's there, and what's missing ---------- */
-  /* o: {from, to, visaId}. Everything is worked out from your records (no files are read). */
+  /* o: {from, to}. Everything is worked out from your records (no files are read). */
   function preview(s, o) {
     const from = o.from;
     const to = o.to;
     const t = today();
-    const out = { from, to, statements: { docs: [], files: 0, noFile: [], unplaced: [], gaps: [], latest: [], any: false }, payslips: { docs: [], files: 0, noFile: [], undated: [], gaps: [] }, wages: { rows: [], total: 0, count: 0 }, visa: null };
+    const out = { from, to, statements: { docs: [], files: 0, noFile: [], unplaced: [], gaps: [], latest: [], any: false }, payslips: { docs: [], files: 0, noFile: [], undated: [], gaps: [] }, wages: { rows: [], total: 0, count: 0 } };
 
     // Bank statements: every one that covers any of the period.
     const stmts = (s.documents || []).filter(isStatement).map((d) => ({ d, files: filesOf(d), range: stmtRange(s, d), bank: bankOf(d) }));
@@ -232,16 +232,10 @@
     const covered = (key) => slips.some((x) => x.range && !NOT_PAYSLIP.test(x.d.title || '') && (x.range.from.slice(0, 7) === key || (x.range.from.slice(0, 7) === shiftMonth(key, 1) && +x.range.from.slice(8) <= 10)));
     for (const r of out.wages.rows) if (r.count && !covered(r.key)) out.payslips.gaps.push('no payslip for ' + monthLabel(r.key, true));
 
-    // The visa's own files and checklist.
-    const v = o.visaId ? (s.visas || []).find((x) => x.id === o.visaId) : null;
-    if (v) {
-      const list = v.checklist || [];
-      out.visa = { v, files: filesOf(v), done: list.filter((c) => c.done).length, total: list.length, todo: list.filter((c) => !c.done).map((c) => c.text) };
-    }
     return out;
   }
 
-  /* The preview as a short list, for the dialog. include: {statements, payslips, wages, visa}. */
+  /* The preview as a short list, for the dialog. include: {statements, payslips, wages}. */
   function previewHTML(p, include) {
     const row = (on, label, text, gaps) => '<li class="ev-row' + (on ? '' : ' is-off') + '"><b>' + esc(label) + '</b><span>' + esc(on ? text : 'Not included') + '</span>' +
       (on && gaps && gaps.length ? '<ul class="ev-gaps">' + gaps.map((g) => '<li>' + GU.ui.icon('alert') + '<span>' + esc(g.charAt(0).toUpperCase() + g.slice(1)) + '</span></li>').join('') + '</ul>' : '') + '</li>';
@@ -260,11 +254,8 @@
       ps.undated.length ? [plural(ps.undated.length, 'paper') + ' ' + (ps.undated.length === 1 ? 'has' : 'have') + ' no date, so ' + (ps.undated.length === 1 ? 'it’s' : 'they’re') + ' left out'] : []);
     const wg = p.wages;
     const wgText = wg.count ? plural(wg.count, 'payment') + ' in ' + plural(wg.rows.filter((r) => r.count).length, 'month') + ', ' + GU.util.money(wg.total) : 'No wages found in your bank records for these dates';
-    const v = p.visa;
-    const vText = v ? plural(v.files.length, 'file') + ' and a checklist (' + v.done + ' of ' + v.total + ' ticked)' : '';
-    const vGaps = v && v.todo.length ? ['Not ticked yet: ' + v.todo.slice(0, 4).join(', ') + (v.todo.length > 4 ? ' and ' + (v.todo.length - 4) + ' more' : '')] : [];
     return '<ul class="ev-sum">' + row(include.statements, 'Bank statements', stText, stGaps) + row(include.payslips, 'Payslips and employment papers', psText, psGaps) +
-      row(include.wages, 'Wages summary', wgText, []) + (v ? row(include.visa, 'This application', vText, vGaps) : '') + '</ul>' +
+      row(include.wages, 'Wages summary', wgText, []) + '</ul>' +
       '<p class="ev-foot">' + esc('Covers ' + span(p.from, p.to) + '. Check what each application asks for: this is a tidy copy of your own papers, not advice on what you need.') + '</p>';
   }
 
@@ -286,25 +277,13 @@
       p.wages.rows.map((r) => [monthLabel(r.key, true) + (r.partial ? ' (part month)' : ''), r.dates.join('; '), r.count, r.count ? n2(r.total) : '0.00']), [['Total', '', p.wages.count, n2(p.wages.total)]]));
     return [{ name: FOLDERS.wages + '/' + name + '.html', blob: new Blob([html], { type: 'text/html' }) }, { name: FOLDERS.wages + '/' + name + '.csv', blob: new Blob([csv], { type: 'text/csv' }) }];
   }
-  /* The visa's checklist as a page. */
-  function checklistFile(v) {
-    const html = printPage({
-      title: v.visaType + ': checklist',
-      lede: [v.country, v.applicant && 'For ' + v.applicant, v.status].filter(Boolean).join(' · '),
-      meta: [['Made on', long(today())], ['Ticked', (v.checklist || []).filter((c) => c.done).length + ' of ' + (v.checklist || []).length]],
-      blocks: [{ cols: [{ label: 'Ready' }, { label: 'Document' }], rows: (v.checklist || []).map((c) => [c.done ? 'Yes' : 'Not yet', c.text]) }],
-      foot: 'Made with The Ground Up on ' + long(today()) + '.',
-    });
-    return { name: FOLDERS.visa + '/Checklist.html', blob: new Blob([html], { type: 'text/html' }) };
-  }
+  const nameFor = (o) => 'Evidence pack ' + o.from + ' to ' + o.to + '.zip';
 
-  const nameFor = (o, v) => 'Evidence pack ' + o.from + ' to ' + o.to + (v ? ' - ' + fileSafe(v.visaType, 40) : '') + '.zip';
-
-  /* Builds the pack. o: {from, to, visaId, include: {statements, payslips, wages, visa}}.
+  /* Builds the pack. o: {from, to, include: {statements, payslips, wages}}.
      Returns {blob, name, rows, entries, missing, gaps, preview}, or null when there's nothing to put in. */
   async function build(o) {
     const s = store.state;
-    const inc = Object.assign({ statements: true, payslips: true, wages: true, visa: true }, o.include || {});
+    const inc = Object.assign({ statements: true, payslips: true, wages: true }, o.include || {});
     const p = preview(s, o);
     const entries = [];
     const rows = [];
@@ -353,20 +332,10 @@
       entries.push(...files);
       rows.push([FOLDERS.wages, 'Wages summary, month by month', span(p.from, p.to), base + '.html and .csv', p.wages.count ? plural(p.wages.count, 'payment') + ', ' + GU.util.money(p.wages.total) : 'No wages found in your bank records']);
     }
-    const v = inc.visa && p.visa ? p.visa : null;
-    if (v) {
-      const asFiles = v.files.map((f) => ({ d: { title: f.name.replace(/\.[a-z0-9]{1,5}$/i, '') }, files: [f], range: null }));
-      await take(FOLDERS.visa, asFiles, 'File');
-      const cl = checklistFile(v.v);
-      entries.push(cl);
-      rows.push([FOLDERS.visa, 'Checklist', '', 'Checklist.html', v.done + ' of ' + v.total + ' ticked']);
-      if (v.todo.length) gaps.push('Visa checklist: not ticked yet: ' + v.todo.join(', '));
-    }
     // A wages summary that only says 'no wages found' isn't a reason to build a pack on its own.
     if (!entries.some((e) => !(p.wages.count === 0 && e.name.startsWith(FOLDERS.wages + '/')))) return null;
 
     const meta = [['Period', span(p.from, p.to)], ['Made on', long(today())]];
-    if (v) meta.push(['For', [v.v.visaType, v.v.country].filter(Boolean).join(', ')]);
     meta.push(['Files', String(entries.length)]);
     const html = printPage({
       title: 'Evidence pack: contents',
@@ -379,19 +348,16 @@
     const csv = csvText([['Folder', 'What it is', 'Dates', 'File', 'Note']].concat(rows, gaps.length ? [['', '', '', '', '']].concat(gaps.map((g) => ['Not in this pack', g, '', '', ''])) : []));
     entries.unshift({ name: '00 Contents.html', blob: new Blob([html], { type: 'text/html' }) }, { name: '00 Contents.csv', blob: new Blob([csv], { type: 'text/csv' }) });
     const blob = await GU.ui.makeZip(entries);
-    return { blob, name: nameFor(p, v && v.v), rows, entries: entries.map((e) => e.name), missing, gaps, preview: p };
+    return { blob, name: nameFor(p), rows, entries: entries.map((e) => e.name), missing, gaps, preview: p };
   }
 
   /* ---------- the dialog ---------- */
   function open(opts) {
     opts = opts || {};
-    const s = store.state;
-    const visas = (s.visas || []).filter((v) => !['Refused', 'Withdrawn'].includes(v.status)).concat((s.visas || []).filter((v) => ['Refused', 'Withdrawn'].includes(v.status)));
-    const visaId = opts.visaId && visas.some((v) => v.id === opts.visaId) ? opts.visaId : '';
     const months = opts.months ? String(opts.months) : '6';
     const w = lastMonths(+months || 6);
     const periodOf = (v) => (v.range === 'custom' ? { from: isISO(v.from) ? v.from : w.from, to: isISO(v.to) ? v.to : w.to } : lastMonths(+v.range));
-    const include = (v) => ({ statements: !!v.statements, payslips: !!v.payslips, wages: !!v.wages, visa: !!v.visa && !!v.visaId });
+    const include = (v) => ({ statements: !!v.statements, payslips: !!v.payslips, wages: !!v.wages });
     const d = GU.ui.formDialog({
       title: 'Evidence pack',
       intro: 'Pick the dates and what to put in. You get one zip with a folder for each, and a contents list. Check what each application asks for: I can’t tell you what you need.',
@@ -399,22 +365,20 @@
         { name: 'range', label: 'Period', type: 'segmented', default: months, options: [{ value: '3', label: 'Last 3 months' }, { value: '6', label: 'Last 6 months' }, { value: '12', label: 'Last 12 months' }, { value: 'custom', label: 'Choose dates' }] },
         { name: 'from', label: 'From', type: 'date', half: true, showIf: (v) => v.range === 'custom' },
         { name: 'to', label: 'To', type: 'date', half: true, showIf: (v) => v.range === 'custom' },
-        { name: 'visaId', label: 'For which application', type: 'select', options: [{ value: '', label: 'Not for a particular one' }].concat(visas.map((v) => ({ value: v.id, label: v.visaType + (v.applicant ? ' (' + v.applicant + ')' : '') }))), default: visaId, optional: true, showIf: () => visas.length > 0 },
         { name: 'includeHead', label: 'What to put in', type: 'html', html: '' },
         { name: 'statements', label: 'Include', type: 'checkbox', checkLabel: 'Bank statements' },
         { name: 'payslips', label: 'Include', type: 'checkbox', checkLabel: 'Payslips and employment papers' },
         { name: 'wages', label: 'Include', type: 'checkbox', checkLabel: 'A wages summary, month by month' },
-        { name: 'visa', label: 'Include', type: 'checkbox', checkLabel: 'This application’s files and checklist', showIf: (v) => !!v.visaId },
         { name: 'preview', type: 'html', html: '<div class="ev-preview" aria-live="polite"></div>' },
       ],
-      values: { range: months, from: w.from, to: w.to, statements: true, payslips: true, wages: true, visa: true, visaId },
+      values: { range: months, from: w.from, to: w.to, statements: true, payslips: true, wages: true },
       submitLabel: 'Build the pack',
       onChange: (v, form) => {
         const box = form.querySelector('.ev-preview');
         if (!box) return;
         const win = periodOf(v);
         if (win.from > win.to) box.innerHTML = '<p class="ev-foot">The “from” date needs to be before the “to” date.</p>';
-        else box.innerHTML = previewHTML(preview(store.state, { from: win.from, to: win.to, visaId: v.visaId }), include(v));
+        else box.innerHTML = previewHTML(preview(store.state, { from: win.from, to: win.to }), include(v));
       },
       onSubmit: async (v) => {
         const win = periodOf(v);
@@ -423,11 +387,11 @@
           return false;
         }
         const inc = include(v);
-        if (!inc.statements && !inc.payslips && !inc.wages && !inc.visa) {
+        if (!inc.statements && !inc.payslips && !inc.wages) {
           GU.ui.toast('Tick at least one thing to put in the pack.');
           return false;
         }
-        const out = await build({ from: win.from, to: win.to, visaId: v.visaId, include: inc });
+        const out = await build({ from: win.from, to: win.to, include: inc });
         if (!out) {
           GU.ui.toast('There’s nothing to put in the pack for those choices.');
           return false;

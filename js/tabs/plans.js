@@ -65,7 +65,6 @@
     const keep = b.cfg.buffer ? money(b.cfg.buffer, { whole: true }) : '£0';
     return '<section class="panel cf"><header class="panel__head"><h2>' + icon('trend') + 'When you can afford things</h2><span class="muted">next ' + b.cfg.months + ' months</span></header>' +
       '<div class="tally__sum">' +
-      '<div><span>Spare each month</span><b class="' + (plan.spare < 0 ? 'is-crit' : 'is-in') + '">' + esc(money(plan.spare, { whole: true })) + '</b><em>' + esc(plan.spare < 0 ? 'more goes out than comes in' : 'on average, after bills, debts and everyday spending') + '</em></div>' +
       '<div><span>You could spend now</span><b>' + esc(money(plan.freeNow, { whole: true })) + '</b><em>' + esc('and never drop below ' + keep) + '</em></div>' +
       '<div><span>Saving up for</span><b>' + esc(money(sum(mine, (r) => r.cost), { whole: true })) + '</b><em>' + esc(plural(mine.length, 'thing') + ' on the list') + '</em></div>' +
       '</div></section>';

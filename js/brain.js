@@ -27,7 +27,6 @@
     bill: 'Bills',
     debt: 'Debts',
     document: 'Documents',
-    visa: 'Visas',
     task: 'To-do',
     transaction_out: 'Bank',
     transaction_in: 'Bank',
@@ -38,6 +37,16 @@
   };
   const PAPER = ['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty'];
   const PAYSLIPS = 'Employment and payslips';
+  // Visa and immigration papers are filed as documents of this type.
+  const IMMIGRATION_DOC = 'Residence permit or eVisa';
+  /* The Visas page was taken out (the records stay in your data). A saved reading that still says 'visa' is a document now. */
+  function retired(out) {
+    if (out && out.destination === 'visa') {
+      out.destination = 'document';
+      if (!out.document_type || out.document_type === 'Other') out.document_type = IMMIGRATION_DOC;
+    }
+    return out;
+  }
   const WORK_OUT = F.WORK_OUT || 'Work expenses';
 
   /* ---------- work: the employer and whose money ---------- */
@@ -69,7 +78,7 @@
   }
   const DEST_LABEL = {
     receipt: 'Receipt', invoice_to_pay: 'Invoice to pay', invoice_owed_to_me: 'Invoice someone owes you', warranty: 'Warranty',
-    bill: 'Regular bill', debt: 'Debt', document: 'Important document', visa: 'Visa application', task: 'Task', transaction_out: 'Money out',
+    bill: 'Regular bill', debt: 'Debt', document: 'Important document', task: 'Task', transaction_out: 'Money out',
     transaction_in: 'Money in', bank_statement: 'Bank statement', order_history: 'Online order list', section: 'New or custom section', unsure: 'Not sure yet',
   };
 
@@ -149,7 +158,6 @@
       business: s.settings.business || '',
       employer: e.set ? { name: e.name, short: e.short, about: String(raw.about || '').trim() } : null,
       currency: s.settings.currency || 'GBP',
-      visas: s.visas.map((v) => ({ id: v.id, visa: v.visaType, country: v.country || '', applicant: v.applicant || '', status: v.status })),
       sections: (s.sections || []).map((x) => ({ id: x.id, name: x.name })),
       documentTypes: GU.tabs.documents.TYPES,
       // Work money categories are set by the site itself (work paperwork and bills, the employer's bank lines).
@@ -163,7 +171,7 @@
     type: 'object',
     additionalProperties: false,
     required: ['destination', 'confidence', 'why', 'summary', 'title', 'party', 'amount', 'date', 'due_date', 'expiry_date', 'reference', 'context', 'payer', 'category',
-      'document_type', 'frequency', 'paid', 'visa_id', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes', 'monthly_payment', 'interest_rate', 'debt_type', 'term_months', 'borrowed_amount'],
+      'document_type', 'frequency', 'paid', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes', 'monthly_payment', 'interest_rate', 'debt_type', 'term_months', 'borrowed_amount'],
     properties: {
       destination: { type: 'string', enum: Object.keys(DESTINATIONS) },
       confidence: { type: 'number' },
@@ -182,7 +190,6 @@
       document_type: NULLABLE('string'),
       frequency: { anyOf: [{ type: 'string', enum: F.FREQUENCIES.map((f) => f.value) }, { type: 'null' }] },
       paid: { type: 'boolean' },
-      visa_id: NULLABLE('string'),
       section_id: NULLABLE('string'),
       new_section_name: NULLABLE('string'),
       task_title: NULLABLE('string'),
@@ -227,8 +234,7 @@
       '- warranty: a warranty, guarantee or protection plan. Put the cover end date in expiry_date (work it out from the purchase date and length if needed).',
       '- debt: money the user owes and is paying off: a credit card or store card statement, loan or car finance agreement or statement, Klarna, PayPal Pay in 3, Clearpay or Monzo Flex plans and screenshots, overdraft letters, or money owed to a person. Put the balance still owed in amount (null if it only shows what was first borrowed, as a new agreement does), the date of that balance or of the agreement in date, the lender in party, the minimum or monthly payment in monthly_payment, the interest rate (APR) as a number in interest_rate, the number of monthly payments in term_months, the amount first borrowed in borrowed_amount, the next payment due date in due_date, and the account or agreement number in reference. Set debt_type to one of: ' + GU.debts.TYPES.join('; ') + '. A credit card statement is a debt, not a bank_statement.',
       '- bill: a regular payment being set up or changed (direct debit notice, subscription, contract with a monthly cost). Set frequency and put the next payment date in due_date.',
-      '- document: an important document to keep: passport, ID, driving licence, certificates, contracts, tenancy, insurance policy, payslip, P60, tax letters, medical letters, pension or bank letters. Set document_type to one of: ' + ctx.documentTypes.join('; ') + '. Put any expiry or renewal date in expiry_date and the issue date in date.',
-      '- visa: anything about a visa or immigration application (UKVI, Home Office, eVisa, biometrics, TLScontact, VFS, Certificate of Sponsorship, embassy letters). If it belongs to one of these existing applications, set visa_id to its id: ' + JSON.stringify(ctx.visas) + '.',
+      '- document: an important document to keep: passport, ID, driving licence, visa or immigration papers (UKVI, Home Office, eVisa, biometrics, Certificate of Sponsorship, embassy letters: use the document type for residence permits and eVisas), certificates, contracts, tenancy, insurance policy, payslip, P60, tax letters, medical letters, pension or bank letters. Set document_type to one of: ' + ctx.documentTypes.join('; ') + '. Put any expiry or renewal date in expiry_date and the issue date in date.',
       '- task: something the user needs to do, usually a short note like "call the dentist tomorrow". Put the date in due_date.',
       '- transaction_out or transaction_in: a note about money spent or received that is not paperwork, such as "paid £20 cash to the window cleaner".',
       '- bank_statement: a bank statement export listing many transactions.',
@@ -254,7 +260,7 @@
 
   function blankResult() {
     return { destination: 'unsure', confidence: 0.3, why: '', summary: '', title: '', party: null, amount: null, date: null, due_date: null, expiry_date: null, reference: null,
-      context: 'home', payer: null, category: null, document_type: null, frequency: null, paid: false, visa_id: null, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null,
+      context: 'home', payer: null, category: null, document_type: null, frequency: null, paid: false, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null,
       monthly_payment: null, interest_rate: null, debt_type: null, term_months: null, borrowed_amount: null };
   }
   function clean(r) {
@@ -263,10 +269,10 @@
     if (typeof out.amount === 'string') out.amount = parseAmount(out.amount);
     if (out.amount != null && isNaN(out.amount)) out.amount = null;
     if (out.amount != null) out.amount = Math.abs(round2(out.amount));
+    retired(out);
     if (!DESTINATIONS[out.destination]) out.destination = 'unsure';
     out.confidence = Math.max(0, Math.min(1, Number(out.confidence) || 0));
     out.why = typeof out.why === 'string' ? out.why.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
-    if (out.visa_id && !store.find('visas', out.visa_id)) out.visa_id = null;
     if (out.section_id && !(store.state.sections || []).some((x) => x.id === out.section_id)) out.section_id = null;
     if (out.document_type && !GU.tabs.documents.TYPES.includes(out.document_type)) out.document_type = 'Other';
     if (out.category && !F.EXPENSE.concat(F.INCOME, [F.TRANSFER]).includes(out.category)) out.category = null;
@@ -282,6 +288,7 @@
   }
   /* Home or work, and whose money, made to fit how the site files things. */
   function workSense(out) {
+    retired(out);
     if (out.context !== 'work') out.context = 'home';
     if (!payerOk(out.payer)) out.payer = null;
     // A payslip or P60 is about your own pay, even when it comes from your employer.
@@ -611,7 +618,7 @@
     }
 
     const sc = {
-      visa: has(t, ['visa', 'ukvi', 'home office', 'biometric', 'evisa', 'brp', 'tlscontact', 'tls contact', 'vfs global', 'schengen', 'certificate of sponsorship', 'immigration', 'leave to remain', 'share code', 'embassy', 'consulate', 'gwf']) * 3,
+      immigration: has(t, ['visa', 'ukvi', 'home office', 'biometric', 'evisa', 'brp', 'tlscontact', 'tls contact', 'vfs global', 'schengen', 'certificate of sponsorship', 'immigration', 'leave to remain', 'share code', 'embassy', 'consulate', 'gwf']) * 3,
       warranty: has(t, ['warranty', 'guarantee', 'applecare', 'extended cover', 'protection plan', 'care plan']) * 3,
       invoice: has(t, ['invoice', 'amount due', 'balance due', 'payment due', 'due date', 'pay by', 'please pay', 'remittance', 'sort code', 'bill to', 'billed to', 'payment terms']) * 2,
       receipt: has(t, ['receipt', 'subtotal', 'sub total', 'change due', 'card payment', 'contactless', 'visa debit', 'mastercard', 'thank you for shopping', 'vat ', 'order confirmation', 'paid with', 'auth code', 'qty', 'cashier', 'till']) * 1.3,
@@ -632,7 +639,7 @@
     const warrantyYears = t.match(/(\d+)[\s-]*year (?:manufacturer'?s? )?(?:warranty|guarantee)/);
 
     const debtSc = debtScore(t);
-    if (debtSc >= 2 && (looksLikeDebt(t) || debtSc * 2 >= sc.invoice) && sc.visa < 3) {
+    if (debtSc >= 2 && (looksLikeDebt(t) || debtSc * 2 >= sc.invoice) && sc.immigration < 3) {
       const f = debtFigures(raw, t);
       const name = f.lender ? f.lender.name : r.party || 'Debt';
       // The next instalment date is when to pay, not the date of the balance.
@@ -643,10 +650,10 @@
         summary: (f.type === 'Credit card' ? 'A credit card statement' : 'Details of a debt') + (f.lender || r.party ? ' from ' + name : '') + (f.balance != null ? ': ' + money(Math.abs(f.balance)) + ' owed' : '') + (f.payment ? ', ' + money(f.payment) + ' a month' : '') + '.' });
       return clean(r);
     }
-    if (sc.visa >= 3 && sc.visa >= sc.invoice && docType !== 'Passport') {
-      const v = matchVisa(t);
-      Object.assign(r, { destination: 'visa', confidence: v ? 0.82 : 0.7, why: v ? 'It mentions your ' + v.visaType + ' application' : 'It mentions visa or Home Office words', visa_id: v ? v.id : null, title: v ? v.visaType : 'Visa letter',
-        summary: v ? 'About your ' + v.visaType + (v.country ? ' (' + v.country + ')' : '') + '. I’ll add it to that application.' : 'A visa or immigration letter.' });
+    if (sc.immigration >= 3 && sc.immigration >= sc.invoice && docType !== 'Passport') {
+      // Visa and immigration papers are kept with your documents.
+      Object.assign(r, { destination: 'document', confidence: 0.75, document_type: docType || IMMIGRATION_DOC, why: 'It mentions visa or Home Office words', title: 'Visa or immigration letter',
+        summary: 'A visa or immigration paper. I’ll keep it with your documents.' });
     } else if (sc.warranty >= 3 && sc.warranty >= sc.invoice && !(sc.receipt >= 2.6 && sc.warranty < 6)) {
       const until = r.expiry_date || (warrantyYears && (r.date || today()) ? addMonths(r.date || today(), 12 * +warrantyYears[1]) : null);
       Object.assign(r, { destination: 'warranty', confidence: 0.78, why: 'It mentions a warranty or guarantee', expiry_date: until, title: r.party ? r.party + ' warranty' : 'Warranty',
@@ -709,23 +716,6 @@
     const segs = String((paths || [])[0] || '').split('/').slice(0, -1).map((x) => x.trim()).filter(Boolean);
     for (let i = segs.length - 1; i >= 0; i--) if (!GENERIC_FOLDER.test(segs[i])) return segs[i];
     return '';
-  }
-
-  function matchVisa(t) {
-    const visas = store.state.visas.filter((v) => !['Refused', 'Withdrawn'].includes(v.status));
-    let best = null;
-    let bestScore = 0;
-    for (const v of visas) {
-      let score = 0;
-      for (const w of [v.country, v.visaType, v.applicant, v.reference].filter(Boolean)) {
-        for (const part of String(w).toLowerCase().split(/[\s,]+/)) if (part.length > 3 && t.includes(part)) score++;
-      }
-      if (score > bestScore) {
-        best = v;
-        bestScore = score;
-      }
-    }
-    return best || (visas.length === 1 ? visas[0] : null);
   }
 
   /* ---------- public: analyse ---------- */
@@ -823,7 +813,7 @@
     return label + ' › ' + c + (newCategory(r) ? ' (new category)' : '');
   };
   const MONEY = ['transaction_out', 'transaction_in', 'bill'].concat(PAPER);
-  /* Where a result is filed: {tab, label, fresh}. fresh: filing it makes a new place (a section, list, category or visa application). */
+  /* Where a result is filed: {tab, label, fresh}. fresh: filing it makes a new place (a section, list or category). */
   function placeOf(result) {
     const out = placeAt(result);
     const r = workSense(Object.assign({}, result));
@@ -844,10 +834,6 @@
       const same = name && (s.sections || []).find((x) => x.name.toLowerCase() === name.toLowerCase());
       if (same) return { tab: 's-' + same.id, label: partName(same.part) + ' › ' + same.name };
       return { tab: null, label: partName(newSectionPart(r)) + ' › ' + (name ? name + ' (new section)' : 'A new section'), fresh: true };
-    }
-    if (d === 'visa') {
-      const v = r.visa_id && store.find('visas', r.visa_id);
-      return { tab: 'visas', label: homePage('visas', 'Visas') + ' › ' + (v ? v.visaType : 'new application'), fresh: !v };
     }
     if (PAPER.includes(d)) {
       if (!work) return { tab: 'receipts', label: withCategory(homePage('receipts', 'Receipts') + (d === 'invoice_owed_to_me' ? ' › Owed to you' : ''), r) };
@@ -896,7 +882,6 @@
     const work = r.context === 'work';
     let tab = null;
     let ref = null;
-    let visaUndo = null;
     let attachUndo = null;
     let txUndo = null;
     let sameTitle = '';
@@ -1000,23 +985,6 @@
           ref = { c: 'documents', id: rec.id };
           break;
         }
-        case 'visa': {
-          const v = r.visa_id && st.visas.find((x) => x.id === r.visa_id);
-          if (v) {
-            const logId = uid();
-            v.files = (v.files || []).concat(metas);
-            v.log = (v.log || []).concat([{ id: logId, date: t, text: r.summary || 'Filed ' + r.title }]);
-            if (r.reference && !v.reference) v.reference = r.reference;
-            visaUndo = { id: v.id, logId, fileIds: metas.map((m) => m.id) };
-            ref = { c: 'visas', id: v.id };
-          } else {
-            const rec = add('visas', { id: 'v-' + uid(), created: t, visaType: r.title || 'Visa application', country: '', applicant: 'Me', status: 'Planning', reference: r.reference || '',
-              checklist: [], log: [{ id: uid(), date: t, text: r.summary || 'Created from an upload' }], files: metas, notes });
-            ref = { c: 'visas', id: rec.id };
-          }
-          tab = 'visas';
-          break;
-        }
         case 'task': {
           // Your own: the list you chose, a new one you named, or your first list.
           let listId = work ? workList() : null;
@@ -1083,13 +1051,6 @@
           if (attachUndo) {
             const p = st[attachUndo.c || 'paperwork'].find((x) => x.id === attachUndo.id);
             if (p) p.files = (p.files || []).filter((f) => !attachUndo.fileIds.includes(f.id));
-          }
-          if (visaUndo) {
-            const v = st.visas.find((x) => x.id === visaUndo.id);
-            if (v) {
-              v.files = (v.files || []).filter((f) => !visaUndo.fileIds.includes(f.id));
-              v.log = (v.log || []).filter((l) => l.id !== visaUndo.logId);
-            }
           }
           if (txUndo) {
             const tx = st.transactions.find((x) => x.id === txUndo.id);

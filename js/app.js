@@ -46,7 +46,7 @@
     /* Opens the right editor for any record, wherever it lives. */
     open(ref) {
       if (ref.c === 'sectionItems') return GU.sections.editItem(ref.id);
-      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', visas: 'visas', documents: 'documents', transactions: 'transactions', debts: 'debts', projects: 'work', workNotes: 'work', costIdeas: 'work', requests: 'work-requests' };
+      const map = { tasks: 'todos', bills: 'bills', paperwork: 'receipts', incomeSources: 'incomings', documents: 'documents', transactions: 'transactions', debts: 'debts', projects: 'work', workNotes: 'work', costIdeas: 'work', requests: 'work-requests' };
       const tab = GU.tabs[map[ref.c]];
       if (tab && tab.edit) tab.edit(ref.id, ref.c);
     },
@@ -58,6 +58,7 @@
   GU.view = view;
 
   function hasDemo(s) {
+    // 'visas' stays in these lists: the page is gone but the records are still data (and old examples can still be cleared).
     return ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks'].some((k) => (s[k] || []).some((x) => x.demo));
   }
 
@@ -91,6 +92,7 @@
     app.addEventListener('click', (e) => {
       const add = e.target.closest('[data-quick-add]');
       if (add) return view.quickAdd(add);
+      if (e.target.closest('[data-new-category]')) return GU.sections.newSection({ part: parts.get() });
       const sw = e.target.closest('[data-part-go]');
       if (sw) {
         const p = sw.getAttribute('data-part-go');
@@ -152,8 +154,9 @@
         const at = all.findIndex((full) => full.includes(g[0]));
         return (i ? sep(titles[at]) : '') + g.map(item).join('');
       }).join('') +
-      (custom.length ? sep(part === 'work' ? 'Sections' : 'Your sections') + custom.map(item).join('') : '') +
-      '<a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>';
+      (custom.length ? sep(part === 'work' ? 'Categories' : 'Your categories') + custom.map(item).join('') : '') +
+      '<div class="rail__foot"><a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>' +
+      '<button type="button" class="rail__item rail__newcat" data-new-category aria-label="New category"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">New category</span></button></div>';
   }
 
   function applyTheme() {
@@ -224,6 +227,15 @@
         /* the address bar just stays as it is */
       }
       return 'hub';
+    }
+    // The Visas page was taken out (the records stay in your data): old links open the Home Overview.
+    if (id === 'visas' && !GU.tabs.visas) {
+      try {
+        history.replaceState(null, '', '#today');
+      } catch (e) {
+        /* the address bar just stays as it is */
+      }
+      return 'today';
     }
     if (GU.tabs[id]) return id;
     const start = PARTS[parts.partOf(id) === 'work' ? 'work' : part].start;

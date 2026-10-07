@@ -131,7 +131,7 @@
     const name = existing ? existing.name : (sectionRef && sectionRef.name) || 'New section';
     formDialog({
       title: 'Add to ' + name,
-      fields: (existing ? [] : [{ name: 'sectionName', label: 'Section name', required: true }]).concat(fields()),
+      fields: (existing ? [] : [{ name: 'sectionName', label: 'Category name', required: true }]).concat(fields()),
       values: Object.assign({ sectionName: name }, prefill || {}),
       submitLabel: 'Add',
       onSubmit: (v) => {
@@ -203,11 +203,11 @@
     opts = opts || {};
     const part = opts.part === 'work' || opts.part === 'home' ? opts.part : GU.parts ? GU.parts.get() : 'home';
     formDialog({
-      title: part === 'work' ? 'New work section' : 'New section',
-      intro: part === 'work' ? 'Make a drawer for anything for ' + esc(co()) + ' that doesn’t fit the other Work pages, for example Vehicles, Premises or Training.'
-        : 'Make a drawer for anything that doesn’t fit the other tabs, for example Car, Pets, Wedding or Garden.',
-      fields: [{ name: 'name', label: 'Section name', required: true }],
-      submitLabel: 'Create section',
+      title: part === 'work' ? 'New work category' : 'New category',
+      intro: part === 'work' ? 'Add a page for anything for ' + esc(co()) + ' that doesn’t fit the other Work pages, for example Vehicles, Premises or Training.'
+        : 'Add a page to your menu for anything that doesn’t fit the other tabs, for example Car, Pets, Wedding or Garden.',
+      fields: [{ name: 'name', label: 'Category name', required: true }],
+      submitLabel: 'Create category',
       onSubmit: (v) => {
         const id = 's' + uid();
         store.commit((st) => st.sections.push({ id, name: v.name, icon: iconFor(v.name), created: today(), part }));

@@ -53,7 +53,6 @@
       { id: 'home-todos', kind: 'page', part: 'home', label: 'Home › To-do', tab: 'todos', words: ['to-do', 'to do', 'todo', 'to-do list', 'my to-do', 'my tasks', 'home tasks'] },
       { id: 'home-bank', kind: 'page', part: 'home', label: 'Home › Bank', tab: 'transactions', words: ['bank', 'transactions', 'my bank'] },
       { id: 'home-debts', kind: 'page', part: 'home', label: 'Home › Debts', tab: 'debts', words: ['debts', 'my debts'] },
-      { id: 'home-visas', kind: 'page', part: 'home', label: 'Home › Visas', tab: 'visas', words: ['visas', 'visa applications'] },
       { id: 'work-back', kind: 'page', part: 'work', label: 'Work › Get paid back', tab: 'work-back', words: ['get paid back', 'paid back', 'claim back', 'to claim', 'claims', 'my claims', 'expenses to claim', 'reimbursements', 'pay me back'] },
       { id: 'work-ktk', kind: 'page', part: 'work', label: 'Work › ' + p, tab: 'work-ktk', words: [p.toLowerCase(), c + ' pays', c + 's money', 'company pays', 'the company pays', 'company money'] },
       { id: 'work-bills', kind: 'page', part: 'work', label: 'Work › Bills', tab: 'work-bills', words: ['work bills', c + ' bills'] },
@@ -73,7 +72,6 @@
       out.push({ id: 'folder:' + f.id, kind: 'folder', part: 'work', name: f.name, area: f.area, label: 'Work › ' + areaName(f.area) + ' › ' + f.name, tab: AREA_TAB[f.area] });
     }
     for (const k of ['out', 'in']) for (const c of F.custom(s, k)) out.push({ id: 'category:' + c, kind: 'category', part: 'home', name: c, money: k, custom: true, label: (k === 'in' ? 'Money in' : 'Spending') + ' › ' + c, tab: k === 'in' ? 'incomings' : 'outgoings' });
-    for (const v of s.visas || []) if (!['Refused', 'Withdrawn'].includes(v.status)) out.push({ id: 'visa:' + v.id, kind: 'visa', part: 'home', name: v.visaType, label: 'Home › Visas › ' + v.visaType, tab: 'visas' });
     for (const t of DOC_TYPES()) out.push({ id: 'doctype:' + t, kind: 'doctype', part: 'home', name: t, label: 'Home › Documents › ' + t, tab: 'documents' });
     return out;
   }
@@ -81,6 +79,8 @@
   function placeById(id, s) {
     s = s || store.state;
     const raw = String(id == null ? '' : id).trim();
+    // A rule saved before the Visas page went points at its old page or one application: visa papers are documents now.
+    if (/^(home-visas|visa:.+)$/i.test(raw)) return placeById('doctype:Residence permit or eVisa', s);
     const m = raw.match(/^([a-z]+)[:](.+)$/i);
     if (!m) return pages().find((p) => p.id === raw.toLowerCase()) || null;
     const kind = m[1].toLowerCase();
@@ -117,7 +117,7 @@
       if (p.kind !== 'doctype' && names.some((n) => n.length > 3 && want.length > 3 && (n.startsWith(want + ' ') || want.startsWith(n + ' ')))) return 1;
       return 0;
     };
-    const order = { section: 0, list: 1, category: 2, folder: 3, page: 4, visa: 5, doctype: 6 };
+    const order = { section: 0, list: 1, category: 2, folder: 3, page: 4, doctype: 5 };
     const ranked = all.map((p) => ({ p, n: score(p) })).filter((x) => x.n)
       .sort((a, b) => b.n - a.n || (inWork() ? (b.p.part === 'work') - (a.p.part === 'work') : (b.p.part === 'home') - (a.p.part === 'home')) || order[a.p.kind] - order[b.p.kind]);
     if (ranked.length) return ranked[0].p;
@@ -136,7 +136,6 @@
     const paperOr = (dflt, okOut) => (['receipt', 'invoice_to_pay', 'warranty'].concat(okOut ? ['invoice_owed_to_me'] : []).includes(was) ? was : dflt);
     const payerIn = (p) => (p === 'me' || p === 'company' ? p : null);
     Object.assign(r, { section_id: null, new_section_name: null, list_id: null, new_list_name: null, folder_id: null, new_category: null });
-    if (was !== 'visa') r.visa_id = null;
     const home = () => Object.assign(r, { context: 'home', payer: null });
     const work = (payer) => Object.assign(r, { context: 'work', payer: payer === undefined ? r.payer : payerIn(payer) });
     switch (place.kind === 'page' ? place.id : place.kind) {
@@ -151,7 +150,6 @@
       case 'home-todos': home(); r.destination = 'task'; break;
       case 'home-bank': home(); r.destination = was === 'transaction_in' ? 'transaction_in' : 'transaction_out'; break;
       case 'home-debts': home(); r.destination = 'debt'; break;
-      case 'home-visas': home(); r.destination = 'visa'; break;
       case 'section': {
         r.destination = 'section';
         r.section_id = place.id.slice(8);
@@ -178,7 +176,6 @@
         break;
       }
       case 'doctype': home(); r.destination = 'document'; r.document_type = place.name; break;
-      case 'visa': home(); r.destination = 'visa'; r.visa_id = place.id.slice(5); break;
       default: throw new Error('Things can’t be filed there');
     }
     r.confidence = extra.confidence != null ? extra.confidence : 1;
@@ -202,7 +199,6 @@
     if (d === 'document') return work ? folder || 'work-docs' : r.document_type && r.document_type !== 'Other' ? 'doctype:' + r.document_type : 'home-documents';
     if (d === 'task') return work ? folder || 'work-tasks' : r.list_id ? 'list:' + r.list_id : 'home-todos';
     if (d === 'transaction_out' || d === 'transaction_in') return r.category && !(F.WORK || []).includes(r.category) ? 'category:' + r.category : 'home-bank';
-    if (d === 'visa') return r.visa_id ? 'visa:' + r.visa_id : 'home-visas';
     if (d === 'debt') return 'home-debts';
     return null;
   }
@@ -223,12 +219,11 @@
     }
     if (c === 'documents') return rec.context === 'work' ? { label: 'Work › Contracts & documents', tab: 'work-docs' } : { label: 'Home › Documents', tab: 'documents' };
     if (c === 'bills') return GU.parts && GU.parts.isWorkBill(rec) ? { label: 'Work › Bills', tab: 'work-bills' } : { label: 'Home › Bills', tab: 'bills' };
-    if (c === 'visas') return { label: 'Home › Visas', tab: 'visas' };
     if (c === 'tasks') return GU.parts && GU.parts.isWorkTask(s, rec) ? { label: 'Work › Tasks', tab: 'work-tasks' } : { label: 'Home › To-do', tab: 'todos' };
     if (c === 'transactions') return { label: 'Home › Bank', tab: 'transactions' };
     return { label: 'your records', tab: null };
   }
-  const titleOf = (c, rec) => String((rec && (rec.title || rec.name || rec.description || rec.visaType)) || 'it');
+  const titleOf = (c, rec) => String((rec && (rec.title || rec.name || rec.description)) || 'it');
 
   /* ---------- making places (each one only once) ---------- */
   const words40 = (v) => String(v == null ? '' : v).normalize('NFKC').replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/[<>]/g, '').trim().slice(0, 40);
@@ -573,7 +568,7 @@
         sums.get(k).push({ c, rec });
       }
     };
-    for (const c of ['paperwork', 'sectionItems', 'documents', 'bills', 'visas', 'debts']) for (const rec of s[c] || []) put(c, rec);
+    for (const c of ['paperwork', 'sectionItems', 'documents', 'bills', 'debts']) for (const rec of s[c] || []) put(c, rec);
     return { files, sums, refs };
   }
   /* What an item looks like you already have: {c, rec, title, label, tab}, or null. */
@@ -604,7 +599,7 @@
   }
 
   /* ---------- groups ---------- */
-  const NOUN = { receipt: 'receipt', invoice_to_pay: 'invoice', invoice_owed_to_me: 'invoice', warranty: 'warranty', bill: 'bill', document: 'document', task: 'task', transaction_out: 'payment', transaction_in: 'payment', section: 'thing', visa: 'visa letter', debt: 'statement' };
+  const NOUN = { receipt: 'receipt', invoice_to_pay: 'invoice', invoice_owed_to_me: 'invoice', warranty: 'warranty', bill: 'bill', document: 'document', task: 'task', transaction_out: 'payment', transaction_in: 'payment', section: 'thing', debt: 'statement' };
   const nounFor = (d, n) => {
     const w = NOUN[d] || 'thing';
     return n === 1 ? w : w === 'warranty' ? 'warranties' : w + 's';
@@ -620,8 +615,9 @@
       const p = partyKey(r);
       if (!p) continue;
       const label = GU.brain.where(r);
-      const key = p + '|' + (NOUN[r.destination] || r.destination) + '|' + label;
-      if (!map.has(key)) map.set(key, { key, items: [], label, party: String(r.party || '').trim().split(/\s+/).slice(0, 2).join(' '), dest: r.destination });
+      const dest = r.destination === 'visa' ? 'document' : r.destination; // from before the Visas page went
+      const key = p + '|' + (NOUN[dest] || dest) + '|' + label;
+      if (!map.has(key)) map.set(key, { key, items: [], label, party: String(r.party || '').trim().split(/\s+/).slice(0, 2).join(' '), dest });
       map.get(key).items.push(it);
     }
     return Array.from(map.values()).filter((g) => g.items.length >= 2).map((g) => Object.assign(g, { title: g.items.length + ' ' + g.party + ' ' + nounFor(g.dest, g.items.length) }));
@@ -850,7 +846,7 @@
   }
 
   /* ---------- the sorting agent ---------- */
-  const FILEABLE = ['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty', 'bill', 'debt', 'document', 'visa', 'task', 'transaction_out', 'transaction_in', 'section'];
+  const FILEABLE = ['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty', 'bill', 'debt', 'document', 'task', 'transaction_out', 'transaction_in', 'section'];
   /* The agent's standing instructions. The data goes separately, fenced. */
   function agentRules(list) {
     const e = GU.workMoney ? GU.workMoney.employer(store.state) : { set: false };
@@ -884,7 +880,7 @@
     if (it.note) bits.push('the user wrote: "' + c(it.note, 240) + '"');
     if (it.scope && it.scope.name) bits.push('added in: ' + c(it.scope.name, 60));
     if (r) {
-      bits.push('read as: ' + c(GU.brain.DEST_LABEL[r.destination] || r.destination, 30) + ' "' + c(r.title, 80) + '"' + (r.party ? ' from ' + c(r.party, 60) : '') + (r.amount != null ? ', ' + money(r.amount) : '') +
+      bits.push('read as: ' + c(GU.brain.DEST_LABEL[r.destination === 'visa' ? 'document' : r.destination] || r.destination, 30) + ' "' + c(r.title, 80) + '"' + (r.party ? ' from ' + c(r.party, 60) : '') + (r.amount != null ? ', ' + money(r.amount) : '') +
         (r.date ? ', dated ' + c(r.date, 10) : '') + (r.due_date ? ', due ' + c(r.due_date, 10) : '') + (r.reference ? ', ref ' + c(r.reference, 30) : ''));
       bits.push('for: ' + (r.context === 'work' ? 'work' : 'home') + (r.payer ? ', payer ' + r.payer : ''));
       bits.push('suggested place: ' + c(GU.brain.where(r), 80));
@@ -943,7 +939,7 @@
       title: { type: 'string' }, party: { type: 'string' }, amount: { type: 'number' }, date: { type: 'string', description: 'YYYY-MM-DD' }, due_date: { type: 'string', description: 'YYYY-MM-DD' },
       context: { type: 'string', enum: ['home', 'work'] }, payer: { type: 'string', enum: ['me', 'company'], description: 'Work receipts, invoices and bills: me = Get paid back, company = the business pays' },
       paid: { type: 'boolean' }, section_id: { type: 'string' }, new_section_name: { type: 'string' }, list_id: { type: 'string' }, category: { type: 'string' }, document_type: { type: 'string' },
-      folder_id: { type: 'string' }, visa_id: { type: 'string' },
+      folder_id: { type: 'string' },
     } };
     /* A reading with the place, destination and details asked for, all checked. */
     function shape(base, i, loose) {
@@ -992,11 +988,6 @@
         const p = placeById('folder:' + K.str(o.folder_id, 80));
         if (!p) throw new Error('No work folder with that id');
         r = applyPlace(r, p, { payer: r.payer });
-      }
-      if (o.visa_id) {
-        const p = placeById('visa:' + K.str(o.visa_id, 80));
-        if (!p) throw new Error('No visa application with that id');
-        r = applyPlace(r, p, {});
       }
       if (!FILEABLE.includes(r.destination)) throw new Error('Say where it goes: a place, or a destination (' + FILEABLE.join(', ') + ')');
       r = GU.brain.workSense(r);
@@ -1062,10 +1053,10 @@
       },
       {
         name: 'list_places',
-        description: 'Every place things can go, with exact ids: the Home and Work pages, sections (with their part), to-do lists, work folders, your own categories, visa applications and document types.',
-        inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['all', 'page', 'section', 'list', 'folder', 'category', 'visa', 'doctype'] } } },
+        description: 'Every place things can go, with exact ids: the Home and Work pages, sections (with their part), to-do lists, work folders, your own categories and document types.',
+        inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['all', 'page', 'section', 'list', 'folder', 'category', 'doctype'] } } },
         execute(i) {
-          const k = K.oneOf(i.kind, 'kind', ['all', 'page', 'section', 'list', 'folder', 'category', 'visa', 'doctype'], 'all');
+          const k = K.oneOf(i.kind, 'kind', ['all', 'page', 'section', 'list', 'folder', 'category', 'doctype'], 'all');
           const rows = places().filter((p) => k === 'all' || p.kind === k).map((p) => [K.clip(p.id, 60), K.clip(p.label, 90)]);
           return { parts: { home: 'Home: the user\'s own life and money', work: 'Work: ' + K.clip(co(), 40) }, count: rows.length, places: rows.slice(0, 250),
             categories: { out: F.EXPENSE.filter((x) => !(F.WORK || []).includes(x)).map((x) => K.clip(x, 40)), in: F.INCOME.filter((x) => !(F.WORK || []).includes(x)).map((x) => K.clip(x, 40)) } };

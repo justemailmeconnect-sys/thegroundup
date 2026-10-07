@@ -586,8 +586,10 @@
         action: 'See what changed', timeout: 15000,
         onAction: () => {
           showChanges = true;
+          tidyOpen = true;
           if (GU.parts) GU.parts.set('work');
           if (GU.view) GU.view.go('work');
+          setTimeout(openTidy, 200);
         },
       });
     }
@@ -1221,6 +1223,7 @@
   }
   /* ---------- 'What the re-sort changed' ---------- */
   let showChanges = false; // opened from the toast's 'See what changed': shown open
+  let tidyOpen = false; // the Overview's one tidy-up block: closed until you open it, and kept open while you answer
   /* A closed disclosure listing what the re-sort did while it can still be undone: the money it split, the rule it
      took out, and each home order it moved into Work, with 'Move back to Home'. '' when there's nothing to show. */
   function changesHTML(s) {
@@ -1254,6 +1257,38 @@
       '<button type="button" class="link link--btn" data-refile-undo>Undo the re-sort</button></p></div></details>';
   }
 
+  /* ---------- the tidy-up block on Work › Overview ---------- */
+  /* The one-off re-sort's leftovers folded into one closed block: the 'Check these' questions, then what the re-sort
+     changed (with its Undo). '' once nothing is open and the 30 days to undo it are over. The badge counts the open
+     questions. The buttons are the same as ever (data-refile-*), just inside the block. */
+  function tidyHTML(s) {
+    s = s || store.state;
+    const card = cardHTML(s);
+    const changes = changesHTML(s);
+    if (!card && !changes) return '';
+    const icon = GU.ui.icon;
+    const n = count(s);
+    return '<details class="panel wk-tidy" id="wk-tidy"' + (tidyOpen ? ' open' : '') + '><summary>' + icon('check') + '<span class="wk-tidy__title">Tidy-up from the Home/Work split</span>' +
+      '<span class="pill pill--' + (n ? 'warn' : 'muted') + ' wk-tidy__n">' + esc(n ? n + ' to check' : 'nothing to check') + '</span>' + icon('chevron', 'wk-tidy__chev') + '</summary>' +
+      '<div class="wk-tidy__body">' + card + changes + '</div></details>';
+  }
+  /* Opens the tidy-up block (if it's on the page) and scrolls to it. */
+  function openTidy() {
+    tidyOpen = true;
+    const el = document.getElementById('wk-tidy');
+    if (!el) return false;
+    el.open = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return true;
+  }
+  // The page is drawn again after every change, so what's open is remembered here.
+  document.addEventListener('toggle', (ev) => {
+    const d = ev.target;
+    if (!d || !d.classList) return;
+    if (d.classList.contains('wk-tidy')) tidyOpen = d.open;
+    else if (d.classList.contains('rf-changes')) showChanges = d.open;
+  }, true);
+
   document.addEventListener('click', (ev) => {
     const t = ev.target;
     if (!t || !t.closest) return;
@@ -1283,5 +1318,5 @@
     }
   });
 
-  GU.refile = { run, undo, canUndo, info, questions, count, answer, useSuggestions, learnRepayDays, cardHTML, changesHTML, heal };
+  GU.refile = { run, undo, canUndo, info, questions, count, answer, useSuggestions, learnRepayDays, cardHTML, changesHTML, tidyHTML, openTidy, heal };
 })();

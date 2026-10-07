@@ -17,7 +17,7 @@
         name: '',
         currency: 'GBP',
         docWarnDays: 90,
-        visaWarnDays: 120,
+        visaWarnDays: 120, // no longer shown or used; kept so older backups and synced settings stay as they were
         theme: 'system',
         budgets: {},
         business: '',
@@ -36,7 +36,7 @@
       incomeSources: [],
       paperwork: [],
       documents: [],
-      visas: [],
+      visas: [], // the Visas page was removed, but the data key stays so saved records, backups and sync keep working
       todoLists: [
         { id: 'list-personal', name: 'Personal' },
         { id: 'list-admin', name: 'Life admin' },

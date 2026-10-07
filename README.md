@@ -20,8 +20,7 @@ The site has two parts, like the two halves of a shop's website: **Home** is you
 | **Bank** | Every transaction across your accounts, with each account's current balance and a balance-over-time chart. Import statements from any UK bank; categories are filled in automatically and learn from your corrections. Work money is marked on each line. |
 | **Spending** | History: spending by category, monthly budgets with warnings, and your biggest payments. Work money is left out, with one line saying how much there was. |
 | **Receipts** | Receipts, invoices you need to pay, invoices someone owes you, paid invoices and warranties, each with its photo or PDF. **Owed to you** keeps a running total of unpaid invoices you've sent for your own side work, soonest due first, with what's late, what's due in the next 30 days and what you've been paid this tax year. Part payments come off the total and the rest stays owed. If a matching payment turns up in your bank statements, it asks whether that's the one. |
-| **Documents** | Passports, licences, certificates, contracts and policies, with scans, where the original is kept, and reminders before anything expires. Reference numbers stay hidden until you tap Show. Payslips and tax papers stay here, because they're about your own pay. |
-| **Visas** | Each application from planning to decision: stage, document checklist, appointments, notes and files, and a warning before an approved visa runs out. |
+| **Documents** | Passports, licences, visa and immigration papers, certificates, contracts and policies, with scans, where the original is kept, and reminders before anything expires. Reference numbers stay hidden until you tap Show. Payslips and tax papers stay here, because they're about your own pay. |
 | **To-do** | Your own lists, Today and Upcoming views, and quick add that understands "tomorrow", "on Friday" or "14 Nov". Work tasks are in Work › Tasks. |
 | **Your sections** | Extra drawers like Car, Pets or Kids & school, made by you or by the assistant when something doesn't fit anywhere else. A section can be moved to Work from **Rename or move**. |
 
@@ -29,7 +28,7 @@ The site has two parts, like the two halves of a shop's website: **Home** is you
 
 | Page | What it does |
 | --- | --- |
-| **Overview** | What needs doing, worst first (things to send, repayments to confirm, invoices the business still has to pay, late tasks, projects about to start, contracts ending), a card for each page, notes, and a box where you can type anything for work, like "Paid £18 for printer paper". |
+| **Overview** | A box where you can type anything for work, like "Paid £18 for printer paper", then **Needs attention**: the five things that matter most, worst first (things to send, repayments to confirm, invoices the business still has to pay, late tasks, projects about to start, contracts ending), with the rest under "+ n more". Then a card for each page in two groups, **Money** and **Running it**, the one-off **Tidy-up from the Home/Work split** (closed, with how many are left to check) and notes. |
 | **Get paid back** | Things you paid for the business with your own money, from **Not sent yet** to **Waiting** to **Paid back**. See below. |
 | **… pays** | Named after the business ("Acme pays"). Orders, invoices and receipts the business pays for itself, on its own card or account. None of it is your money, so it never shows in Home. Invoices wait until you mark them **Paid by …**. |
 | **Bills** | Regular work costs, in two groups: ones that come out of your account and the business pays you back (each payment joins Get paid back by itself), and ones the business pays directly. |
@@ -38,7 +37,7 @@ The site has two parts, like the two halves of a shop's website: **Home** is you
 | **Cost forecast** | Things the business wants to buy, grouped by who pays: the business's own list to fund, the ones you'll pay for and get back (planned on your money until they're paid back), and ones not sorted yet. |
 | **Contracts & documents** | Leases, licences, insurance, supplier terms and registrations, with end-date reminders. |
 
-Every Work page keeps folders, search and notes.
+Every Work page keeps folders, search and notes (a small **+ Note** button until the page has some, then a Notes panel).
 
 ### Shared
 
@@ -94,7 +93,7 @@ The first time the site opens with Home and Work, it sorts what's already there,
 - links the work things you paid for to your bank payments, and ticks off the ones already paid back;
 - moves home orders that the business clearly paid you back for (the same amount, and its payment names the item) into Work;
 - moves monthly work bills you pay into Work;
-- asks about anything it isn't sure of, one tap each, in **Check these** on Work's overview, with its suggestions marked.
+- asks about anything it isn't sure of, one tap each, in **Check these**, inside the **Tidy-up from the Home/Work split** block on Work's overview, with its suggestions marked.
 
 Every field it changes is logged. **Settings › Work › Undo the Home/Work re-sort** puts everything back for 30 days. It never runs on the example data.
 
@@ -163,7 +162,7 @@ Live bank connections (Open Banking) need a small server and an account with a p
 
 ## Planning ahead
 
-Home's menu is grouped by what you need: **Overview** and the **Sorting hub**; money ahead (**Bills**, **Debts**, **Income**, **Plans**); money so far (**Bank**, **Spending**); paperwork (**Receipts**, **Documents**, **Visas**); and life (**To-do** and your sections). Work's menu has **Overview** and the **Sorting hub**; money (**Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Cost forecast**, **Contracts & documents**).
+Home's menu is grouped by what you need: **Overview** and the **Sorting hub**; money ahead (**Bills**, **Debts**, **Income**, **Plans**); money so far (**Bank**, **Spending**); paperwork (**Receipts**, **Documents**); and life (**To-do** and your sections). Work's menu has **Overview** and the **Sorting hub**; money (**Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Cost forecast**, **Contracts & documents**).
 
 Home's overview starts from your balances (from your statements, or what you put in with **Update balances**) and adds everything expected from today: income on its next dates, bills, debt payments, every instalment of a payment schedule and unpaid invoices. Each account is followed separately, so if your income lands in one account and your bills leave another you'll see which one runs short and when.
 
@@ -194,14 +193,14 @@ Each one has **Keep**, **Not a bill** (removed and never suggested again), and u
 
 ## Uploading folders
 
-Every page that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts, Documents, Bills, Bank, each visa application, each of your own sections and every Work page. On Get paid back, files dropped are always things you paid for; on the business's own page, they're always its money. Files uploaded there stay in that tab; the assistant only reads them to fill in the details. Subfolders are kept as groups.
+Every page that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts, Documents, Bills, Bank, each of your own sections and every Work page. On Get paid back, files dropped are always things you paid for; on the business's own page, they're always its money. Files uploaded there stay in that tab; the assistant only reads them to fill in the details. Subfolders are kept as groups.
 
-In the Sorting hub, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements*, *Debts* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, the Debts tab, that visa application). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
+In the Sorting hub, your own folder organisation is used: upload a folder such as "My life" containing *Car*, *Receipts/Work*, *Passports*, *Bank statements*, *Debts* and *Schengen visa*, and each file goes where its folder says (a Car section, a work receipt, a Passport document, the statement importer, the Debts tab, and the visa folder to Documents as a residence permit or eVisa). Plain names like "2024" or "Scans" are ignored, and files with no labelled folder are sorted by what's in them.
 
 ## Your data, sync and backups
 
-- **Undo and Recently deleted:** every delete (a bill, debt, receipt, document, visa application, income, task, transaction, section item, a whole section or a bank account) shows **Undo** straight away and goes to **Settings → Recently deleted**, where it can be restored for 30 days on any of your devices. Attached files are only removed for good once those 30 days are up.
-- **Downloading what you uploaded:** every row with files (receipts and invoices, documents, bills, debts, visa applications, your own sections and things waiting in the Sorting hub) has a download button, as do the file viewer and each attachment in an edit form. One file downloads as itself; a record with several files downloads as one .zip named after it. On claude.ai you confirm each download first, and file types it can't save directly (such as HEIC photos) come inside a .zip. A file that hasn't synced to this device yet can be downloaded from the device that added it.
+- **Undo and Recently deleted:** every delete (a bill, debt, receipt, document, income, task, transaction, section item, a whole section or a bank account) shows **Undo** straight away and goes to **Settings → Recently deleted**, where it can be restored for 30 days on any of your devices. Attached files are only removed for good once those 30 days are up.
+- **Downloading what you uploaded:** every row with files (receipts and invoices, documents, bills, debts, your own sections and things waiting in the Sorting hub) has a download button, as do the file viewer and each attachment in an edit form. One file downloads as itself; a record with several files downloads as one .zip named after it. On claude.ai you confirm each download first, and file types it can't save directly (such as HEIC photos) come inside a .zip. A file that hasn't synced to this device yet can be downloaded from the device that added it.
 
 - **On claude.ai** (opened from your artifact link while signed in) everything syncs across your devices: open the same link on your phone, tablet or another computer and it's all there, and changes appear on your other devices within seconds. Records are kept in your own private space in the artifact's database (`data/users/<you>/`), which nobody else can read even if you share the link. Uploaded files are stored as artifact assets and downloaded to a device the first time you open them there. Word, Excel and HEIC photos can't be stored this way, so they stay on the device that added them. Your Anthropic API key is never synced. **Settings → Sync across your devices** shows the status.
 - Each device also keeps a full copy in the browser (`localStorage` for records, IndexedDB for files), so it works offline and catches up when it reconnects. If the same thing is changed on two devices while one is offline, the device that reconnects keeps its version and adds anything new from the other.
@@ -247,7 +246,7 @@ No frameworks and no build step: plain HTML, CSS and JavaScript. PDF text is rea
 ## More pages and tools
 
 - **Work › To buy**: things the business has asked you to get. Mark one bought and the receipt form opens ready to fill, then it goes to Get paid back.
-- **Home › Tax year**: what came in for each tax year or Universal Credit month, from your statements, with CSV and printable downloads. Work money is shown apart. From here, or from a visa card, build an **evidence pack**: a zip of statements, payslips and a wages summary.
+- **Home › Tax year**: what came in for each tax year or Universal Credit month, from your statements, with CSV and printable downloads. Work money is shown apart. From here, build an **evidence pack** for an application (a mortgage, tenancy or visa, say): a zip of statements, payslips and a wages summary.
 - **Bank › Statements to import**: a nudge when an account you import into has a missing month or has gone quiet.
 - **Return-by dates** on receipts, with a reminder on the day list and a way to take a returned item out of Get paid back.
 - **Debts › Debt-free date**: when your debts clear at what you pay now, and what paying extra changes.

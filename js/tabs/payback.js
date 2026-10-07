@@ -12,8 +12,8 @@
   const P = 'paperwork';
 
   // Things you've unticked in Not sent yet (everything new starts ticked), whether Paid back is open,
-  // and which 'From your bank' lists show in full. Kept for this visit only.
-  const ui = { off: new Set(), paidOpen: false, all: {} };
+  // which 'From your bank' lists show in full and which are open. Kept for this visit only.
+  const ui = { off: new Set(), paidOpen: false, all: {}, fold: {} };
 
   /* ---------- small helpers ---------- */
   const W = () => GU.workMoney;
@@ -207,7 +207,7 @@
     return '<section class="panel pb-lane" id="pb-sent"><header class="panel__head"><h2><span class="pb-n" aria-hidden="true">2</span>' + esc('Waiting for ' + e.label) + '</h2>' +
       '<span class="muted">' + esc(packs.length ? money(total) + ' · ' + plural(packs.length, 'pack') : 'nothing waiting') + '</span></header>' +
       (loose.length ? '<div class="pb-prompts">' + loose.map((r) => promptHTML(s, e, r)).join('') + '</div>' : '') +
-      (body || '<p class="pb-lane__empty">' + esc('Nothing waiting. Things you send to ' + e.label + ' wait here until the money comes back, and I tick them off when it shows in your bank.') + '</p>') +
+      (body || '<p class="pb-lane__empty">' + esc('Things you send to ' + e.label + ' wait here until the money comes back.') + '</p>') +
       '</section>';
   }
 
@@ -224,13 +224,17 @@
   }
 
   /* ---------- From your bank ---------- */
-  function group(key, title, sub, rows, tools) {
+  /* One list, folded under its own heading with its count. Closed until you open it, except the work spending you
+     haven't claimed yet (the one to act on), which starts open. It shows five rows and 'Show all n'. */
+  function group(key, title, sub, rows, tools, openByDefault) {
     const n = rows.length;
-    const lim = 4;
+    const lim = 5;
     const all = !!ui.all[key];
-    return '<div class="pb-bank__group"><h3>' + esc(title) + ' <span class="chip__n">' + n + '</span></h3>' + (sub ? '<p class="pb-bank__sub">' + esc(sub) + '</p>' : '') +
+    const open = ui.fold[key] != null ? ui.fold[key] : !!openByDefault;
+    return '<details class="pb-bank__group pb-fold" data-fold="' + key + '"' + (open ? ' open' : '') + '><summary><span class="pb-fold__title">' + esc(title) + '</span><span class="chip__n">' + n + '</span>' + icon('chevron', 'pb-fold__chev') + '</summary>' +
+      '<div class="pb-fold__body">' + (sub ? '<p class="pb-bank__sub">' + esc(sub) + '</p>' : '') +
       '<ul class="pb-txs">' + (all ? rows : rows.slice(0, lim)).join('') + '</ul>' +
-      (n > lim || tools ? '<p class="pb-bank__tools">' + (n > lim ? '<button type="button" class="link link--btn" data-bank-more="' + key + '">' + (all ? 'Show fewer' : 'Show all ' + n) + '</button>' : '') + (tools || '') + '</p>' : '') + '</div>';
+      (n > lim || tools ? '<p class="pb-bank__tools">' + (n > lim ? '<button type="button" class="link link--btn" data-bank-more="' + key + '">' + (all ? 'Show fewer' : 'Show all ' + n) + '</button>' : '') + (tools || '') + '</p>' : '') + '</div></details>';
   }
   function spendRow(s, t, hint) {
     return '<li class="pb-tx"><button type="button" class="pb-tx__main" data-tx="' + esc(t.id) + '"><b>' + esc(bankText(t)) + '</b><em>' + esc([short(t.date), acct(s, t.account), hint].filter(Boolean).join(' · ')) + '</em></button>' +
@@ -246,23 +250,17 @@
       '<button type="button" class="btn btn--sm btn--ghost" data-credit-ok="' + esc(t.id) + '">That’s fine</button>' +
       '<button type="button" class="pb-link pb-link--quiet" data-wages="' + esc(t.id) + '">It’s my wages</button></span></li>';
   }
-  function billRow(s, x) {
-    const p = x.p;
-    const st = W().stage(p);
-    return '<li class="pb-tx"><button type="button" class="pb-tx__main" data-edit="' + esc(p.id) + '"><b>' + esc(name(p)) + '</b><em>' + esc('Added ' + short(p.date) + ' · ' + (st === 'paid-back' ? 'paid back' : st === 'sent' ? 'sent' : 'not sent yet')) + '</em></button>' +
-      '<b class="pb-tx__amt">' + esc(money(amountOf(p))) + '</b></li>';
-  }
+  /* (The bills you pay and claim aren't listed here: each payment already says 'From your bill' on its row.) */
   function bankHTML(s, e, pr) {
     const groups = [];
     const work = pr.unclaimedSpend.filter((x) => x.why === 'work');
     const shops = pr.unclaimedSpend.filter((x) => x.why === 'shop');
-    if (work.length) groups.push(group('work', 'Work spending not claimed yet', 'Marked as work in your bank, but not added here.', work.map((x) => spendRow(s, x.tx, ''))));
+    if (work.length) groups.push(group('work', 'Work spending not claimed yet', 'Marked as work in your bank, but not added here.', work.map((x) => spendRow(s, x.tx, '')), '', true));
     if (shops.length) groups.push(group('shop', 'From shops you’ve claimed before', 'In the last 60 days. Were any for ' + e.label + '?', shops.map((x) => spendRow(s, x.tx, x.shop ? 'like ' + x.shop : ''))));
     if (pr.noClaimCredits.length) {
       groups.push(group('credits', 'Money from ' + e.label + ' I couldn’t match', 'Kept out of your income. Say what each was for, or leave it.', pr.noClaimCredits.slice().sort((a, b) => (b.tx.date || '').localeCompare(a.tx.date || '')).map((x) => creditRow(s, e, x.tx)),
         pr.noClaimCredits.length > 1 ? '<button type="button" class="link link--btn" data-credits-ok>They’re all fine</button>' : ''));
     }
-    if (pr.fromBills.length) groups.push(group('bills', 'Added from your bills', 'Monthly work costs you pay add themselves here when they leave your account.', pr.fromBills.map((x) => billRow(s, x))));
     return '<section class="panel pb-bank"><header class="panel__head"><h2>' + icon('bank') + 'From your bank</h2></header>' + (GU.gaps ? GU.gaps.claimsNoteHTML(s) : '') +
       (groups.join('') || '<div class="panel__body"><p class="muted">' + esc('Nothing to check. After you import a statement, I’ll list work spending you haven’t claimed and any money from ' + e.label + ' I can’t match.') + '</p></div>') + '</section>';
   }
@@ -319,6 +317,8 @@
     GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'work', area: 'back', payer: 'me', name: 'Work › Get paid back' } }));
     const det = root.querySelector('#pb-paid');
     if (det) det.addEventListener('toggle', () => (ui.paidOpen = det.open));
+    // The page is drawn again after every change, so which 'From your bank' lists are open is kept here.
+    root.querySelectorAll('.pb-fold').forEach((d) => d.addEventListener('toggle', () => (ui.fold[d.dataset.fold] = d.open)));
     root.addEventListener('change', onChange);
     root.addEventListener('click', onClick);
   }

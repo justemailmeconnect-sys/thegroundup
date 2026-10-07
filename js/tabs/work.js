@@ -1,7 +1,9 @@
 /* The Ground Up: Work. Everything for the business you work for, each area its own page in the Work part:
    what the business pays for (its own money), Bills, Tasks, Projects, Cost forecast and Contracts & documents.
-   Get paid back (your own money) is in js/tabs/payback.js. Each page has its own folders, search and notes,
-   and the Overview shows what needs doing. The business's name comes from Settings, never from here. */
+   Get paid back (your own money) is in js/tabs/payback.js. Each page has its own folders and search, and notes
+   (a panel once there are some, a small '+ Note' button before). The Overview shows what needs attention, then a card
+   for each page in two groups (Money, Running it), then the one-off tidy-up from the Home/Work split (js/refile.js).
+   The business's name comes from Settings, never from here. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -20,14 +22,14 @@
     { id: 'contracts', label: 'Contracts & documents', icon: 'file', one: 'document' },
   ];
   /* The page each area lives on. 'back' is Get paid back (js/tabs/payback.js). */
-  const TAB_OF = { tasks: 'work-tasks', invoices: 'work-ktk', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', costs: 'work-costs', back: 'work-back' };
+  const TAB_OF = { tasks: 'work-tasks', invoices: 'work-ktk', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', costs: 'work-costs', back: 'work-back', requests: 'work-requests' };
   const COLL = { tasks: 'tasks', invoices: 'paperwork', projects: 'projects', bills: 'bills', contracts: 'documents', costs: 'costIdeas' };
   const AREA_OF = { tasks: 'tasks', paperwork: 'invoices', projects: 'projects', bills: 'bills', documents: 'contracts', costIdeas: 'costs' };
   const PRIORITIES = [{ value: 'must', label: 'Must have' }, { value: 'should', label: 'Should have' }, { value: 'could', label: 'Nice to have' }];
   const STATUSES = ['Idea', 'Planned', 'Booked', 'In progress', 'Done', 'Cancelled'];
   const CLOSED = ['Done', 'Cancelled'];
   const CONTRACT = 'Contract or agreement';
-  const ui = { area: 'overview', folder: 'all', q: '', inv: null, showDone: false };
+  const ui = { area: 'overview', folder: 'all', q: '', inv: null, showDone: false, moreChecks: false };
 
   /* ---------- names and whose money ---------- */
   const wm = () => GU.workMoney || null;
@@ -114,8 +116,10 @@
   const notesOf = (s, area) => (s.workNotes || []).filter((n) => (n.area || 'general') === area);
 
   /* ---------- what needs doing ---------- */
-  /* Everything at work that needs a look, worst first: the Overview's checklist and the pages' badges.
-     Each is {level, area, title, detail, ref?, go?, inv?, scroll?, acts?}. */
+  /* Everything at work that needs a look, worst first: the Overview's 'Needs attention' list and the pages' badges.
+     Each is {level, area, title, detail, ref?, go?, inv?, tidy?, acts?}. One line per real action: the cost forecast's
+     'earliest <date>' for each idea lives on the Cost forecast page, and the re-sort's questions (which include 'who
+     pays?' for the ideas) are one line that opens the tidy-up block. */
   function checks(s) {
     const out = [];
     const add = (level, area, title, detail, ref, more) => out.push(Object.assign({ level, area, title, detail, ref: ref || null }, more || {}));
@@ -132,6 +136,12 @@
     const unsorted = [];
     // An invoice you sent that the re-sort's 'Check these' is asking about is asked there, not twice.
     const asked = new Set(GU.refile && GU.refile.questions ? GU.refile.questions(s).map((q) => q.key) : []);
+    let asks = 0;
+    try {
+      asks = GU.refile && GU.refile.count ? GU.refile.count(s) : 0;
+    } catch (err) {
+      asks = 0;
+    }
     for (const p of itemsOf(s, 'invoices')) {
       if (needsSort(p)) {
         if (!(looseOut(p) && asked.has('merge:' + p.id))) unsorted.push(p);
@@ -233,22 +243,16 @@
         const ref = { c: 'costIdeas', id: i.id };
         if (r.fixed && r.short > 0) add('warn', 'costs', i.name + ' on ' + short(r.date) + ' would leave you ' + money(r.short) + ' short', 'Booked date · move it later or free up money first', ref);
         else if (!r.date && i.wantBy) add('warn', 'costs', i.name + ' can’t be afforded by ' + short(i.wantBy), 'About ' + money(r.shortfall, { whole: true }) + ' short in the time ahead', ref);
-        else if (r.date && r.onTime === false) add('info', 'costs', i.name + ': earliest ' + short(r.date), r.lateDays + ' days after you wanted it', ref);
       }
       const now = mine.filter((r) => r.date && !r.fixed && daysUntil(r.date) <= 0);
       if (now.length) add('info', 'costs', now.length === 1 ? 'You can afford ' + now[0].idea.name + ' now' : 'You can afford ' + plural(now.length, 'idea') + ' now', now.map((r) => r.idea.name + ' (' + money(r.cost, { whole: true }) + (r.account ? ', from ' + r.account : '') + ')').join(', '), now.length === 1 ? { c: 'costIdeas', id: now[0].idea.id } : null);
+      // The re-sort asks 'who pays?' for these too, so the one line below covers them while it's asking.
       const open = workIdeas.filter((i) => !ideaPayer(i));
-      if (open.length) add('info', 'costs', 'Who pays? ' + plural(open.length, 'cost idea') + (open.length === 1 ? ' isn’t' : ' aren’t') + ' sorted', 'Until you say, I plan ' + (open.length === 1 ? 'it' : 'them') + ' on your money', null, { go: TAB_OF.costs });
+      if (open.length && !asks) add('info', 'costs', 'Who pays? ' + plural(open.length, 'cost idea') + (open.length === 1 ? ' isn’t' : ' aren’t') + ' sorted', 'Until you say, I plan ' + (open.length === 1 ? 'it' : 'them') + ' on your money', null, { go: TAB_OF.costs });
     }
 
-    // The one-off re-sort's questions.
-    let asks = 0;
-    try {
-      asks = GU.refile && GU.refile.count ? GU.refile.count(s) : 0;
-    } catch (err) {
-      asks = 0;
-    }
-    if (asks) add('info', 'overview', plural(asks, 'thing') + ' to check from the re-sort', 'One tap each, in Check these', null, { scroll: true });
+    // The one-off re-sort's questions: one line, which opens the tidy-up block on the Overview.
+    if (asks) add('info', 'overview', plural(asks, 'thing') + ' to check from the Home/Work split', 'One tap each, in the tidy-up below', null, { tidy: true });
 
     // Things you've been asked to get and haven't ordered (Work › To buy, js/tabs/requests.js).
     try {
@@ -265,7 +269,8 @@
     }
 
     const rank = { crit: 0, warn: 1, info: 2 };
-    return out.sort((a, b) => rank[a.level] - rank[b.level]);
+    // Worst first; the one-off tidy-up line comes after the real actions of its level.
+    return out.sort((a, b) => rank[a.level] - rank[b.level] || (a.tidy ? 1 : 0) - (b.tidy ? 1 : 0));
   }
   /* The two answers to 'Who paid?' for a piece of paperwork. */
   function payerActs(id) {
@@ -327,52 +332,60 @@
     return { open, fund, me, unsorted, meTotal: cost(me), unsortedTotal: cost(unsorted) };
   }
 
-  /* The card for each area on the Overview: {big, unit, lines, bad?, good?, warn?}. */
+  /* The card for each area on the Overview: {big, unit, line, lines, bad?, good?, warn?}. The card shows the figure and
+     its one line; the other lines are for the Projects and Contracts pages' summary. */
   function figures(s, area) {
     const items = itemsOf(s, area);
     const t = today();
     const c = co();
     if (area === 'back') {
       const d = dueBack(s);
-      if (!d) return { big: money(0), unit: 'due back from ' + c, lines: ['Things you paid for ' + c, 'with your own money'] };
+      if (!d) return { big: money(0), unit: 'due back from ' + c, line: 'things you paid for ' + c, lines: ['Things you paid for ' + c, 'with your own money'] };
       const o = d.oldest;
-      return { big: money(d.total), unit: 'due back from ' + c, lines: [money(d.toSendTotal) + ' not sent · ' + money(d.sentTotal) + ' waiting', o ? 'Oldest ' + short(o.date) + ', ' + plural(o.days, 'day') : d.count ? plural(d.count, 'thing') + ' to come back' : 'Nothing to send'], good: d.total > 0 && !d.nudge, warn: d.nudge };
+      const l1 = money(d.toSendTotal) + ' not sent · ' + money(d.sentTotal) + ' waiting';
+      const l2 = o ? 'Oldest ' + short(o.date) + ', ' + plural(o.days, 'day') : d.count ? plural(d.count, 'thing') + ' to come back' : 'Nothing to send';
+      return { big: money(d.total), unit: 'due back from ' + c, line: d.count ? l1 : 'nothing to send', lines: [l1, l2], good: d.total > 0 && !d.nudge, warn: d.nudge };
     }
     if (area === 'tasks') {
       const open = items.filter((k) => !k.done);
       const late = open.filter((k) => k.due && k.due < t).length;
       const week = open.filter((k) => k.due && k.due >= t && daysUntil(k.due) <= 7).length;
-      return { big: String(open.length), unit: open.length === 1 ? 'open task' : 'open tasks', lines: [late ? late + ' overdue' : 'nothing overdue', week ? week + ' due this week' : 'nothing due this week'], bad: late > 0 };
+      return { big: String(open.length), unit: open.length === 1 ? 'open task' : 'open tasks', line: late ? late + ' overdue' + (week ? ' · ' + week + ' due this week' : '') : week ? week + ' due this week' : 'nothing due this week',
+        lines: [late ? late + ' overdue' : 'nothing overdue', week ? week + ' due this week' : 'nothing due this week'], bad: late > 0 };
     }
     if (area === 'invoices') {
       const k = ktkTotals(s);
-      return { big: money(k.waitTotal), unit: 'waiting for ' + c,
-        lines: [k.unsorted.length ? plural(k.unsorted.length, 'item') + ' not sorted yet' : k.overdue ? k.overdue + ' overdue' : plural(k.waiting.length, 'invoice') + ' waiting', plural(k.paid.length, 'thing') + ' paid by ' + c + ' this month'],
+      const l1 = k.unsorted.length ? plural(k.unsorted.length, 'item') + ' not sorted yet' : k.overdue ? k.overdue + ' overdue' : plural(k.waiting.length, 'invoice') + ' waiting';
+      return { big: money(k.waitTotal), unit: 'waiting for ' + c, line: l1,
+        lines: [l1, plural(k.paid.length, 'thing') + ' paid by ' + c + ' this month'],
         bad: k.overdue > 0, warn: !k.overdue && k.unsorted.length > 0 };
     }
     if (area === 'projects') {
       const live = items.filter((p) => !CLOSED.includes(p.status));
       const next = live.filter((p) => p.start && p.start >= t).sort((a, b) => a.start.localeCompare(b.start))[0];
       const value = sum(live, (p) => Number(p.value) || 0);
-      return { big: String(live.length), unit: live.length === 1 ? 'project on the go' : 'projects on the go', lines: [next ? 'Next: ' + next.name + ', ' + short(next.start) : 'nothing booked to start', value ? money(value, { whole: true }) + ' expected' : 'no fees added yet'] };
+      const l1 = next ? 'Next: ' + next.name + ', ' + short(next.start) : 'nothing booked to start';
+      return { big: String(live.length), unit: live.length === 1 ? 'project on the go' : 'projects on the go', line: l1, lines: [l1, value ? money(value, { whole: true }) + ' expected' : 'no fees added yet'] };
     }
     if (area === 'bills') {
       const b = billTotals(s);
       const next = b.live.filter((x) => x.nextDue).sort((x, y) => x.nextDue.localeCompare(y.nextDue))[0];
-      return { big: money(b.monthly), unit: 'a month', lines: [money(b.meMonthly) + ' you pay and claim · ' + money(b.themMonthly) + ' ' + c + ' pays', next ? 'Next: ' + next.name + ', ' + short(next.nextDue) : plural(b.live.length, 'bill')] };
+      const l1 = money(b.meMonthly) + ' you pay and claim · ' + money(b.themMonthly) + ' ' + c + ' pays';
+      return { big: money(b.monthly), unit: 'a month', line: l1, lines: [l1, next ? 'Next: ' + next.name + ', ' + short(next.nextDue) : plural(b.live.length, 'bill')] };
     }
     if (area === 'contracts') {
       const ending = items.filter((d) => d.expiryDate && daysUntil(d.expiryDate) >= 0 && daysUntil(d.expiryDate) <= 90);
       const next = items.filter((d) => d.expiryDate && d.expiryDate >= t).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))[0];
-      return { big: String(items.length), unit: items.length === 1 ? 'contract or document' : 'contracts and documents', lines: [ending.length ? ending.length + ' ending in 90 days' : 'none ending soon', next ? 'Next ends ' + short(next.expiryDate) : 'no end dates'], bad: ending.some((d) => daysUntil(d.expiryDate) <= 30) };
+      const l1 = ending.length ? ending.length + ' ending in 90 days' : 'none ending soon';
+      return { big: String(items.length), unit: items.length === 1 ? 'contract or document' : 'contracts and documents', line: l1, lines: [l1, next ? 'Next ends ' + short(next.expiryDate) : 'no end dates'], bad: ending.some((d) => daysUntil(d.expiryDate) <= 30) };
     }
     if (area === 'costs') {
       const x = ideaTotals(s);
-      if (!x.open.length) return { big: money(0), unit: 'for ' + c + ' to fund', lines: ['Add things ' + c + ' wants to buy', 'and say who pays'] };
-      return { big: money(x.fund.total, { whole: true }), unit: 'for ' + c + ' to fund', lines: [
-        x.fund.count ? plural(x.fund.count, 'idea') + (x.fund.monthly ? ' + ' + money(x.fund.monthly, { whole: true }) + ' a month' : '') : 'nothing for ' + c + ' to fund yet',
-        x.unsorted.length ? plural(x.unsorted.length, 'idea') + ' not sorted yet' : x.me.length ? plural(x.me.length, 'idea') + ' you pay and get back' : 'none on your money',
-      ], warn: x.unsorted.length > 0 };
+      if (!x.open.length) return { big: money(0), unit: 'for ' + c + ' to fund', line: 'add things ' + c + ' wants to buy', lines: ['Add things ' + c + ' wants to buy', 'and say who pays'] };
+      const l1 = x.fund.count ? plural(x.fund.count, 'idea') + (x.fund.monthly ? ' + ' + money(x.fund.monthly, { whole: true }) + ' a month' : '') : 'nothing for ' + c + ' to fund yet';
+      const l2 = x.unsorted.length ? plural(x.unsorted.length, 'idea') + ' not sorted yet' : x.me.length ? plural(x.me.length, 'idea') + ' you pay and get back' : 'none on your money';
+      // Ideas nobody has said who pays for are the thing to act on, so that's the line when there are some.
+      return { big: money(x.fund.total, { whole: true }), unit: 'for ' + c + ' to fund', line: x.unsorted.length ? l2 : l1, lines: [l1, l2], warn: x.unsorted.length > 0 };
     }
     return { big: '', unit: '', lines: [] };
   }
@@ -387,13 +400,14 @@
       boxes = [
         ['Waiting for ' + c, money(k.waitTotal), plural(k.waiting.length, 'invoice') + (k.overdue ? ', ' + k.overdue + ' overdue' : ''), k.overdue ? 'is-crit' : ''],
         ['Paid by ' + c + ' this month', money(k.paidTotal), plural(k.paid.length, 'thing')],
-        ['Who paid?', String(k.unsorted.length), k.unsorted.length ? 'not sorted yet' : 'all sorted', k.unsorted.length ? 'is-warn' : ''],
       ];
+      // Things nobody has said who paid for are in the 'Who paid?' strip below, so a count here would say it twice.
+      if (k.unsorted.length > WHO_MAX) boxes.push(['Who paid?', String(k.unsorted.length), 'not sorted yet, see the tabs below', 'is-warn']);
     } else if (area === 'bills') {
       const b = billTotals(s);
       boxes = [
         ['A month in all', money(b.monthly), plural(b.live.length, 'bill')],
-        ['You pay, ' + c + ' pays you back', money(b.meMonthly), 'a month, added to Get paid back'],
+        ['You pay, ' + c + ' pays you back', money(b.meMonthly), 'a month'],
         [paysLabel(), money(b.themMonthly), 'a month, not from your account'],
       ];
     } else if (area === 'costs') {
@@ -401,13 +415,13 @@
       boxes = [
         ['For ' + c + ' to fund', money(x.fund.total, { whole: true }), plural(x.fund.count, 'idea') + (x.fund.monthly ? ' + ' + money(x.fund.monthly, { whole: true }) + ' a month' : '')],
         ['You pay, ' + c + ' pays you back', money(x.meTotal, { whole: true }), plural(x.me.length, 'idea')],
-        ['Not sorted yet', money(x.unsortedTotal, { whole: true }), x.unsorted.length ? plural(x.unsorted.length, 'idea') + ', planned on your money' : 'all sorted', x.unsorted.length ? 'is-warn' : ''],
+        ['Not sorted yet', money(x.unsortedTotal, { whole: true }), x.unsorted.length ? plural(x.unsorted.length, 'idea') : 'all sorted', x.unsorted.length ? 'is-warn' : ''],
       ];
     } else if (area === 'tasks') {
       const open = itemsOf(s, 'tasks').filter((k) => !k.done);
       const late = open.filter((k) => k.due && k.due < t).length;
       boxes = [
-        ['To do', String(open.length), plural(open.length, 'open task')],
+        ['To do', String(open.length), 'open, not done yet'],
         ['Overdue', String(late), late ? 'past their date' : 'nothing late', late ? 'is-crit' : ''],
         ['Due this week', String(open.filter((k) => k.due && k.due >= t && daysUntil(k.due) <= 7).length), 'in the next 7 days'],
       ];
@@ -555,46 +569,58 @@
   }
 
   /* ---------- the overview ---------- */
-  const CARDS = ['back', 'invoices', 'bills', 'tasks', 'projects', 'costs', 'contracts'];
+  /* The cards, in two groups: the money, then running the place. To buy's card comes from js/tabs/requests.js. */
+  const CARD_GROUPS = [
+    { title: 'Money', cards: ['requests', 'back', 'invoices', 'bills'] },
+    { title: 'Running it', cards: ['tasks', 'projects', 'costs', 'contracts'] },
+  ];
   const ICON_OF = { back: 'coin' };
+  const SHOW_CHECKS = 5; // how many lines of 'Needs attention' show before '+ n more'
+  /* One card: its figure and ONE line, amber when it needs action. o: {tab, ico, label, big, unit, line, warn, cls}. */
+  function cardBtn(o) {
+    return '<button type="button" class="wk-card' + (o.warn ? ' is-warn' : '') + '" data-go="' + esc(o.tab) + '"><span class="wk-card__head">' + icon(o.ico) + '<span>' + esc(o.label) + '</span>' + icon('chevron') + '</span>' +
+      '<b class="' + (o.cls || '') + '">' + esc(o.big) + '</b><em>' + esc(o.unit) + '</em>' +
+      (o.line ? '<span class="wk-card__line">' + esc(o.line) + '</span>' : '') + '</button>';
+  }
+  function areaCard(s, a) {
+    if (a === 'requests') return GU.requests && GU.requests.cardHTML ? GU.requests.cardHTML(s) : '';
+    const f = figures(s, a);
+    return cardBtn({ tab: TAB_OF[a], ico: ICON_OF[a] || (AREAS.find((x) => x.id === a) || {}).icon, label: labelOf(a), big: f.big, unit: f.unit, line: f.line || f.lines[0],
+      warn: f.warn && !f.bad, cls: f.bad ? 'is-crit' : f.warn ? 'is-warn' : f.good ? 'is-in' : '' });
+  }
+
   function overviewHTML(s) {
     const list = checks(s);
     const crit = list.filter((x) => x.level === 'crit').length;
     const notes = (s.workNotes || []).slice().sort((a, b) => (b.updated || b.created || '').localeCompare(a.updated || a.created || '')).slice(0, 6);
     const c = co();
-    let ask = '';
+    // The one-off tidy-up from the Home/Work split: its questions, then what the re-sort changed, in one closed block.
+    let tidy = '';
     try {
-      ask = GU.refile && GU.refile.cardHTML ? GU.refile.cardHTML(s) : '';
-      // What the re-sort changed, while it can still be undone (where 'See what changed' brings you).
-      if (GU.refile && GU.refile.changesHTML) ask += GU.refile.changesHTML(s);
+      tidy = GU.refile && GU.refile.tidyHTML ? GU.refile.tidyHTML(s) : '';
     } catch (e) {
-      ask = '';
+      tidy = '';
     }
     const checkLi = (x, i) => '<li class="is-' + x.level + (x.acts ? ' has-acts' : '') + '"><button type="button" data-check="' + i + '"><span class="dot dot--' + x.level + '">' + icon(x.level === 'info' ? 'info' : 'alert') + '</span>' +
       '<span><b>' + esc(x.title) + '</b><em>' + esc((x.area === 'overview' ? '' : labelOf(x.area) + ' · ') + x.detail) + '</em></span>' + icon('chevron') + '</button>' +
       (x.acts ? '<div class="wk-check__acts">' + x.acts.map((a, k) => actBtn(a.attr, a.label, a.icon !== undefined ? a.icon : k ? 'coin' : 'briefcase', k ? '' : 'btn--soft')).join('') + '</div>' : '') + '</li>';
+    const lis = list.map(checkLi);
+    const more = lis.slice(SHOW_CHECKS);
     const wages = wm() && wm().wageSource ? wm().wageSource(s) : null;
     return '<form class="capture wk-tell" data-tell>' +
       '<label class="capture__field">' + icon('briefcase') + '<input type="text" name="note" id="wk-tell" autocomplete="off" placeholder="' + esc('Tell me anything for ' + c + ', e.g. Paid £18 for printer paper') + '" aria-label="' + esc('Tell me anything for ' + c) + '"></label>' +
       '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
       '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button></div></form>' +
-      '<section class="panel wk-check"><header class="panel__head"><h2>' + icon(list.length ? 'alert' : 'check') + 'What needs doing</h2>' +
+      '<section class="panel wk-check"><header class="panel__head"><h2>' + icon(list.length ? 'alert' : 'check') + 'Needs attention</h2>' +
       '<span class="muted">' + esc(list.length ? plural(list.length, 'thing') + (crit ? ', ' + crit + ' overdue or late' : '') : 'all up to date') + '</span></header>' +
-      (list.length ? '<ul class="wk-check__list">' + list.map(checkLi).join('') + '</ul>'
+      (list.length ? '<ul class="wk-check__list">' + lis.slice(0, SHOW_CHECKS).join('') + '</ul>' +
+        (more.length ? '<details class="wk-check__more"' + (ui.moreChecks ? ' open' : '') + '><summary><span class="wk-check__more-open">+ ' + more.length + ' more</span><span class="wk-check__more-close">Show fewer</span>' + icon('chevron') + '</summary>' +
+          '<ul class="wk-check__list">' + more.join('') + '</ul></details>' : '')
         : '<div class="panel__body"><p class="wk-allgood">' + icon('check') + '<span>Everything at work is managed. Nothing is late, overdue or about to end.</span></p></div>') + '</section>' +
-      ask +
-      '<div class="wk-cards">' + (GU.requests && GU.requests.cardHTML ? GU.requests.cardHTML(s) : '') + CARDS.map((a) => {
-        const f = figures(s, a);
-        const n = a === 'back' ? ((dueBack(s) || {}).count || 0) : itemsOf(s, a).length;
-        const nf = a === 'back' ? 0 : foldersOf(s, a).length;
-        const cls = f.bad ? 'is-crit' : f.warn ? 'is-warn' : f.good ? 'is-in' : '';
-        return '<button type="button" class="wk-card' + (f.warn && !f.bad ? ' is-warn' : '') + '" data-go="' + TAB_OF[a] + '"><span class="wk-card__head">' + icon(ICON_OF[a] || (AREAS.find((x) => x.id === a) || {}).icon) + esc(labelOf(a)) + '</span>' +
-          '<b class="' + cls + '">' + esc(f.big) + '</b><em>' + esc(f.unit) + '</em>' +
-          '<span class="wk-card__lines">' + f.lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</span>' +
-          '<span class="wk-card__foot">' + esc(a === 'back' ? plural(n, 'thing') + ' to come back' : plural(n, 'item') + (nf ? ' · ' + plural(nf, 'folder') : '')) + icon('chevron') + '</span></button>';
-      }).join('') + '</div>' +
+      CARD_GROUPS.map((g) => '<section class="wk-cardgroup" aria-label="' + esc(g.title) + '"><h2 class="wk-sub">' + esc(g.title) + '</h2><div class="wk-cards">' + g.cards.map((a) => areaCard(s, a)).join('') + '</div></section>').join('') +
+      tidy +
       '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header>' +
-      (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, true)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">Jot down anything for work: meeting notes, ideas, who to call. Each page has its own notes too.</p></div>') + '</section>' +
+      (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, true)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">Jot down anything for work: meeting notes, ideas, who to call.</p></div>') + '</section>' +
       '<p class="wk-footnote">' + icon('info') + '<span>' + esc('Your wages' + (wm() && wm().employer(s).set ? ' from ' + c : '') + ' are your own money, so they’re in Home › Income' + (wages ? ' as ' + (wages.name || 'your pay') : '') + '.') +
       ' <a class="link" href="#incomings">Open Income</a></span></p>' +
       '<div class="dropcover" hidden><div>' + icon('upload') + '<b>' + esc('Drop to file it under Work') + '</b></div></div>';
@@ -675,7 +701,7 @@
       const me = live.filter((b) => billPayer(b) !== 'company');
       const them = live.filter((b) => billPayer(b) === 'company');
       groups = [
-        { title: 'You pay, ' + c + ' pays you back · ' + mo(me), note: 'These come out of your account. Each payment is added to Get paid back on the day it leaves.', items: me },
+        { title: 'You pay, ' + c + ' pays you back · ' + mo(me), items: me },
         { title: paysLabel() + ' · ' + mo(them), note: c.charAt(0).toUpperCase() + c.slice(1) + ' pays these itself, so they’re never in your Money ahead.', items: them },
         { title: 'Stopped', items: list.filter((b) => b.active === false), closed: true },
       ];
@@ -712,6 +738,8 @@
       if (list.length) emptyText = view === 'all' ? 'Say who paid for the things above, or add something ' + c + ' is paying.' : 'Try another tab above.';
       else emptyText = 'Add an order, invoice or receipt ' + c + ' is paying for, or drop the files above.';
     }
+    // Nothing in this tab but things in the others: one quiet line, not a big empty box.
+    if (empty && area === 'invoices' && list.length && !ui.q) return extra + '<p class="wk-quiet">' + esc(emptyTitle + '. ' + emptyText) + '</p>';
     return extra + '<section class="panel">' +
       (empty ? emptyState({ icon: a.icon, title: emptyTitle, text: esc(emptyText) })
         : groups.map((g) => (g.closed ? '<details class="wk-group"' + (ui.showDone ? ' open' : '') + '><summary>' + esc(g.title) + ' (' + g.items.length + ')</summary>' : g.title ? '<h3 class="wk-group__title">' + esc(g.title) + '</h3>' : '') +
@@ -761,7 +789,7 @@
     if (area === 'bills') return 'Regular costs for ' + c + '. Say who pays each one: if it comes out of your account, each payment joins Get paid back by itself.';
     if (area === 'tasks') return 'Things to do for ' + c + '. They stay out of Home › To-do.';
     if (area === 'projects') return 'Jobs and pieces of work: on the go, coming up, ideas and done.';
-    if (area === 'costs') return 'Things ' + c + ' wants to buy. Say who pays: ' + c + '’s own are listed for ' + c + ' to fund, and the ones you pay for are planned on your money until ' + c + ' pays you back.';
+    if (area === 'costs') return 'Things ' + c + ' wants to buy, and who pays for each. The ones that come out of your money are planned for you below.';
     if (area === 'contracts') return C + '’s contracts, leases, licences, insurance, supplier terms and registrations, with reminders before they end. Your own payslips and P60s stay in Home › Documents.';
     return '';
   }
@@ -784,7 +812,7 @@
     return tallyHTML(s, area) +
       (area === 'invoices' ? whoHTML(s) : '') +
       '<div class="wk-folders" role="group" aria-label="Folders">' +
-      '<button type="button" class="chip" data-folder="all" aria-pressed="' + (ui.folder === 'all') + '">' + icon('list') + 'All <span class="chip__n">' + all.length + '</span></button>' +
+      (folders.length ? '<button type="button" class="chip" data-folder="all" aria-pressed="' + (ui.folder === 'all') + '">' + icon('list') + 'All <span class="chip__n">' + all.length + '</span></button>' : '') +
       folders.map((fo) => '<button type="button" class="chip" data-folder="' + esc(fo.id) + '" aria-pressed="' + (ui.folder === fo.id) + '">' + icon('folder') + esc(fo.name) + ' <span class="chip__n">' + inFolder(fo.id) + '</span></button>').join('') +
       (folders.length ? '<button type="button" class="chip" data-folder="none" aria-pressed="' + (ui.folder === 'none') + '">Not in a folder <span class="chip__n">' + unfiled + '</span></button>' : '') +
       '<button type="button" class="chip chip--add" data-new-folder>' + icon('plus') + 'New folder</button>' +
@@ -793,24 +821,30 @@
         '<button type="button" class="btn btn--sm btn--ghost" data-delete-folder="' + esc(cur.id) + '">' + icon('trash') + 'Delete folder</button></div>' : '') +
       (drop ? GU.ui.dropbar(drop[0] + (cur ? ' to file them in ' + cur.name : ''), drop[1]) : '') +
       '<div id="wk-body">' + areaBody(s, area) + '</div>' +
-      '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes' + (cur ? ' in ' + esc(cur.name) : '') + '</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header>' +
-      (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, false)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">No notes here yet.</p></div>') + '</section>';
+      // Notes: a panel once this page has some. Until then, a small '+ Note' button in the page head.
+      (notesOf(s, area).length
+        ? '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes' + (cur ? ' in ' + esc(cur.name) : '') + '</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header>' +
+          (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, false)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">No notes in this folder yet.</p></div>') + '</section>'
+        : '');
   }
 
+  /* The small '+ Note' button for a page with no notes yet ('' once it has some, and they have their own panel). */
+  const noteBtn = (hasNotes) => (hasNotes ? '' : '<button type="button" class="btn btn--ghost" data-new-note>' + icon('plus') + 'Note</button>');
   function addButtons(s, area) {
     const c = co();
     const renameBtn = area === 'invoices' ? '' : '<button type="button" class="icon-btn" data-rename-area="' + area + '" aria-label="' + esc('Rename ' + labelOf(area)) + '" data-tip="Rename this page">' + icon('edit') + '</button>';
-    if (area === 'tasks') return renameBtn + '<button type="button" class="btn btn--primary" data-add="tasks">' + icon('plus') + 'New task</button>';
+    const note = noteBtn(notesOf(s, area).length > 0);
+    if (area === 'tasks') return renameBtn + note + '<button type="button" class="btn btn--primary" data-add="tasks">' + icon('plus') + 'New task</button>';
     if (area === 'invoices') {
       const send = ktkTotals(s).waiting.filter((p) => !p.handedDate);
       return '<button type="button" class="btn" data-import-orders>' + icon('upload') + 'Import orders</button>' +
-        (send.length ? '<button type="button" class="btn" data-send-co="' + esc(send.map((p) => p.id).join(',')) + '">' + icon('send') + esc('Send to ' + c + ' (' + send.length + ')') + '</button>' : '') +
+        (send.length ? '<button type="button" class="btn" data-send-co="' + esc(send.map((p) => p.id).join(',')) + '">' + icon('send') + esc('Send to ' + c + ' (' + send.length + ')') + '</button>' : '') + note +
         '<button type="button" class="btn btn--primary" data-add="invoices">' + icon('plus') + esc('Something ' + c + ' is paying') + '</button>';
     }
-    if (area === 'projects') return renameBtn + '<button type="button" class="btn btn--primary" data-add="projects">' + icon('plus') + 'New project</button>';
-    if (area === 'costs') return renameBtn + '<button type="button" class="btn" data-cf-settings>' + icon('settings') + 'Forecast settings</button><button type="button" class="btn btn--primary" data-add="costs">' + icon('plus') + 'New idea</button>';
-    if (area === 'bills') return renameBtn + '<button type="button" class="btn" data-move-home="bills">' + icon('home') + 'Move a bill from Home</button><button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New bill</button>';
-    return renameBtn + '<button type="button" class="btn" data-move-home="contracts">' + icon('home') + 'Move a document from Home</button><button type="button" class="btn btn--primary" data-add="contracts">' + icon('plus') + 'New contract or document</button>';
+    if (area === 'projects') return renameBtn + note + '<button type="button" class="btn btn--primary" data-add="projects">' + icon('plus') + 'New project</button>';
+    if (area === 'costs') return renameBtn + '<button type="button" class="btn" data-cf-settings>' + icon('settings') + 'Forecast settings</button>' + note + '<button type="button" class="btn btn--primary" data-add="costs">' + icon('plus') + 'New idea</button>';
+    if (area === 'bills') return renameBtn + '<button type="button" class="btn" data-move-home="bills">' + icon('home') + 'Move a bill from Home</button>' + note + '<button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New bill</button>';
+    return renameBtn + '<button type="button" class="btn" data-move-home="contracts">' + icon('home') + 'Move a document from Home</button>' + note + '<button type="button" class="btn btn--primary" data-add="contracts">' + icon('plus') + 'New contract or document</button>';
   }
 
   /* ---------- the page ---------- */
@@ -828,7 +862,7 @@
       ? GU.view.head({
         eyebrow: name,
         title: 'Work overview',
-        text: esc(name ? 'Everything for ' + name + ' in one place. Each thing is either ' + co() + '’s money or yours to get back.' : 'Everything for your job or business in one place. Each thing is either the company’s money or yours to get back.'),
+        text: esc(name ? 'Everything for ' + name + ' in one place.' : 'Everything for your job or business in one place.'),
         actions: '<button type="button" class="btn btn--primary" data-add-menu>' + icon('plus') + 'Add</button>',
       })
       : GU.view.head({ eyebrow: name, title: labelOf(area), text: esc(introOf(area)), actions: addButtons(s, area) });
@@ -879,6 +913,7 @@
       wireDropCover(root);
     }
     root.querySelectorAll('.wk-group').forEach((d) => d.addEventListener('toggle', () => (ui.showDone = d.open)));
+    root.querySelectorAll('.wk-check__more').forEach((d) => d.addEventListener('toggle', () => (ui.moreChecks = d.open)));
     if (area !== 'overview') GU.ui.wireDropbar(root, (files) => upload(files));
     root.addEventListener('change', (e) => {
       const d = e.target.closest('[data-done]');
@@ -934,9 +969,8 @@
     if ((el = b('[data-check]'))) {
       const x = checks(s)[+el.dataset.check];
       if (!x) return;
-      if (x.scroll) {
-        const card = document.querySelector('.rf-card, .ask-card');
-        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (x.tidy) {
+        if (GU.refile && GU.refile.openTidy) GU.refile.openTidy();
         return;
       }
       if (x.inv) ui.inv = x.inv;
@@ -1239,32 +1273,21 @@
     const outstanding = round2(sum(results, (r) => r.cost));
     const notFitting = results.filter((r) => !r.date).length;
     const allBy = results.length && results.every((r) => r.date) ? results.reduce((m, r) => (r.date > m ? r.date : m), '') : null;
-    const n = b.dates.length;
-    // Four month labels, with the year once it changes.
-    const step = Math.max(1, Math.round(n / 4));
-    const labels = [];
-    for (let i = 0; i < n - step / 2; i += step) labels.push({ i, text: monthLabel(b.dates[i].slice(0, 7)) + (b.dates[i].slice(0, 4) !== today().slice(0, 4) ? ' ' + b.dates[i].slice(2, 4) : '') });
-    const marks = results.filter((r) => r.date).map((r) => ({ i: b.dates.indexOf(r.date), tip: r.idea.name + ': ' + money(r.cost, { whole: true }) + ', ' + short(r.date) + (r.account ? ' from ' + r.account : '') + (r.back ? ', back about ' + short(r.back) : '') })).filter((m) => m.i >= 0);
     const keep = b.cfg.buffer ? money(b.cfg.buffer, { whole: true }) : '£0';
-    const floorLabel = 'Keep ' + keep + (b.cfg.overdraft ? ', using your overdraft' : '');
-    const spareTone = plan.spare < 0 ? 'is-crit' : 'is-in';
     const room = plan.months.slice(0, b.cfg.months);
     const c = co();
-    const dips = results.filter((r) => r.dip).length;
     let more = '';
-    if (ctx === 'work') more = ' Ideas ' + c + ' pays for aren’t counted. The ones you pay for first come back after about ' + plural(plan.repayDays || 14, 'day') + ', if ' + c + ' pays as usual.';
+    // (The page's groups already say how the ones you pay for come back.)
+    if (ctx === 'work') more = ' Ideas ' + c + ' pays for aren’t counted.';
     // Home › Plans says which work ideas are planned on your money in its own line, with a link.
     else if (!ctx && plan.fronting && plan.fronting.length) more = ' Work ideas you pay for first come back after about ' + plural(plan.repayDays || 14, 'day') + '.';
     return '<section class="panel cf"><header class="panel__head"><h2>' + icon('trend') + 'When you can afford things</h2><span class="muted">next ' + b.cfg.months + ' months</span></header>' +
       '<div class="tally__sum">' +
-      '<div><span>Spare each month</span><b class="' + spareTone + '">' + esc(money(plan.spare, { whole: true })) + '</b><em>' + esc(plan.spare < 0 ? 'more goes out than comes in' : 'on average, after bills, debts and everyday spending') + '</em></div>' +
       '<div><span>You could spend now</span><b>' + esc(money(plan.freeNow, { whole: true })) + '</b><em>' + esc('and never drop below ' + keep + (b.cfg.overdraft ? ' (with overdraft)' : '')) + '</em></div>' +
-      '<div><span>' + esc(ctx === 'work' ? 'On your money' : 'Ideas to fund') + '</span><b>' + esc(money(outstanding, { whole: true })) + '</b><em>' + esc(plural(results.length, 'idea') + (ctx === 'work' && dips ? ', ' + dips + ' paid back later' : ' on the list')) + '</em></div>' +
+      // On the Work page the 'you pay' and 'not sorted' figures above it already add up to this, so it isn't said twice.
+      (ctx === 'work' ? '' : '<div><span>Ideas to fund</span><b>' + esc(money(outstanding, { whole: true })) + '</b><em>' + esc(plural(results.length, 'idea') + ' on the list') + '</em></div>') +
       '<div><span>' + (notFitting ? 'Don’t fit yet' : 'All done by') + '</span><b class="' + (notFitting ? 'is-crit' : '') + '">' + esc(notFitting ? String(notFitting) : allBy ? short(allBy) : '–') + '</b><em>' + esc(notFitting ? 'not affordable in ' + b.cfg.months + ' months at this rate' : results.length ? 'at the earliest' : 'add an idea below') + '</em></div>' +
       '</div>' +
-      '<div class="panel__body cf-chart">' + GU.charts.line(plan.after.map((v, i) => ({ value: v, tip: fmtDate(b.dates[i], { weekday: true }) + ': ' + money(v) + (plan.after[i] !== b.total[i] ? ' (' + money(b.total[i]) + ' before your ideas)' : '') })),
-        { height: 170, labels, base: plan.results.some((r) => r.date) ? b.total : null, floor: { value: b.floor, label: floorLabel }, marks }) +
-      '<p class="cf-legend"><span><i class="cf-key cf-key--after"></i>With your ideas</span><span><i class="cf-key cf-key--base"></i>Before them</span><span><i class="cf-key cf-key--mark"></i>When each idea happens</span></p></div>' +
       '<div class="cf-room"><h3>Room to spend, month by month</h3><p class="muted">The most you could spend from the start of each month, after the ideas above, without dropping below ' + esc(keep) + ' later on.</p><ol>' +
       room.map((m) => '<li class="' + (m.room > 0 ? 'is-room' : '') + '"><span>' + esc(monthLabel(m.key) + (m.key.slice(0, 4) !== today().slice(0, 4) ? ' ' + m.key.slice(0, 4) : '')) + '</span><b>' + esc(money(m.room, { whole: true })) + '</b></li>').join('') + '</ol></div>' +
       '<footer class="panel__foot cf-note">' + icon('info') + '<span>' + esc('Starts from ' + money(b.plan.start) + ' across your accounts. Counts your income, bills, debt and instalment payments and invoices due, plus about ' + money(b.everyday, { whole: true }) + ' a month of everyday spending' +
@@ -1369,7 +1392,7 @@
       wide: true,
       fields: [
         { name: 'title', label: 'Title', required: true, placeholder: 'e.g. Call with the supplier, Ideas for the shop' },
-        { name: 'area', label: 'Page', type: 'select', options: [{ value: 'general', label: 'Overview' }].concat(AREAS.map((a) => ({ value: a.id, label: labelOf(a.id) }))), half: true },
+        { name: 'area', label: 'Page', type: 'select', options: [{ value: 'general', label: 'Overview' }, { value: 'requests', label: labelOf('requests') }].concat(AREAS.map((a) => ({ value: a.id, label: labelOf(a.id) }))), half: true },
         { name: 'folder', label: 'Folder', type: 'select', options: folderOpts(area), half: true, help: 'Folders belong to a page. Save, then reopen to pick a folder after changing the page.' },
         { name: 'body', label: 'Note', type: 'textarea', rows: 10 },
       ],
@@ -1516,7 +1539,7 @@
   }
   function moveNote(anchor, id) {
     const s = store.state;
-    const opts = [{ area: 'general', folder: '', label: 'Overview' }];
+    const opts = [{ area: 'general', folder: '', label: 'Overview' }, { area: 'requests', folder: '', label: labelOf('requests') }];
     for (const a of AREAS) {
       opts.push({ area: a.id, folder: '', label: labelOf(a.id) });
       for (const f of foldersOf(s, a.id)) opts.push({ area: a.id, folder: f.id, label: labelOf(a.id) + ' › ' + f.name });
@@ -1586,7 +1609,7 @@
   GU.work = {
     AREAS, TAB_OF, CONTRACT, labelOf, itemsOf, checks, dates, figures, workListId, ensureWorkList,
     isWorkBill: (b) => parts().isWorkBill(b), isWorkTask: (s, t) => parts().isWorkTask(s, t),
-    forecastHTML, editIdea, ideaStatus, forecastSettings, rowHTML, rowClick, newFolder, show, sendToCo, moveFromHome, takeOut,
+    forecastHTML, editIdea, ideaStatus, forecastSettings, rowHTML, rowClick, newFolder, show, sendToCo, moveFromHome, takeOut, card: cardBtn, editNote, notesOf,
   };
   GU.tabs.work = { label: 'Work overview', short: 'Overview', icon: 'briefcase', part: 'work', render: (r) => render(r, 'overview'), edit, show, editProject, editNote, editIdea, newFolder };
   // Each area is its own page in the Work part. Get paid back ('work-back') is js/tabs/payback.js.

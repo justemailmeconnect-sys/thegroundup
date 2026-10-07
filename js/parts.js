@@ -11,7 +11,7 @@
     home: {
       label: 'Home',
       start: 'today',
-      groups: [['today', 'hub'], ['bills', 'debts', 'incomings', 'plans'], ['transactions', 'outgoings', 'taxyear'], ['receipts', 'documents', 'visas'], ['todos']],
+      groups: [['today', 'hub'], ['bills', 'debts', 'incomings', 'plans'], ['transactions', 'outgoings', 'taxyear'], ['receipts', 'documents'], ['todos']],
       titles: ['', 'Money ahead', 'Money so far', 'Paperwork', 'Life'],
     },
     work: {
@@ -350,9 +350,8 @@
       { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance…', onClick: () => use(() => tabs().debts.create, [], 'debts') },
       { icon: 'upload', label: 'Bank statement', hint: 'Import a CSV or PDF', onClick: () => use(() => tabs().transactions.importCSV, [], 'transactions') },
       { icon: 'folder', label: 'Document', hint: 'Passport, certificate, tenancy…', onClick: () => use(() => tabs().documents.create, [], 'documents') },
-      { icon: 'globe', label: 'Visa application', hint: 'Track a new application', onClick: () => use(() => tabs().visas.create, [], 'visas') },
       { icon: 'trend', label: 'Something to save for', hint: 'I’ll work out when you can afford it', onClick: () => use(() => GU.work && GU.work.editIdea, [null, { context: 'home' }], 'plans') },
-      { icon: 'star', label: 'New section', hint: 'Car, Pets, Wedding…', onClick: () => use(() => GU.sections && GU.sections.newSection, [], null) },
+      { icon: 'star', label: 'New category', hint: 'Car, Pets, Wedding…', onClick: () => use(() => GU.sections && GU.sections.newSection, [], null) },
       { icon: 'briefcase', label: 'Something for work →', hint: 'Switch to Work', onClick: () => switchAndAdd('work') },
       where,
     ];
@@ -401,10 +400,9 @@
       row('Klarna, PayPal Pay in 3, a card or a loan', to('debts', 'Home › Debts'), 'Add the payment schedule there, not in a section.'),
       row('A bank statement', to('transactions', 'Home › Bank'), 'Or drop it anywhere.'),
       row('Something I’m saving up for', to('plans', 'Home › Plans')),
-      row('Passport, certificates, tenancy, insurance', to('documents', 'Home › Documents')),
-      row('Visa paperwork', to('visas', 'Home › Visas')),
+      row('Passport, visa or immigration papers, certificates, tenancy, insurance', to('documents', 'Home › Documents')),
       row('A to-do for me', to('todos', 'Home › To-do')),
-      row('Anything else (a wedding, the car, pets)', 'one of your sections', 'Or make a new section from + Add.'),
+      row('Anything else (a wedding, the car, pets)', 'one of your categories', 'Or make a new category from + Add, or at the bottom of the menu.'),
     ];
     const body = '<div class="where">' +
       '<p class="dlg__intro">Two questions sort almost everything.</p>' +

@@ -238,8 +238,6 @@
     if (tasks.length) line('\nOPEN TASKS: ' + tasks.slice(0, 25).map((k) => clip(k.title) + (k.due ? ' (due ' + day(k.due) + ')' : '') + ' [' + clip((s.todoLists.find((l) => l.id === k.listId) || {}).name, 30) + ']').join('; '));
     const docs = s.documents.filter((d) => GU.util.isISO(d.expiryDate) && daysUntil(d.expiryDate) <= 120 && daysUntil(d.expiryDate) >= -30);
     if (docs.length) line('\nDOCUMENTS ENDING SOON: ' + docs.slice(0, 20).map((d) => clip(d.title) + ' ' + day(d.expiryDate)).join('; '));
-    const visas = (s.visas || []).filter((v) => !['Refused', 'Withdrawn'].includes(v.status));
-    if (visas.length) line('VISAS: ' + visas.map((v) => clip(v.visaType, 60) + ' [' + clip(v.status, 30) + ']' + (v.validUntil ? ' valid until ' + day(v.validUntil) : '')).join('; '));
     const last = GU.util.shiftMonth(t.slice(0, 7), -1);
     const spent = F.byCategory(s.transactions.filter((x) => String(x.date || '').slice(0, 7) === last), 'out').slice(0, 10);
     if (spent.length) line('\nSPENDING in ' + last + ' by category: ' + spent.map((c) => clip(c.category, 40) + ' ' + money(c.total, { whole: true })).join(', '));
@@ -264,7 +262,7 @@
   /* The standing instructions. The dashboard data goes separately, fenced in <dashboard_data> tags. */
   function rules(list) {
     const change = list.some((t) => WRITES.test(t.name));
-    return 'You are Claude, the assistant built into "The Ground Up", the user\'s personal dashboard for money, bills, debts, paperwork, visas and work.' + who() + ' ' +
+    return 'You are Claude, the assistant built into "The Ground Up", the user\'s personal dashboard for money, bills, debts, paperwork and work.' + who() + ' ' +
       'Answer in plain, friendly UK English, short and practical, using £ and dates like "Fri 9 Oct". Use simple Markdown (bold, short lists) only when it helps. ' +
       'Base money answers on the dashboard data' + (list.length ? ' and the tools' : '') + '; never make figures up, and say what an answer is based on when it matters (for example that Money ahead leaves out everyday spending). ' +
       (list.length ? 'Use the tools to look up details (transactions, records, the forecast). ' : 'You cannot look anything up beyond the dashboard data. ') +
@@ -547,7 +545,7 @@
     },
     {
       name: 'open_page',
-      description: 'Show the user a page of the dashboard: today (Home), hub (the Sorting hub), work, work-back (Get paid back), bills, debts, incomings (Income), todos, receipts, documents, visas, transactions (Bank), outgoings (Spending) or settings.',
+      description: 'Show the user a page of the dashboard: today (Home), hub (the Sorting hub), work, work-back (Get paid back), bills, debts, incomings (Income), todos, receipts, documents, transactions (Bank), outgoings (Spending) or settings.',
       inputSchema: { type: 'object', properties: { page: { type: 'string' } }, required: ['page'] },
       execute(i) {
         const want = squash(i.page, 40).toLowerCase();

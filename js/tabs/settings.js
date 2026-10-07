@@ -222,7 +222,6 @@
 
       '<section class="panel"><header class="panel__head"><h2>Reminders</h2></header><form class="panel__body form-grid" data-form="reminders">' +
       '<div class="field field--half"><label class="field__label" for="set-doc">Warn me before documents expire</label><select id="set-doc" name="docWarnDays">' + selectOptions([30, 60, 90, 120, 180].map((n) => ({ value: n, label: n + ' days before' })), st.docWarnDays) + '</select></div>' +
-      '<div class="field field--half"><label class="field__label" for="set-visa">Warn me before a visa runs out</label><select id="set-visa" name="visaWarnDays">' + selectOptions([60, 90, 120, 180, 240].map((n) => ({ value: n, label: n + ' days before' })), st.visaWarnDays) + '</select></div>' +
       (GU.returns ? '<div class="field field--half"><label class="field__label" for="set-ret">Usual time to return something</label><select id="set-ret" name="returnDays">' +
         selectOptions([{ value: 0, label: 'Don’t offer a return reminder' }].concat([14, 28, 30, 60, 90].map((n) => ({ value: n, label: n + ' days' }))), GU.returns.windowDays(s)) + '</select><p class="field__help">Offered as a reminder when you file a new receipt. You can set any date by hand.</p></div>' : '') +
       '<div class="field"><button type="submit" class="btn btn--primary">Save</button></div></form></section>' +
@@ -242,9 +241,9 @@
 
       categoriesHTML(s) +
 
-      '<section class="panel"><header class="panel__head"><h2>Your sections</h2><button type="button" class="btn btn--sm btn--ghost" data-new-section>' + icon('plus') + 'New section</button></header>' +
+      '<section class="panel"><header class="panel__head"><h2>Your categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-section>' + icon('plus') + 'New category</button></header>' +
       ((s.sections || []).length ? '<ul class="rows rows--tight">' + s.sections.map((x) => '<li class="row-item"><span class="row-item__icon">' + icon(x.icon || 'star') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' + esc((x.part === 'work' ? 'Work · ' : 'Home · ') + plural(s.sectionItems.filter((i) => i.sectionId === x.id).length, 'item')) + (x.byAssistant ? ' · started by your assistant' : '') + '</em></span><span class="row-item__act"><button type="button" class="btn btn--sm btn--ghost" data-move-section="' + esc(x.id) + '">Rename or move</button><a class="btn btn--sm btn--ghost" href="#s-' + esc(x.id) + '">Open</a></span></li>').join('') + '</ul>'
-        : '<div class="panel__body"><p class="muted">No extra sections yet. I’ll suggest one when something you send me doesn’t fit the other tabs.</p></div>') + '</section>' +
+        : '<div class="panel__body"><p class="muted">No extra categories yet. I’ll suggest one when something you send me doesn’t fit the other tabs.</p></div>') + '</section>' +
 
       (GU.lock ? GU.lock.panel() : '') +
 
@@ -288,7 +287,6 @@
           set.ocr = f.elements.ocr.checked;
         } else if (kind === 'reminders') {
           set.docWarnDays = +f.elements.docWarnDays.value;
-          set.visaWarnDays = +f.elements.visaWarnDays.value;
           if (f.elements.returnDays) set.returnDays = +f.elements.returnDays.value;
         } else if (kind === 'employer') {
           saveEmployer(set, f);
@@ -400,7 +398,7 @@
       }
       if (b('[data-clear-demo]')) return GU.sample.clear();
       if (b('[data-erase]')) {
-        const ok = await confirmBox({ title: 'Erase everything?', message: 'This deletes all your transactions, bills, documents, receipts, visas, tasks and uploaded files from this browser. Export a backup first if you might want them back.', confirmLabel: 'Erase everything', danger: true });
+        const ok = await confirmBox({ title: 'Erase everything?', message: 'This deletes everything saved in this browser: your transactions, bills, documents, receipts, tasks, uploaded files and any older records the site still keeps for you. Export a backup first if you might want them back.', confirmLabel: 'Erase everything', danger: true });
         if (!ok) return;
         await GU.files.clear();
         store.replaceAll(store.blank());

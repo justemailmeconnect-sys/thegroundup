@@ -207,7 +207,7 @@
       DOC({ title: 'Employers’ liability insurance', type: 'Insurance policy', holder: 'Acme Care Ltd', reference: 'EL-2209184', expiryDate: d(48), location: 'Office filing cabinet', context: 'work' }),
       DOC({ title: 'Lease for the new office', type: 'Contract or agreement', holder: 'Acme Care Ltd', issueDate: d(-20), expiryDate: d(1075), location: 'Scanned', context: 'work', notes: 'Three months’ notice. Rent reviewed every year.' }),
     ];
-    // The last three months' statements and payslips, so the evidence pack (Visas › Evidence pack) has something to gather.
+    // The last three months' statements and payslips, so the evidence pack (Home › Tax year › Evidence pack) has something to gather.
     // Earlier months are left out on purpose, so its preview shows what a gap looks like.
     for (let k = -3; k <= -1; k++) {
       const first = addMonths(t.slice(0, 8) + '01', k);
@@ -241,27 +241,12 @@
       { id: 'wn-' + uid(), area: 'projects', folder: officeFolder.id, title: 'Call with the landlord', body: 'Keys on the 1st. Two parking spaces.\nSend the signed lease back by Friday.', created: d(-3), updated: d(-3), demo: true },
     ];
 
-    const C = (texts, doneN) => texts.map((text, i) => ({ id: uid(), text, done: i < doneN }));
-    const visas = [
-      Object.assign({ id: 'v-' + uid(), visaType: 'Skilled Worker visa', country: 'United Kingdom', applicant: 'Me', status: 'Approved', reference: 'GWF071234567', submittedDate: d(-1120), decisionDate: d(-1085),
-        validFrom: d(-1080), validUntil: d(110), fee: 827, portalUrl: 'https://www.gov.uk/skilled-worker-visa/extend-your-visa',
-        checklist: C(['Passport', 'Certificate of Sponsorship', 'Proof of English', 'Bank statements', 'TB test certificate', 'Payslips'], 6),
-        log: [{ id: uid(), date: d(-1120), text: 'Application submitted online' }, { id: uid(), date: d(-1100), text: 'Biometrics done at UKVCAS Croydon' }, { id: uid(), date: d(-1085), text: 'Approved' }, { id: uid(), date: d(-12), text: 'Asked HR for a new Certificate of Sponsorship for the extension' }], files: [] }, D),
-      Object.assign({ id: 'v-' + uid(), visaType: 'Schengen visa (short stay)', country: 'France', applicant: 'Me', status: 'Preparing documents', appointmentLabel: 'Biometrics appointment', appointmentDate: d(9), appointmentTime: '09:40',
-        appointmentPlace: 'TLScontact London', fee: 90, portalUrl: 'https://france-visas.gouv.fr',
-        checklist: C(['Passport (valid 3 months after trip)', 'Two passport photos', 'Completed application form', 'Bank statements (3 months)', 'Hotel booking', 'Return flights', 'Travel insurance', 'Employer letter'], 4),
-        log: [{ id: uid(), date: d(-15), text: 'Booked TLScontact appointment' }, { id: uid(), date: d(-8), text: 'Hotel and flights booked' }], files: [] }, D),
-      Object.assign({ id: 'v-' + uid(), visaType: 'Standard Visitor visa', country: 'United Kingdom', applicant: 'Mum', status: 'Awaiting decision', reference: 'GWF078812345', submittedDate: d(-21), decisionExpected: d(7), fee: 127,
-        checklist: C(['Passport', 'Invitation letter', 'My bank statements', 'Proof of my visa status', 'Mum’s bank statements'], 5),
-        log: [{ id: uid(), date: d(-21), text: 'Submitted at VFS Lagos' }, { id: uid(), date: d(-20), text: 'Biometrics done' }], files: [] }, D),
-    ];
-
     const lists = store.state.todoLists;
     const L = (re) => (lists.find((l) => re.test(l.name)) || lists[0] || {}).id;
     const workList = (GU.parts && GU.parts.workListId(store.state)) || 'list-work';
     const K = (o) => Object.assign({ id: 'k-' + uid(), priority: 'normal', notes: '', done: false, due: '' }, D, o);
     const tasks = [
-      K({ title: 'Book passport photos for Schengen application', due: d(1), listId: L(/admin/i), priority: 'high' }),
+      K({ title: 'Book passport photos', due: d(1), listId: L(/admin/i), priority: 'high' }),
       K({ title: 'Call Octopus about the meter reading', due: d(-2), listId: L(/admin/i) }),
       K({ title: 'Pay Clarke Accountancy invoice', due: d(-1), listId: L(/admin/i), priority: 'high' }),
       K({ title: 'Chase Bloom Bakery for invoice INV-0042', due: t, listId: L(/admin/i), priority: 'high' }),
@@ -286,7 +271,7 @@
     const inbox = [
       Object.assign({ id: 'in-' + uid(), note: 'School trip letter for Amara: Science Museum, £35 by 24 Oct, sign the consent slip', files: [], status: 'ready',
         result: { destination: 'section', confidence: 0.62, summary: 'A school trip letter for Amara: £35 to pay and a consent slip to sign.', title: 'Science Museum school trip', party: 'Amara’s school', amount: 35,
-          date: t, due_date: d(18), expiry_date: null, reference: null, context: 'home', category: 'Family & kids', document_type: null, frequency: null, paid: false, visa_id: null, section_id: null,
+          date: t, due_date: d(18), expiry_date: null, reference: null, context: 'home', category: 'Family & kids', document_type: null, frequency: null, paid: false, section_id: null,
           new_section_name: 'Kids & school', task_title: 'Pay £35 and sign consent slip for school trip', task_due: d(16), notes: null, via: 'offline' } }, D),
     ];
     const byTitle = (title) => (paperwork.find((p) => p.title === title) || {}).id;
@@ -315,7 +300,6 @@
       s.incomeSources.push(...incomeSources);
       s.paperwork.push(...paperwork);
       s.documents.push(...documents);
-      s.visas.push(...visas);
       s.tasks.push(...tasks);
       s.projects.push(...projects);
       s.workFolders.push(officeFolder);
@@ -342,6 +326,7 @@
     });
   }
 
+  // 'visas' stays here so old examples that were loaded before the Visas page went can still be cleared.
   const COLLECTIONS = ['transactions', 'debts', 'bills', 'incomeSources', 'paperwork', 'documents', 'visas', 'tasks', 'sections', 'sectionItems', 'inbox', 'filedLog', 'projects', 'workFolders', 'workNotes', 'costIdeas', 'requests'];
   function clear(silent) {
     const s = store.state;

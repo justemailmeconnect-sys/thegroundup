@@ -533,14 +533,14 @@
     const hot = asked.some((r) => dateOf(r.needBy) && daysUntil(r.needBy, t) <= SOON);
     const next = asked.find((r) => dateOf(r.needBy));
     const total = sum(asked, est);
-    const lines = asked.length
-      ? [plural(asked.length, 'thing') + ' to order' + (ordered.length ? ' · ' + ordered.length + ' on its way' : ''), next ? 'Next needed ' + short(next.needBy) : 'no dates set']
-      : ['Nothing to order right now', ordered.length ? plural(ordered.length, 'thing') + ' on its way' : 'Note down what ' + co() + ' asks for'];
-    const open = asked.length + ordered.length;
-    return '<button type="button" class="wk-card' + (hot ? ' is-warn' : '') + '" data-go="' + TAB + '"><span class="wk-card__head">' + icon('bag') + 'To buy</span>' +
-      '<b class="' + (hot ? 'is-warn' : '') + '">' + esc(money(total)) + '</b><em>waiting to order</em>' +
-      '<span class="wk-card__lines">' + lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</span>' +
-      '<span class="wk-card__foot">' + esc(plural(open, 'thing') + ' to get') + icon('chevron') + '</span></button>';
+    // The figure and one line: what's to order (and when the next is needed), or what's on its way.
+    const line = asked.length
+      ? plural(asked.length, 'thing') + ' to order' + (next ? ', next needed ' + short(next.needBy) : ordered.length ? ' · ' + ordered.length + ' on its way' : '')
+      : ordered.length ? plural(ordered.length, 'thing') + ' on its way' : 'nothing to order right now';
+    const o = { tab: TAB, ico: 'bag', label: 'To buy', big: money(total), unit: 'waiting to order', line, warn: hot, cls: hot ? 'is-warn' : '' };
+    if (GU.work && GU.work.card) return GU.work.card(o);
+    return '<button type="button" class="wk-card' + (hot ? ' is-warn' : '') + '" data-go="' + TAB + '"><span class="wk-card__head">' + icon('bag') + '<span>To buy</span>' + icon('chevron') + '</span>' +
+      '<b class="' + o.cls + '">' + esc(o.big) + '</b><em>' + esc(o.unit) + '</em><span class="wk-card__line">' + esc(line) + '</span></button>';
   }
 
   /* ---------- the page ---------- */
@@ -631,17 +631,24 @@
         laneHTML({ id: 'bought', title: 'Bought this month', icon: 'check', rows: T.bought, total: T.boughtTotal, fold: true, open: ui.boughtOpen, empty: 'Nothing bought this month yet. Once you mark something bought, it moves here.',
           foot: T.older ? plural(T.older, 'earlier one') + ' not shown here. The receipts are where you filed them.' : '' }) +
         (T.dropped.length ? laneHTML({ id: 'dropped', title: 'Not needed', icon: 'x', rows: T.dropped, fold: true, open: ui.droppedOpen, empty: '' }) : '')
-      : '<section class="panel">' + emptyState({ icon: 'bag', title: 'Nothing to get right now',
-        text: esc('When ' + c + ' asks you to get something, note it here. You can order it, add the receipt when you’ve bought it, and get your money back.'),
-        action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Note something down</button>' }) + '</section>';
+      : '<p class="wk-quiet">' + esc('Nothing to get right now.') + '</p>';
+    // Notes for this page: a panel once there are some, until then a small '+ Note' button in the head.
+    const W = GU.work;
+    const notes = W && W.notesOf ? W.notesOf(s, 'requests').slice().sort((x, y) => (y.updated || y.created || '').localeCompare(x.updated || x.created || '')) : [];
+    const notesPanel = notes.length && GU.tabs.work
+      ? '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header><ul class="wk-notes">' +
+        notes.map((n) => '<li class="wk-note"><button type="button" class="wk-note__main" data-open="workNotes:' + esc(n.id) + '"><b>' + esc(n.title || 'Note') + '</b>' + (n.body ? '<span>' + esc(n.body.length > 220 ? n.body.slice(0, 220) + '…' : n.body) + '</span>' : '') +
+          '<em>' + esc('updated ' + short(n.updated || n.created)) + '</em></button><button type="button" class="icon-btn" data-more="workNotes:' + esc(n.id) + '" aria-label="' + esc('More for ' + (n.title || 'Note')) + '">' + icon('more') + '</button></li>').join('') + '</ul></section>'
+      : '';
+    const noteBtn = !notes.length && GU.tabs.work ? '<button type="button" class="btn btn--ghost" data-new-note>' + icon('plus') + 'Note</button>' : '';
     root.innerHTML = GU.view.head({
       eyebrow: coName(),
       title: 'To buy',
       text: esc('Things ' + c + ' has asked you to get. Note them down, order them, then add the receipt and it goes to Get paid back by itself.'),
       actions: (T.asked.length + T.ordered.length ? '<button type="button" class="btn" data-download>' + icon('download') + 'Download list</button>' : '') +
-        '<button type="button" class="btn" data-add-many>' + icon('list') + 'Add several</button>' +
+        '<button type="button" class="btn" data-add-many>' + icon('list') + 'Add several</button>' + noteBtn +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Something to get</button>',
-    }) + '<div class="stack rq">' + (T.all.length ? tally : '') + quick + body + '</div>';
+    }) + '<div class="stack rq">' + (T.all.length ? tally : '') + quick + body + notesPanel + '</div>';
 
     root.querySelectorAll('details[data-fold]').forEach((det) => det.addEventListener('toggle', () => {
       if (det.dataset.fold === 'bought') ui.boughtOpen = det.open;
@@ -689,6 +696,9 @@
   function onClick(e) {
     const b = (sel) => e.target.closest(sel);
     let el;
+    // A note on this page (made, opened and moved just like the notes on the other Work pages).
+    if (b('[data-new-note]')) return GU.work && GU.work.editNote ? GU.work.editNote(null, { area: 'requests' }) : undefined;
+    if ((el = b('[data-more^="workNotes:"], [data-open^="workNotes:"]')) && GU.work && GU.work.rowClick) return GU.work.rowClick(e);
     if ((el = b('[data-more]'))) return moreMenu(el, el.dataset.more);
     if ((el = b('[data-edit]'))) return edit(el.dataset.edit);
     if ((el = b('[data-ordered]'))) return markOrdered(el.dataset.ordered);

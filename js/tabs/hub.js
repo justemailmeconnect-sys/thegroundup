@@ -14,6 +14,7 @@
   const AUTO_FILE_AT = 0.75;
   const WORK_OUT = (GU.finance && GU.finance.WORK_OUT) || 'Work expenses';
   const PAYSLIPS = 'Employment and payslips';
+  const IMMIGRATION = 'Residence permit or eVisa';
   const NOT_FILEABLE = ['unsure', 'bank_statement', 'order_history'];
   const undoers = new Map();
   let running = false;
@@ -49,11 +50,11 @@
     return null;
   }
   /* In Work, a labelled folder keeps its own place only when that isn't work paperwork: statements still go to
-     the importer, and visa, debt and payslip folders are always yours. Everything else is filed for work. */
+     the importer, and debt, payslip and visa or immigration folders are always yours. Everything else is filed for work. */
   function workLabel(p, workScope) {
     const l = p.label;
     if (!l) return { scope: workScope, sub: p.sub };
-    if (['statements', 'visa', 'debts'].includes(l.kind) || (l.kind === 'documents' && l.docType === PAYSLIPS)) return { scope: l, sub: p.sub };
+    if (['statements', 'debts'].includes(l.kind) || (l.kind === 'documents' && (l.docType === PAYSLIPS || l.docType === IMMIGRATION))) return { scope: l, sub: p.sub };
     if (l.kind === 'section') {
       const sec = l.sectionId && (store.state.sections || []).find((x) => x.id === l.sectionId);
       if (sec && sec.part === 'work') return { scope: l, sub: p.sub };
@@ -107,12 +108,6 @@
         work = work.filter((w) => !(w.scope && w.scope.kind === 'statements'));
       }
     }
-    // Files for a visa application are attached straight away; nothing needs reading.
-    const visaWork = work.filter((w) => w.scope && w.scope.kind === 'visa');
-    if (visaWork.length) {
-      await attachToVisas(visaWork);
-      work = work.filter((w) => !(w.scope && w.scope.kind === 'visa'));
-    }
     if (!work.length) return {};
     const labels = Array.from(new Set(work.filter((w) => w.scope).map((w) => w.scope.name || '').filter(Boolean)));
     const from = GU.ui.folderSummary(work.map((w) => w.file));
@@ -137,26 +132,10 @@
     return { waiting: work.length };
   }
 
-  async function attachToVisas(list) {
-    const groups = new Map();
-    for (const w of list) {
-      let id = w.scope.visaId || (store.state.visas.find((v) => v.visaType.toLowerCase() === String(w.scope.name).toLowerCase()) || {}).id;
-      if (!id) {
-        id = 'v-' + uid();
-        store.commit((s) => s.visas.push({ id, created: today(), visaType: w.scope.name, country: '', applicant: 'Me', status: 'Planning', checklist: [],
-          log: [{ id: uid(), date: today(), text: 'Started from your “' + w.scope.name + '” folder' }], files: [] }));
-      }
-      w.scope.visaId = id;
-      if (!groups.has(id)) groups.set(id, []);
-      groups.get(id).push(await GU.files.add(w.file));
-    }
-    for (const [id, metas] of groups) GU.tabs.visas.attach(id, metas, 'Added ' + plural(metas.length, 'file') + ' from your folders: ' + metas.slice(0, 3).map((m) => m.name).join(', ') + (metas.length > 3 ? '…' : ''));
-    const v = store.find('visas', groups.keys().next().value);
-    toast('Added ' + plural(list.length, 'file') + ' to ' + (groups.size > 1 ? groups.size + ' visa applications' : (v ? v.visaType : 'your visa application')));
-  }
-
   /* A file you put in a section (or a labelled folder) stays there: the reading only fills in the details. */
   function applyScope(r, scope, sub, ctx, root) {
+    // A waiting item from before the Visas page went: its folder is a documents folder now.
+    if (scope && scope.kind === 'visa') scope = Object.assign({}, scope, { kind: 'documents', docType: IMMIGRATION });
     const out = Object.assign({}, r, { confidence: 1, scoped: true, folder: sub || '' });
     const unclear = r.destination === 'unsure' || r.confidence < 0.5;
     const fileTitle = (r._fileName || '').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim();
@@ -540,9 +519,6 @@
           work && r.payer ? { payer: r.payer } : {}), { onSaved: done });
       case 'document':
         return GU.tabs.documents.create({ title: r.title, type: r.document_type || 'Other', context: work ? 'work' : 'home', reference: r.reference, issueDate: r.date, expiryDate: r.expiry_date, notes: [r.summary, r.notes].filter(Boolean).join('\n'), files }, { onSaved: done });
-      case 'visa':
-        if (r.visa_id) return fileItem(item, r);
-        return GU.tabs.visas.create({ visaType: r.title, reference: r.reference, notes: r.notes, files }, { onSaved: done });
       case 'task':
         return GU.tabs.todos.create(Object.assign({ title: r.title, due: r.due_date || '', notes: item.note && item.note !== r.title ? item.note : '' }, work ? Object.assign({ context: 'work' }, wl ? { listId: wl } : {}) : Object.assign({ context: 'home' }, r.list_id ? { listId: r.list_id } : {})), { onSaved: done });
       case 'transaction_out': case 'transaction_in':
@@ -562,7 +538,7 @@
   }
   /* Where a record saved by a form ended up, so Recently sorted says where it really went. */
   function whereNow(id) {
-    for (const c of ['paperwork', 'bills', 'documents', 'tasks', 'sectionItems', 'transactions', 'visas', 'debts']) {
+    for (const c of ['paperwork', 'bills', 'documents', 'tasks', 'sectionItems', 'transactions', 'debts']) {
       const rec = (store.state[c] || []).find((x) => x.id === id);
       if (rec) return Object.assign({ ref: { c, id } }, S().recordPlace(c, rec));
     }
@@ -664,11 +640,8 @@
       { icon: 'bills', label: 'Regular bill', onClick: () => set({ destination: 'bill' }) },
       { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance', onClick: () => set({ destination: 'debt' }) },
       { icon: 'folder', label: 'Important document', onClick: () => set({ destination: 'document', document_type: (first.result && first.result.document_type) || 'Other' }) },
-    ].concat(s.visas.filter((v) => !['Refused', 'Withdrawn'].includes(v.status)).map((v) => ({ icon: 'globe', label: 'Visa: ' + v.visaType, hint: v.applicant || v.country, onClick: () => set({ destination: 'visa', visa_id: v.id }) })))
-      .concat([
-        { icon: 'globe', label: 'New visa application', onClick: () => set({ destination: 'visa', visa_id: null }) },
-        { icon: 'todo', label: 'Task', hint: isWork ? 'Work › Tasks' : 'Home › To-do', onClick: () => set({ destination: 'task' }) },
-      ])
+      { icon: 'todo', label: 'Task', hint: isWork ? 'Work › Tasks' : 'Home › To-do', onClick: () => set({ destination: 'task' }) },
+    ]
       .concat(isWork ? [] : homeLists.map((l) => ({ icon: 'list', label: 'To-do list: ' + l.name, onClick: () => toPlace(S().placeById('list:' + l.id)) })))
       .concat([{ icon: 'plus', label: 'New list…', hint: 'A to-do list of its own', onClick: () => ask('New list', 'List name', 'e.g. Errands, Wedding jobs', [], (v) => set({ destination: 'task', context: 'home', new_list_name: v.name.trim() })) }])
       .concat([
@@ -965,7 +938,7 @@
   }
 
   /* Records a waiting file can be added to, when it looks like one you already have. */
-  const ATTACHABLE = ['paperwork', 'sectionItems', 'documents', 'bills', 'visas', 'debts'];
+  const ATTACHABLE = ['paperwork', 'sectionItems', 'documents', 'bills', 'debts'];
   /* 'Add the file to it': the item's files join the record you already have, and the item goes (with Undo). */
   function attachToDup(item) {
     const d = S().dupOf(item);
@@ -1056,8 +1029,8 @@
   }
   function newRule() {
     const ps = S().places().filter((p) => p.kind !== 'doctype');
-    const order = ['page', 'section', 'list', 'category', 'folder', 'visa'];
-    const groupsOf = order.map((k) => ({ group: { page: 'Pages', section: 'Sections', list: 'To-do lists', category: 'Your categories', folder: 'Work folders', visa: 'Visa applications' }[k], options: ps.filter((p) => p.kind === k).map((p) => ({ value: p.id, label: p.label })) })).filter((g) => g.options.length);
+    const order = ['page', 'section', 'list', 'category', 'folder'];
+    const groupsOf = order.map((k) => ({ group: { page: 'Pages', section: 'Sections', list: 'To-do lists', category: 'Your categories', folder: 'Work folders' }[k], options: ps.filter((p) => p.kind === k).map((p) => ({ value: p.id, label: p.label })) })).filter((g) => g.options.length);
     formDialog({
       title: 'New rule',
       intro: 'Anything from or mentioning these words goes straight to the place you choose.',

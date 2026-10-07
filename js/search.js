@@ -1,5 +1,5 @@
 /* The Ground Up: search everywhere. One box that looks through both Home and Work: bank lines, receipts and
-   invoices, bills, debts, income, documents, visas, tasks, section items, work notes and projects, plans,
+   invoices, bills, debts, income, documents, tasks, section items, work notes and projects, plans,
    requests and Sorting hub items. Opens from the rail, the phone bar, / and Ctrl or Cmd + Shift + F. */
 (function () {
   'use strict';
@@ -16,7 +16,6 @@
     { id: 'debt', label: 'Debts', icon: 'card' },
     { id: 'income', label: 'Income', icon: 'in' },
     { id: 'doc', label: 'Documents', icon: 'folder' },
-    { id: 'visa', label: 'Visas', icon: 'globe' },
     { id: 'task', label: 'Tasks', icon: 'todo' },
     { id: 'item', label: 'Section items', icon: 'star' },
     { id: 'note', label: 'Work notes and projects', icon: 'note' },
@@ -44,7 +43,7 @@
     return iso + ' ' + +d + ' ' + mon + ' ' + +d + ' ' + mon + ' ' + y + ' ' + mon + ' ' + y + ' ' + MONTHS_LONG[+m - 1].toLowerCase() + ' ' + d + '/' + m + '/' + y;
   }
 
-  const stamp = (s) => (store.rev || 0) + ':' + ['transactions', 'paperwork', 'bills', 'debts', 'incomeSources', 'documents', 'visas', 'tasks', 'sectionItems', 'sections', 'workNotes', 'projects', 'costIdeas', 'requests', 'inbox']
+  const stamp = (s) => (store.rev || 0) + ':' + ['transactions', 'paperwork', 'bills', 'debts', 'incomeSources', 'documents', 'tasks', 'sectionItems', 'sections', 'workNotes', 'projects', 'costIdeas', 'requests', 'inbox']
     .map((k) => (s[k] || []).length).join(',');
   let cache = { key: '', list: [] };
 
@@ -110,10 +109,6 @@
       const work = P && P.isWorkDoc(d);
       add({ k: 'doc', c: 'documents', rec: d, title: d.title, f1: [d.holder, d.type], f2: [d.reference, d.location, d.notes, ...fileNames(d)], date: d.expiryDate, dateLead: 'expires ',
         part: work ? 'work' : 'home', tab: pickTab(work ? 'work-docs' : 'documents', work ? 'work' : 'today'), where: 'Documents', tail: low(d.type) === low(d.title) ? '' : d.type });
-    }
-    for (const v of s.visas || []) {
-      add({ k: 'visa', c: 'visas', rec: v, title: join([v.visaType || 'Visa', v.country ? '· ' + v.country : '']), f1: [v.applicant, v.country, v.status], f2: [v.reference, v.notes, ...fileNames(v)],
-        part: 'home', tab: 'visas', where: 'Visas', tail: v.status });
     }
     for (const t of s.tasks || []) {
       const work = P && P.isWorkTask(s, t);
@@ -326,7 +321,7 @@
     if (!clean) {
       const rec = recents();
       html = '<div class="gs-empty"><p><b>Search everything in Home and Work.</b></p>' +
-        '<p class="muted">Bank lines, receipts and invoices, bills, debts, documents, visas, tasks, notes and the Sorting hub. Try a name, an amount like £42, or a month like oct.</p></div>';
+        '<p class="muted">Bank lines, receipts and invoices, bills, debts, documents, tasks, notes and the Sorting hub. Try a name, an amount like £42, or a month like oct.</p></div>';
       if (rec.length) {
         html += '<div class="gs-group" role="group" aria-label="Recent searches"><h3 class="gs-group__head"><span>Recent searches</span><button type="button" class="link link--btn" data-gs-clear>Clear</button></h3>' +
           rec.map((r) => {

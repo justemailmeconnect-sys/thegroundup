@@ -28,7 +28,6 @@
     invoice: { label: 'Invoice', tab: 'receipts' },
     owed: { label: 'Owed to you', tab: 'receipts' },
     income: { label: 'Income', tab: 'incomings' },
-    visa: { label: 'Visa', tab: 'visas' },
     document: { label: 'Document', tab: 'documents' },
     warranty: { label: 'Warranty', tab: 'receipts' },
     return: { label: 'Return', tab: 'receipts' },
@@ -106,17 +105,6 @@
         push({ kind: 'income', date: d, title: s.name + ' expected', meta: s.from || 'Regular income', amount: s.amount, ref: { c: 'incomeSources', id: s.id } });
       }
     }
-    for (const v of state.visas) {
-      const name = v.visaType + (v.country ? ', ' + v.country : '');
-      const closed = ['Refused', 'Withdrawn'].includes(v.status);
-      if (closed) continue;
-      if (v.appointmentDate && v.appointmentDate >= t && v.appointmentDate <= to)
-        push({ kind: 'visa', date: v.appointmentDate, title: (v.appointmentLabel || 'Appointment') + ' for ' + name, meta: [v.appointmentTime, v.appointmentPlace].filter(Boolean).join(' · ') || v.applicant, ref: { c: 'visas', id: v.id } });
-      if (v.decisionExpected && v.status === 'Awaiting decision' && v.decisionExpected <= to)
-        push({ kind: 'visa', date: v.decisionExpected, title: 'Decision expected: ' + name, meta: v.applicant || '', ref: { c: 'visas', id: v.id } });
-      if (v.status === 'Approved' && v.validUntil && v.validUntil >= t && v.validUntil <= to)
-        push({ kind: 'visa', date: v.validUntil, title: name + ' expires', meta: v.applicant || '', ref: { c: 'visas', id: v.id } });
-    }
     for (const it of state.sectionItems || []) {
       if (!it.dueDate || it.dueDate > to) continue;
       const sec = (state.sections || []).find((x) => x.id === it.sectionId);
@@ -147,18 +135,6 @@
       const n = daysUntil(d.expiryDate);
       if (n < 0) out.push({ level: 'crit', tab: 'documents', title: d.title + ' has expired', detail: 'Expired ' + fmtDate(d.expiryDate) + (d.holder ? ' · ' + d.holder : ''), ref: { c: 'documents', id: d.id } });
       else if (n <= (state.settings.docWarnDays || 90)) out.push({ level: n <= 30 ? 'crit' : 'warn', tab: 'documents', title: d.title + ' expires ' + relDays(d.expiryDate), detail: fmtDate(d.expiryDate) + ' · start the renewal early', ref: { c: 'documents', id: d.id } });
-    }
-    for (const v of state.visas) {
-      const name = v.visaType + (v.country ? ', ' + v.country : '');
-      if (v.status === 'Approved' && v.validUntil) {
-        const n = daysUntil(v.validUntil);
-        if (n < 0) continue;
-        if (n <= (state.settings.visaWarnDays || 120)) out.push({ level: n <= 45 ? 'crit' : 'warn', tab: 'visas', title: name + ' ends ' + relDays(v.validUntil), detail: 'Valid until ' + fmtDate(v.validUntil) + '. Check when you can apply to extend or switch.', ref: { c: 'visas', id: v.id } });
-      }
-      if (['Planning', 'Preparing documents'].includes(v.status) && v.checklist && v.checklist.length) {
-        const left = v.checklist.filter((c) => !c.done).length;
-        if (left) out.push({ level: 'info', tab: 'visas', title: plural(left, 'document') + ' still to gather', detail: name, ref: { c: 'visas', id: v.id } });
-      }
     }
     if (GU.money) {
       for (const x of GU.money.accounts(state)) {
@@ -203,10 +179,6 @@
   function waiting(state) {
     const t = today();
     const out = [];
-    for (const v of state.visas) {
-      if (['Submitted', 'Biometrics / interview', 'Awaiting decision'].includes(v.status))
-        out.push({ tab: 'visas', title: (v.applicant ? v.applicant + ': ' : '') + v.visaType + ' decision', detail: (v.decisionExpected ? 'Expected ' + fmtDate(v.decisionExpected, { short: true }) : 'No date yet') + (v.submittedDate ? ' · submitted ' + fmtDate(v.submittedDate, { short: true }) : ''), ref: { c: 'visas', id: v.id }, part: 'home' });
-    }
     for (const p of state.paperwork) {
       if (p.kind === 'invoice-out' && p.context !== 'work' && p.status !== 'paid' && (F.outstanding(p) > 0 || p.amount == null))
         out.push({ tab: 'receipts', title: (p.party || p.title) + ' owes you' + (p.amount != null ? ' ' + money(F.outstanding(p)) : ''), detail: p.dueDate ? (p.dueDate < t ? daysUntil(p.dueDate) * -1 + ' days late' : 'Due ' + fmtDate(p.dueDate, { short: true })) : 'No due date', ref: { c: 'paperwork', id: p.id }, late: p.dueDate && p.dueDate < t, part: 'home' });

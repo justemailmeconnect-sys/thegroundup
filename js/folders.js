@@ -30,10 +30,8 @@
     if (/warrant|guarantee/i.test(n)) return { kind: 'paperwork', paperKind: 'warranty', name: n, strong: true };
     if (/receipt/i.test(n)) return { kind: 'paperwork', paperKind: 'receipt', name: n, strong: true };
     if (/invoice|bills?\b|utilit/i.test(n)) return { kind: 'paperwork', paperKind: 'invoice', name: n, strong: true };
-    if (/visa|immigration|home office|ukvi|evisa|\bbrp\b|schengen/i.test(n)) {
-      const v = store.state.visas.find((x) => [x.visaType, x.country].filter(Boolean).some((w) => w.toLowerCase().split(/[\s,]+/).some((p) => p.length > 3 && low.includes(p))));
-      return { kind: 'visa', visaId: v ? v.id : null, name: n, strong: true };
-    }
+    // Visa and immigration folders hold papers: they go with your documents.
+    if (/visa|immigration|home office|ukvi|evisa|\bbrp\b|schengen/i.test(n)) return { kind: 'documents', docType: 'Residence permit or eVisa', name: n, strong: true };
     const doc = DOC_TYPES.find(([re]) => re.test(n));
     if (doc || /important|documents?|records/i.test(n)) return { kind: 'documents', docType: doc ? doc[1] : null, name: n, strong: true };
     const topic = (GU.brain && GU.brain.TOPICS || []).find((x) => x.name.toLowerCase() === low || x.name.toLowerCase().split(' & ')[0] === low);
