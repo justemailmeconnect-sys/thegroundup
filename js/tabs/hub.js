@@ -1408,7 +1408,37 @@
     if (store.state.inbox.some((i) => i.status === 'reading')) pump();
   }
 
-  GU.hub = { add, resume, fileItem, answerPayer, sortEverything, logChange, undo, discard, setSuggestion, submit, tellWhere, choosePlace, AUTO_FILE_AT };
+  /* Once only: whatever was waiting when the Sorting hub took over from the Inbox goes to Recently deleted
+     (files kept, 30 days to change your mind), so the hub starts empty and only handles what you add from now on. */
+  function startFresh() {
+    const s = store.state;
+    if (s.meta && s.meta.hubFreshV1) return;
+    const old = (s.inbox || []).filter((i) => !i.demo);
+    const entries = [];
+    store.commit((st) => {
+      st.meta = st.meta || {};
+      st.meta.hubFreshV1 = { at: new Date().toISOString(), n: old.length };
+      const ids = new Set(old.map((i) => i.id));
+      st.inbox = st.inbox.filter((i) => !ids.has(i.id));
+      old.forEach((item) => {
+        entries.push(GU.trash.put(st, 'inbox', Object.assign({}, item, { status: item.status === 'reading' ? 'reading' : 'ready' }),
+          (item.result && item.result.title) || (item.files && item.files[0] && item.files[0].name) || item.note || 'Sorting hub item'));
+      });
+    });
+    if (!old.length) return;
+    GU.ui.toast('Cleared ' + plural(old.length, 'item') + ' from the Sorting hub. They’re in Settings › Recently deleted for 30 days.', {
+      timeout: 12000,
+      action: 'Undo',
+      onAction: () => {
+        GU.ui.quietly(() => entries.forEach((e) => GU.trash.restore(e.id)));
+        store.commit((st) => {
+          st.meta.hubFreshV1 = Object.assign({}, st.meta.hubFreshV1, { undone: true });
+        });
+      },
+    });
+  }
+
+  GU.hub = { add, resume, startFresh, fileItem, answerPayer, sortEverything, logChange, undo, discard, setSuggestion, submit, tellWhere, choosePlace, AUTO_FILE_AT };
   GU.inbox = GU.hub; // older callers
   GU.tabs.hub = { label: 'Sorting hub', short: 'Sorting hub', icon: 'funnel', part: 'shared', render };
 })();

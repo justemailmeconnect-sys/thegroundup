@@ -308,6 +308,11 @@
     } catch (e) {
       console.error(e);
     }
+    try {
+      if (GU.hub && GU.hub.startFresh) GU.hub.startFresh();
+    } catch (e) {
+      console.error(e);
+    }
     firstBillScan();
   }
 
