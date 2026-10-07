@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- No action bar; paper-coloured launch window and status bar with dark icons; dark bottom bar (the app's own). -->
+    <style name="Theme.GroundUp" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorBackground">@color/paper</item>
+        <item name="android:statusBarColor">@color/paper</item>
+        <item name="android:navigationBarColor">@color/bottom_bar</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+</resources>

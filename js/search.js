@@ -19,8 +19,8 @@
     { id: 'task', label: 'Tasks', icon: 'todo' },
     { id: 'item', label: 'Section items', icon: 'star' },
     { id: 'note', label: 'Work notes and projects', icon: 'note' },
-    { id: 'plan', label: 'Plans and cost ideas', icon: 'trend' },
-    { id: 'request', label: 'Requests', icon: 'flag' },
+    { id: 'plan', label: 'Plans', icon: 'trend' },
+    { id: 'request', label: 'To buy', icon: 'bag' },
     { id: 'hub', label: 'Sorting hub items', icon: 'funnel' },
   ];
   const KIND = {};
@@ -125,7 +125,8 @@
     }
     const TAB_OF = (GU.work && GU.work.TAB_OF) || {};
     for (const n of s.workNotes || []) {
-      const tab = pickTab(n.area && n.area !== 'general' && TAB_OF[n.area] ? TAB_OF[n.area] : 'work', 'work');
+      const area = n.area === 'costs' ? 'requests' : n.area; // notes from the old Cost forecast page sit on To buy
+      const tab = pickTab(area && area !== 'general' && TAB_OF[area] ? TAB_OF[area] : 'work', 'work');
       add({ k: 'note', c: 'workNotes', rec: n, title: n.title || 'Note', f2: [n.body], date: n.updated || n.created, part: 'work', tab, where: 'Note · ' + (tabName(tab) || 'Overview') });
     }
     for (const p of s.projects || []) {
@@ -134,12 +135,19 @@
     }
     for (const i of s.costIdeas || []) {
       const part = P ? P.ideaPart(i) : 'work';
+      if (part === 'work') {
+        // Work ideas live on To buy now (until they're added there, in its list of old ideas): the page opens, the idea stays put.
+        if (i.movedToRequest || i.status === 'done' || i.status === 'dropped') continue;
+        add({ k: 'request', c: 'costIdeas', rec: i, title: i.name, f1: [i.status], f2: [i.notes], date: i.wantBy, dateLead: 'by ', amount: i.cost, part: 'work',
+          tab: pickTab('work-requests', 'work'), where: tabName('work-requests') || 'To buy', tail: 'not added yet', open: false });
+        continue;
+      }
       add({ k: 'plan', c: 'costIdeas', rec: i, title: i.name, f1: [i.status], f2: [i.notes, ...fileNames(i)], date: i.wantBy || i.plannedDate, dateLead: 'by ', amount: i.cost, part,
-        tab: pickTab(part === 'work' ? 'work-costs' : 'plans', part === 'work' ? 'work' : 'today'), where: part === 'work' ? 'Cost forecast' : 'Plans' });
+        tab: pickTab('plans', 'today'), where: 'Plans' });
     }
     const RQ = { asked: 'to order', ordered: 'on its way', bought: 'bought', dropped: 'not needed' };
     for (const r of s.requests || []) {
-      add({ k: 'request', c: 'requests', rec: r, title: r.title, f2: [r.note, r.link], date: r.needBy, dateLead: 'by ', amount: r.estimate, part: 'work', tab: pickTab('work-requests', 'work'),
+      add({ k: 'request', c: 'requests', rec: r, title: r.title, f2: [r.note, r.link], date: r.needBy, dateLead: 'by ', amount: GU.requests && GU.requests.lineTotal ? GU.requests.lineTotal(r) || null : r.estimate, part: 'work', tab: pickTab('work-requests', 'work'),
         where: tabName('work-requests') || 'To buy', tail: RQ[r.status] || '', open: false });
     }
     for (const i of s.inbox || []) {

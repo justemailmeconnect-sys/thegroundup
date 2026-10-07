@@ -13,6 +13,7 @@
   const METHODS = ['Direct debit', 'Standing order', 'Card (automatic)', 'Pay manually'];
   const isAuto = (m) => m !== 'Pay manually';
   let showStopped = false;
+  let showWhere = false;
 
   /* ---------- home or work ---------- */
   const WORK_OUT = F.WORK_OUT || 'Work expenses';
@@ -82,14 +83,17 @@
       for (let i = 1; i <= total; i++) h += '<i class="' + (i < p.stage ? 'is-paid' : i === p.stage ? 'is-next' : '') + '"></i>';
       return h + '</span>';
     };
-    const row = (p) => {
+    const acctName = (p) => (p.account && (store.state.accounts.find((a) => a.id === p.account) || {}).name) || '';
+    /* A row doesn't repeat what its lender's heading says ('from Santander') or what its stage already says ('Pay in 3', 'Payment 2 of 3'). */
+    const row = (p, sameAcct) => {
       const n = daysUntil(p.next.date);
       const stage = p.stage ? 'Payment ' + p.stage + ' of ' + p.of : plural(p.left, 'payment') + ' left';
-      const acct = p.account && (store.state.accounts.find((a) => a.id === p.account) || {}).name;
+      const acct = sameAcct ? '' : acctName(p);
       const rest = p.left > 1 ? plural(p.left, 'payment') + ' left, ' + money(p.leftTotal) + ' in all, last on ' + fmtDate(p.last, { short: true }) : 'Last payment';
+      const about = [p.stage ? '' : p.of === 3 ? 'Pay in 3' : p.of ? p.of + ' payments' : '', acct ? 'from ' + acct : ''].filter(Boolean).join(' · ');
       return '<li class="inst"><button type="button" class="inst__main" data-open-debt="' + esc(p.debt.id) + '">' +
         '<span class="row-item__icon">' + icon('card') + '</span>' +
-        '<span class="inst__text"><b>' + esc(p.merchant) + '</b><em>' + esc([p.of === 3 ? 'Pay in 3' : p.of ? p.of + ' payments' : '', acct ? 'from ' + acct : ''].filter(Boolean).join(' · ')) + '</em>' + steps(p) + '</span>' +
+        '<span class="inst__text"><b>' + esc(p.merchant) + '</b>' + (about ? '<em>' + esc(about) + '</em>' : '') + steps(p) + '</span>' +
         '<span class="inst__stage">' + pill(stage, p.stage && p.stage === p.of ? 'good' : 'info') + '<em>' + esc(rest) + '</em></span>' +
         '<span class="row-item__date"><b>' + esc(fmtDate(p.next.date, { weekday: true })) + '</b><em>' + esc(relDays(p.next.date)) + '</em></span>' +
         '<span class="row-item__amt' + (n <= 3 ? ' is-soon' : '') + '">' + esc(money(p.next.amount)) + '</span></button></li>';
@@ -97,9 +101,11 @@
     return '<section class="panel inst-panel"><header class="panel__head"><h2>' + icon('card') + 'Instalments</h2><span class="muted">' + esc(plural(plans.length, 'plan') + ' · ' + money(sum(plans, (p) => p.leftTotal)) + ' left to pay') + '</span></header>' +
       lenders.map((l) => {
         const list = plans.filter((p) => p.lender === l);
-        return '<div class="inst-group"><h3 class="inst-group__head"><span>' + esc(l) + '</span><em>' + esc(plural(list.length, 'plan') + ' · ' + money(sum(list, (p) => p.leftTotal)) + ' left') + '</em></h3><ul class="rows">' + list.map(row).join('') + '</ul></div>';
+        const accts = Array.from(new Set(list.map(acctName)));
+        const sameAcct = accts.length === 1 && accts[0] ? accts[0] : '';
+        return '<div class="inst-group"><h3 class="inst-group__head"><span>' + esc(l) + '</span><em>' + esc(plural(list.length, 'plan') + (sameAcct ? ' · from ' + sameAcct : '') + ' · ' + money(sum(list, (p) => p.leftTotal)) + ' left') + '</em></h3><ul class="rows">' + list.map((p) => row(p, !!sameAcct)).join('') + '</ul></div>';
       }).join('') +
-      '<p class="panel__foot muted inst-note">From your payment schedules on the Debts page. Each payment is already in Money ahead on Home, so nothing is counted twice.</p></section>';
+      '<p class="panel__foot muted inst-note">From your payment schedules on the Debts page. They’re already in Money ahead on Home, so nothing is counted twice.</p></section>';
   }
 
   /* One line pointing to Work › Bills, so work bills don't look lost. */
@@ -140,7 +146,7 @@
     root.innerHTML = GU.view.head({
       eyebrow: 'Money ahead',
       title: 'Bills',
-      text: 'Your regular payments' + (plans.length ? ', plus your instalment plans (Klarna, PayPal, Amazon and the like) with the stage each one is at' : '') + '. Direct debits and standing orders roll on by themselves; bills you pay by hand wait on your Overview until you mark them paid.',
+      text: 'Your regular payments' + (plans.length ? ', plus your instalment plans (Klarna, PayPal, Amazon and the like) with the stage each one is at.' : '.'),
       actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +
@@ -148,27 +154,25 @@
       GU.ui.dropbar('Drop bills and contracts here, or a whole folder', 'Each new company becomes a bill. Letters from a company you already have are added to its bill, not duplicated.') +
       reviewHTML(review) +
       '<div class="ledger">' +
-      '<div><span>Bills per month</span><b>' + esc(money(monthly)) + '</b><em>on average</em></div>' +
-      '<div><span>Bills per year</span><b>' + esc(money(monthly * 12, { whole: true })) + '</b><em>' + esc(plural(active.length, 'active bill')) + '</em></div>' +
-      '<div><span>Due in the next 7 days</span><b>' + esc(money(sum(week, (b) => b.amount))) + '</b><em>' + esc(plural(week.length, 'bill')) + '</em></div>' +
-      '<div><span>Overdue</span><b class="' + (overdue.length ? 'is-crit' : '') + '">' + overdue.length + '</b><em>' + (overdue.length ? esc(money(sum(overdue, (b) => b.amount))) + ' to pay' : 'all paid') + '</em></div>' +
-      (plans.length ? '<div><span>Instalments, next 30 days</span><b>' + esc(money(sum(instSoon, (i) => i.amount))) + '</b><em>' + esc(plural(instSoon.length, 'payment') + ' across ' + plural(plans.length, 'plan')) + '</em></div>' : '') +
+      '<div><span>Bills per month</span><b>' + esc(money(monthly)) + '</b><em>' + esc(money(monthly * 12, { whole: true }) + ' a year · ' + plural(active.length, 'active bill')) + '</em></div>' +
+      '<div><span>Due in the next 7 days</span><b>' + esc(money(sum(week, (b) => b.amount))) + '</b><em>' + esc(plural(week.length, 'bill') + (overdue.length ? '' : ' · none overdue')) + '</em></div>' +
+      (overdue.length ? '<div><span>Overdue</span><b class="is-crit">' + overdue.length + '</b><em>' + esc(money(sum(overdue, (b) => b.amount))) + ' to pay</em></div>' : '') +
+      (plans.length ? '<div><span>Instalments, next 30 days</span><b>' + esc(money(sum(instSoon, (i) => i.amount))) + '</b><em>' + esc(plural(instSoon.length, 'payment')) + '</em></div>' : '') +
       '</div>' +
-      '<div class="cols cols--main-side">' +
       '<div class="stack">' +
-      (groups.length ? groups.map((g) => '<section class="panel"><header class="panel__head"><h2>' + esc(g.title) + '</h2><span class="muted">' + esc(money(sum(g.items, (b) => b.amount))) + '</span></header><ul class="rows">' + g.items.map(rowHTML).join('') + '</ul></section>').join('')
+      (groups.length ? groups.map((g) => '<section class="panel"><header class="panel__head"><h2>' + esc(g.title) + '</h2>' + (g.title === 'Overdue' ? '' : '<span class="muted">' + esc(money(sum(g.items, (b) => b.amount))) + '</span>') + '</header><ul class="rows">' + g.items.map(rowHTML).join('') + '</ul></section>').join('')
         : '<section class="panel">' + emptyState({ icon: 'bills', title: 'No bills yet', text: 'Add your rent, energy, phone, subscriptions and anything else you pay regularly.', action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add your first bill</button>' }) + '</section>') +
       instalmentsHTML(plans) +
-      (stopped.length ? '<details class="panel panel--details"' + (showStopped ? ' open' : '') + '><summary class="panel__head"><h2>Stopped bills</h2><span class="muted">' + stopped.length + '</span></summary><ul class="rows">' + stopped.map(rowHTML).join('') + '</ul></details>' : '') +
-      '</div>' +
-      '<aside class="stack">' +
-      (catItems.length ? '<section class="panel"><header class="panel__head"><h2>Where your bills go</h2><span class="muted">per month</span></header><div class="panel__body">' + GU.charts.barList(catItems, { color: '--series-out' }) + '</div></section>' : '') +
-      '<section class="panel"><div class="panel__body tip">' + icon('info') + '<p>Bills paid by direct debit or standing order move to their next date automatically. If you also import your bank statements, leave “add to transactions” unticked when you mark a bill paid, so it isn’t counted twice.</p></div></section>' +
-      '</aside></div>';
+      (stopped.length ? '<details class="panel panel--details" data-fold="stopped"' + (showStopped ? ' open' : '') + '><summary class="panel__head"><h2>Stopped bills</h2><span class="muted">' + stopped.length + '</span></summary><ul class="rows">' + stopped.map(rowHTML).join('') + '</ul></details>' : '') +
+      (catItems.length ? '<details class="panel panel--details" data-fold="where"' + (showWhere ? ' open' : '') + '><summary class="panel__head"><h2>Where your bills go</h2><span class="muted">' + esc(plural(catItems.length, 'category', 'categories') + ', per month') + '</span></summary><div class="panel__body">' + GU.charts.barList(catItems, { color: '--series-out' }) + '</div></details>' : '') +
+      '<p class="privacy-note bills-note">' + icon('info') + '<span>Direct debits and standing orders roll on by themselves. Bills you pay by hand wait on your Overview until you mark them paid. If you also import your bank statements, leave “add to transactions” unticked when you do, so it isn’t counted twice.</span></p>' +
+      '</div>';
 
     GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'bills', name: 'Bills' } }));
-    const det = root.querySelector('.panel--details');
-    if (det) det.addEventListener('toggle', () => (showStopped = det.open));
+    root.querySelectorAll('details[data-fold]').forEach((d) => d.addEventListener('toggle', () => {
+      if (d.dataset.fold === 'stopped') showStopped = d.open;
+      else showWhere = d.open;
+    }));
     root.addEventListener('click', (e) => {
       if (e.target.closest('[data-add]')) return create();
       if (e.target.closest('[data-scan]')) return GU.recurring.scan();

@@ -14,7 +14,9 @@
     'Education and qualifications', 'Employment and payslips', 'Contract or agreement', 'Tax', 'Insurance policy', 'Home and tenancy',
     'Vehicle', 'Medical and health', 'Bank, savings and pension', 'Legal (will, power of attorney)', 'Other',
   ];
-  const ui = { type: 'all', q: '' };
+  /* open / shut: the type groups you've opened or closed yourself, kept here so a redraw doesn't undo them. */
+  const ui = { type: 'all', q: '', open: new Set(), shut: new Set() };
+  const OPEN_GROUPS = 3; // the first groups with documents in them start open, the rest are a line with their count
   const revealed = new Set();
   const isWork = (d) => (GU.parts ? GU.parts.isWorkDoc(d) : !!d && d.context === 'work');
   const workDocsTab = () => (GU.tabs['work-docs'] ? 'work-docs' : 'work');
@@ -41,14 +43,15 @@
     return pill('Valid until ' + fmtDate(d.expiryDate, { short: true }), 'good', 'check');
   }
 
-  function rowHTML(d) {
+  /* grouped: inside its type's group, so the type and 'No expiry' (most of them) aren't said on every row. */
+  function rowHTML(d, grouped) {
     const ref = d.reference ? '<span class="ref">' + esc(revealed.has(d.id) ? d.reference : mask(d.reference)) +
       ' <button type="button" class="link link--btn" data-reveal="' + esc(d.id) + '">' + (revealed.has(d.id) ? 'Hide' : 'Show') + '</button></span>' : '';
     return '<li class="doc-row">' +
       '<button type="button" class="doc-row__thumb" data-view="' + esc(d.id) + '" aria-label="' + (d.files && d.files.length ? 'View scans of ' : 'Add a scan to ') + esc(d.title) + '">' + thumbHTML(d.files) + '</button>' +
       '<div class="doc-row__main"><button type="button" class="doc-row__title" data-edit="' + esc(d.id) + '"><b>' + esc(d.title) + '</b></button>' +
       '<em>' + esc([d.holder, d.location ? 'Kept: ' + d.location : '', d.folder ? 'Folder: ' + d.folder : ''].filter(Boolean).join(' · ')) + (ref ? (d.holder || d.location || d.folder ? ' · ' : '') + ref : '') + '</em>' +
-      '<span class="doc-row__chips">' + pill(d.type || 'Other', 'muted') + expiryPill(d) + '</span></div>' +
+      '<span class="doc-row__chips">' + (grouped ? '' : pill(d.type || 'Other', 'muted')) + (grouped && !d.expiryDate ? '' : expiryPill(d)) + '</span></div>' +
       '<span class="doc-row__end"><span class="doc-row__btns">' + GU.ui.dlButton(d.files, d.title) + '<button type="button" class="icon-btn" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.title) + '">' + icon('edit') + '</button></span></span></li>';
   }
 
@@ -61,7 +64,10 @@
     const present = TYPES.filter((t) => docs.some((d) => d.type === t));
     const q = ui.q.toLowerCase();
     const list = docs.filter((d) => (ui.type === 'all' || d.type === ui.type) && (!q || [d.title, d.holder, d.type, d.location, d.notes].join(' ').toLowerCase().includes(q)));
-    const grouped = TYPES.map((t) => ({ type: t, items: list.filter((d) => (d.type || 'Other') === t) })).filter((g) => g.items.length);
+    // A document that's due for renewal is listed under Renew soon; it isn't repeated in its type below, unless you're searching or looking at one type.
+    const dedupe = ui.type === 'all' && !q;
+    const soonIds = new Set(soon.map((d) => d.id));
+    const grouped = TYPES.map((t) => ({ type: t, items: list.filter((d) => (d.type || 'Other') === t && !(dedupe && soonIds.has(d.id))) })).filter((g) => g.items.length);
 
     root.innerHTML = GU.view.head({
       eyebrow: 'Paperwork',
@@ -74,14 +80,22 @@
       (soon.length ? '<section class="panel panel--alert"><header class="panel__head"><h2>' + icon('alert') + 'Renew soon</h2></header><ul class="doc-rows">' + soon.map(rowHTML).join('') + '</ul></section>' : '') +
       '<div class="toolbar">' + chips('type', [{ value: 'all', label: 'All', count: docs.length }].concat(present.map((t) => ({ value: t, label: t, count: docs.filter((d) => d.type === t).length }))), ui.type) +
       '<label class="search">' + icon('search') + '<input type="search" id="doc-search" placeholder="Search documents" value="' + esc(ui.q) + '" aria-label="Search documents"></label></div>' +
-      (grouped.length ? grouped.map((g) => '<section class="panel"><header class="panel__head"><h2>' + esc(g.type) + '</h2><span class="muted">' + g.items.length + '</span></header><ul class="doc-rows">' + g.items.map(rowHTML).join('') + '</ul></section>').join('')
-        : '<section class="panel">' + emptyState({ icon: 'folder', title: docs.length ? 'Nothing matches' : 'No documents yet', text: docs.length ? 'Try another search.' : 'Start with your passport, driving licence and tenancy or mortgage papers.', action: docs.length ? '' : '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a document</button>' }) + '</section>') +
+      (grouped.length ? grouped.map((g, i) => {
+        // Looking for something (a search, or one type chosen) opens what matches; otherwise the first few groups are open.
+        const auto = !!q || ui.type !== 'all' || i < OPEN_GROUPS;
+        const isOpen = ui.open.has(g.type) || (!ui.shut.has(g.type) && auto);
+        return '<section class="panel doc-group' + (isOpen ? ' is-open' : '') + '"><h2 class="doc-group__h"><button type="button" class="doc-group__btn" data-group="' + esc(g.type) + '" aria-expanded="' + isOpen + '">' + icon('chevron') +
+          '<span class="doc-group__name">' + esc(g.type) + '</span><span class="muted">' + g.items.length + '</span></button></h2>' +
+          (isOpen ? '<ul class="doc-rows">' + g.items.map((d) => rowHTML(d, true)).join('') + '</ul>' : '') + '</section>';
+      }).join('')
+        : dedupe && list.length ? '' : '<section class="panel">' + emptyState({ icon: 'folder', title: docs.length ? 'Nothing matches' : 'No documents yet', text: docs.length ? 'Try another search.' : 'Start with your passport, driving licence and tenancy or mortgage papers.', action: docs.length ? '' : '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a document</button>' }) + '</section>') +
       '<p class="privacy-note">' + icon('lock') + 'Documents and scans are stored only in this browser. Reference numbers are hidden until you tap Show.</p>';
 
     GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'documents', name: 'Important documents' } }));
     const search = root.querySelector('#doc-search');
     search.addEventListener('input', debounce(() => {
       ui.q = search.value;
+      ui.shut.clear();
       GU.render();
       const again = document.getElementById('doc-search');
       if (again) {
@@ -93,6 +107,15 @@
       const c = e.target.closest('[data-chip]');
       if (c) {
         ui.type = c.dataset.value;
+        ui.shut.clear();
+        return GU.render();
+      }
+      const grp = e.target.closest('[data-group]');
+      if (grp) {
+        const k = grp.dataset.group;
+        const now = grp.getAttribute('aria-expanded') === 'true';
+        ui.open[now ? 'delete' : 'add'](k);
+        ui.shut[now ? 'add' : 'delete'](k);
         return GU.render();
       }
       if (e.target.closest('[data-add]')) return create({ context: 'home' });

@@ -424,15 +424,19 @@
   }
   // Money in that isn't earnings, so it's said out loud next to its total.
   const HINT = { 'c:Refunds': 'money back, not income', 'c:Savings & investments': 'savings paid out, not income', 'c:Gifts received': 'gifts, not earnings' };
+  /* Each source with its bar and total, which opens to every payment in it (the dates and amounts behind the figure). */
   function sourcesHTML(sm) {
     if (!sm.groups.length) return '';
-    const items = sm.groups.map((g) => ({
-      label: g.label, value: g.total,
-      note: plural(g.count, 'payment') + (g.kind === 'unsorted' ? ' · needs a category' : HINT[g.key] ? ' · ' + HINT[g.key] : ''),
-    }));
-    return '<section class="panel ty-sources"><header class="panel__head"><h2>Income by source</h2><span class="muted">' + esc(money(sm.total)) + ' in all</span></header>' +
-      '<div class="panel__body">' + GU.charts.barList(items, { color: '--series-in' }) +
-      (sm.paper ? '<p class="field__help">' + esc(money(sm.paper) + ' of this is from invoices you sent that were paid but aren’t in your bank records.') + '</p>' : '') + '</div></section>';
+    const max = Math.max(1, ...sm.groups.map((g) => g.total));
+    return '<section class="panel ty-sources"><header class="panel__head"><h2>Income by source</h2><span class="muted">open a source to see each payment</span></header>' +
+      sm.groups.map((g) => {
+        const key = sm.year.key + '|' + g.key;
+        const note = plural(g.count, 'payment') + (g.kind === 'unsorted' ? ' · needs a category' : HINT[g.key] ? ' · ' + HINT[g.key] : '');
+        return '<details class="ty-src" data-key="' + esc(key) + '"' + (ui.open.has(key) ? ' open' : '') + '><summary><span class="ty-src__name">' + esc(g.label) + '</span>' +
+          '<span class="ty-src__track" aria-hidden="true"><i style="width:' + Math.max(0, (g.total / max) * 100) + '%"></i></span>' +
+          '<span class="ty-src__val"><b>' + esc(money(g.total)) + '</b><small>' + esc(note) + '</small></span></summary>' + linesTable(g.lines) + '</details>';
+      }).join('') +
+      (sm.paper ? '<p class="field__help ty-sources__paper">' + esc(money(sm.paper) + ' of this is from invoices you sent that were paid but aren’t in your bank records.') + '</p>' : '') + '</section>';
   }
   function monthsHTML(sm) {
     if (!sm.months.length) return '';
@@ -450,11 +454,6 @@
     return '<div class="table-wrap"><table class="tbl tbl--compact"><thead><tr><th>Date</th><th>From</th><th class="num">Amount</th></tr></thead><tbody>' +
       lines.map((l) => '<tr><td class="nowrap">' + esc(long(l.date)) + '</td><td class="wrap">' + esc(l.desc || '') + ((l.paper || l.inv) ? ' ' + pill('Invoice', 'info') : '') + '</td><td class="num">' + esc(money(l.amount)) + '</td></tr>').join('') +
       '</tbody></table></div>';
-  }
-  function listsHTML(sm) {
-    if (!sm.groups.length) return '';
-    return '<section class="panel ty-lists"><header class="panel__head"><h2>Dates and amounts</h2><span class="muted">open a source to see each payment</span></header>' +
-      sm.groups.map((g) => '<details class="ty-src" data-key="' + esc(sm.year.key + '|' + g.key) + '"' + (ui.open.has(sm.year.key + '|' + g.key) ? ' open' : '') + '><summary><span class="ty-src__name">' + esc(g.label) + '</span><span class="muted">' + esc(plural(g.count, 'payment')) + '</span><b>' + esc(money(g.total)) + '</b></summary>' + linesTable(g.lines) + '</details>').join('') + '</section>';
   }
   function invoicesHTML(sm) {
     if (!sm.invoices.length) return '';
@@ -486,7 +485,7 @@
         action: sm.cover.first ? '' : '<button type="button" class="btn btn--primary" data-import>' + icon('upload') + 'Import a statement</button>' }) + '</section>';
     }
     return ledgerHTML(sm) +
-      '<div class="cols cols--main-side"><div class="stack">' + sourcesHTML(sm) + monthsHTML(sm) + listsHTML(sm) + invoicesHTML(sm) + '</div>' +
+      '<div class="cols cols--main-side"><div class="stack">' + sourcesHTML(sm) + monthsHTML(sm) + invoicesHTML(sm) + '</div>' +
       '<aside class="stack">' + workHTML(s, sm) + coverHTML(sm) + '</aside></div>';
   }
 

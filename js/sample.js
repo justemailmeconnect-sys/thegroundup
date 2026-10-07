@@ -227,15 +227,11 @@
       { id: 'pj-' + uid(), name: 'New staff rota', client: 'Acme Care', status: 'In progress', start: d(-9), deadline: d(6), notes: 'Everyone on the rota app by the end of the month.', files: [], created: d(-20), demo: true },
       { id: 'pj-' + uid(), name: 'Get ready for the next inspection', status: 'Idea', notes: 'Training records and policies in one folder.', files: [], created: d(-5), demo: true },
     ];
-    // Ideas to cost. Home ones are in Home › Plans; work ones in Work › Cost forecast, by who pays.
-    const idea = (o) => Object.assign({ id: 'ci-' + uid(), status: 'open', files: [], demo: true }, o);
+    // Ideas to save for: your own, in Home › Plans. (What the business wants you to get is in Work › To buy.)
+    const idea = (o) => Object.assign({ id: 'ci-' + uid(), context: 'home', status: 'open', files: [], demo: true }, o);
     const costIdeas = [
-      idea({ context: 'home', name: 'New laptop', cost: 1200, priority: 'must', wantBy: d(75), notes: 'The old one is slowing down.', created: d(-6) }),
-      idea({ context: 'home', name: 'Weekend in Lisbon', cost: 450, priority: 'could', wantBy: d(120), created: d(-3) }),
-      idea({ context: 'work', payer: 'company', name: 'Sign-in tablet for reception', cost: 350, priority: 'should', projectId: projects[0].id, wantBy: d(55), created: d(-4) }),
-      idea({ context: 'work', payer: 'company', name: 'Stand at the care show', cost: 2400, priority: 'could', wantBy: d(150), created: d(-1) }),
-      idea({ context: 'work', payer: 'me', name: 'First aid course', cost: 95, priority: 'should', wantBy: d(30), notes: 'I’ll book it and claim it back.', created: d(-2) }),
-      idea({ context: 'work', name: 'Label printer', cost: 60, priority: 'could', created: d(-2) }),
+      idea({ name: 'New laptop', cost: 1200, priority: 'must', wantBy: d(75), notes: 'The old one is slowing down.', created: d(-6) }),
+      idea({ name: 'Weekend in Lisbon', cost: 450, priority: 'could', wantBy: d(120), created: d(-3) }),
     ];
     const workNotes = [
       { id: 'wn-' + uid(), area: 'projects', folder: officeFolder.id, title: 'Call with the landlord', body: 'Keys on the 1st. Two parking spaces.\nSend the signed lease back by Friday.', created: d(-3), updated: d(-3), demo: true },
@@ -275,12 +271,16 @@
           new_section_name: 'Kids & school', task_title: 'Pay £35 and sign consent slip for school trip', task_due: d(16), notes: null, via: 'offline' } }, D),
     ];
     const byTitle = (title) => (paperwork.find((p) => p.title === title) || {}).id;
-    // Things the business has asked you to get (Work › To buy): two to order, one on its way, and one bought (its receipt is the lunch claim above).
-    const ask = (o) => Object.assign({ id: 'rq-' + uid(), note: '', link: '', estimate: null, qty: 1, askedDate: t, needBy: '', payer: 'me', status: 'asked', orderedDate: '', boughtDate: '', paperId: '' }, D, o);
+    // Things the business has asked you to get (Work › To buy), with what they come to: several to order (one with no price yet),
+    // one on its way, and one bought (its receipt is the lunch claim above). The price is for one; qty × price is the line.
+    const ask = (o) => Object.assign({ id: 'rq-' + uid(), note: '', link: '', estimate: null, priceEach: true, qty: 1, askedDate: t, needBy: '', payer: 'me', status: 'asked', orderedDate: '', boughtDate: '', paperId: '' }, D, o);
     const requests = [
       ask({ title: 'Printer toner', note: 'The black XL one for the office printer.', estimate: 35, askedDate: d(-2), needBy: d(2) }),
-      ask({ title: 'Nitrile gloves', note: 'Medium, two boxes.', estimate: 24, qty: 2, askedDate: d(-1), needBy: d(8), link: 'https://www.example.com/products/nitrile-gloves-medium-100-pack' }),
-      ask({ title: 'Fire exit signs', note: 'Going on the company card.', estimate: 28, askedDate: d(-1), needBy: d(15), payer: 'company' }),
+      ask({ title: 'Nitrile gloves', note: 'Medium, two boxes.', estimate: 12, qty: 2, askedDate: d(-1), needBy: d(8), link: 'https://www.example.com/products/nitrile-gloves-medium-100-pack' }),
+      ask({ title: 'Fire exit signs', note: 'Going on the company card.', estimate: 14, qty: 2, askedDate: d(-1), needBy: d(15), payer: 'company' }),
+      ask({ title: 'Sign-in tablet for reception', note: 'For visitors to sign in. The business is buying it.', estimate: 350, askedDate: d(-4), needBy: d(40), payer: 'company' }),
+      ask({ title: 'First aid course', note: 'I’ll book it and claim it back.', estimate: 95, askedDate: d(-2), needBy: d(25) }),
+      ask({ title: 'Label printer', askedDate: d(-2) }),
       ask({ title: 'Cleaning supplies for the new office', estimate: 64, askedDate: d(-6), needBy: d(5), status: 'ordered', orderedDate: d(-3) }),
       ask({ title: 'Lunch for the training day', estimate: 20, askedDate: d(-5), needBy: d(-2), status: 'bought', boughtDate: d(-2), paperId: byTitle('Lunch for the training day') }),
     ];

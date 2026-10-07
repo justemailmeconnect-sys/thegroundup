@@ -203,7 +203,7 @@
   }
 
   /* Which Work page each area of the work checks belongs to. */
-  const WORK_TABS = { tasks: 'work-tasks', invoices: 'work-ktk', back: 'work-back', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', costs: 'work-costs', requests: 'work-requests' };
+  const WORK_TABS = { tasks: 'work-tasks', invoices: 'work-ktk', back: 'work-back', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', requests: 'work-requests' };
 
   /* Red/amber counts shown on each tab in the rail. Home pages count Home things only; Work pages count the
      work checks. __home and __work are the totals for each half of the Home | Work switch. */

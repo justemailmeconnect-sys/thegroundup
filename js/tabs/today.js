@@ -10,6 +10,9 @@
   const store = GU.store;
 
   let horizon = 14;
+  /* Money ahead lists this many payments, then 'Show all'. Reset when you change the period. */
+  const AHEAD_FIRST = 8;
+  let aheadAll = false;
 
   /* The employer's short name for sentences ('KTK'), or 'the company' when none is set. */
   const co = (s, cap) => (GU.parts && GU.parts.co ? GU.parts.co(s, cap) : cap ? 'The company' : 'the company');
@@ -134,9 +137,14 @@
     const d = W.dueBack(s);
     if (!(d.total > 0) && !d.count) return '';
     const late = d.amber && d.oldest;
-    return '<button type="button" class="now-card now-card--owed now-card--back' + (late ? ' is-warn' : '') + '" data-claims><span>Due back from ' + esc(co(s)) + '</span><b>' + esc(money(d.total)) + '</b><em>' +
-      esc(money(d.toSendTotal) + ' not sent · ' + money(d.sentTotal) + ' waiting') +
-      (late ? '<i>' + icon('clock') + esc('Oldest not sent ' + plural(d.oldest.days, 'day') + ' ago') + '</i>' : '') + '</em></button>';
+    const c = co(s);
+    // One card: what's due back, and (while some of it hasn't been sent) the way to send it. Money not sent yet isn't in Money ahead.
+    return '<div class="now-card now-card--owed now-card--back now-card--split' + (late ? ' is-warn' : '') + '"><div class="now-card__in">' +
+      '<button type="button" class="now-card__main" data-claims><span>Due back from ' + esc(c) + '</span><b>' + esc(money(d.total)) + '</b><em>' +
+      esc([d.toSendTotal > 0 ? money(d.toSendTotal) + ' not sent' : '', d.sentTotal > 0 ? money(d.sentTotal) + ' waiting' : ''].filter(Boolean).join(' · ') || 'nothing to send') +
+      (late ? '<i>' + icon('clock') + esc('Oldest not sent ' + plural(d.oldest.days, 'day') + ' ago') + '</i>' : '') + '</em></button>' +
+      (d.toSendTotal > 0 ? '<button type="button" class="btn btn--sm btn--soft now-card__send" data-send-back title="' + esc('Not counted in Money ahead until you send it') + '">' + icon('send') + esc('Send to ' + c) + '</button>' : '') +
+      '</div></div>';
   }
 
   function nowHTML(s) {
@@ -165,6 +173,25 @@
       '</div></section>';
   }
 
+  /* The warnings under the totals. An account that would go past its overdraft gets its own red line (with what to do).
+     The ones that only dip below zero, inside their overdraft, share one amber line, so two accounts are not two banners. */
+  function overdraftWarnings(plan) {
+    const dips = plan.accounts.filter((a) => a.low < 0);
+    const past = dips.filter((a) => a.low < -a.limit);
+    const inside = dips.filter((a) => a.low >= -a.limit);
+    const line = (cls, text) => '<li class="' + cls + '">' + icon('alert') + '<span>' + esc(text) + '</span></li>';
+    const out = past.map((a) => line('is-crit', a.name + ' would go ' + money(-a.low - a.limit) + ' past its ' + money(a.limit, { whole: true }) + ' overdraft limit by ' + fmtDate(a.lowDate, { weekday: true }) + '. Move money across before then.'));
+    if (inside.length === 1) {
+      const a = inside[0];
+      out.push(line('is-warn', a.name + ' stays overdrawn, lowest ' + money(a.low) + ' on ' + fmtDate(a.lowDate, { short: true }) + (a.limit ? ' (' + money(a.limit + a.low) + ' of overdraft left)' : '') + '.'));
+    } else if (inside.length > 1) {
+      const lead = past.length ? 'Also below zero' : inside.length === 2 ? 'Both accounts dip below zero' : 'All ' + inside.length + ' accounts dip below zero';
+      const list = inside.map((a, i) => a.name + (i ? ' ' : ' lowest ') + money(a.low, { whole: true }) + ' on ' + fmtDate(a.lowDate, { short: true })).join(', ');
+      out.push(line('is-warn', lead + ': ' + list + ', inside your overdrafts.'));
+    }
+    return out;
+  }
+
   function aheadHTML(s, t) {
     const win = windowFor(t);
     const plan = GU.forecast.plan(s, { to: win.to });
@@ -176,17 +203,13 @@
     const endShown = ev.length ? ev[ev.length - 1].after : startShown;
     const inn = sum(ev.filter((e) => e.amount > 0), (e) => e.amount);
     const out = sum(ev.filter((e) => e.amount < 0), (e) => -e.amount);
-    const warns = plan.accounts.filter((a) => a.low < 0).map((a) => {
-      const past = a.low < -a.limit;
-      return '<li class="' + (past ? 'is-crit' : 'is-warn') + '">' + icon('alert') + '<span>' + esc(past
-        ? a.name + ' would go ' + money(-a.low - a.limit) + ' past its ' + money(a.limit, { whole: true }) + ' overdraft limit by ' + fmtDate(a.lowDate, { weekday: true }) + '. Move money across before then.'
-        : a.name + ' stays overdrawn, lowest ' + money(a.low) + ' on ' + fmtDate(a.lowDate, { short: true }) + (a.limit ? ' (' + money(a.limit + a.low) + ' of overdraft left)' : '') + '.') + '</span></li>';
-    });
+    const warns = overdraftWarnings(plan);
     const step = Math.max(1, Math.round(days.length / 4));
     const labels = [];
     for (let i = 0; i < days.length; i += step) labels.push({ i, text: fmtDate(days[i].date, { short: true }) });
+    const shownEv = aheadAll ? ev : ev.slice(0, AHEAD_FIRST);
     const groups = new Map();
-    for (const e of ev) {
+    for (const e of shownEv) {
       if (!groups.has(e.date)) groups.set(e.date, []);
       groups.get(e.date).push(e);
     }
@@ -204,35 +227,30 @@
         plural(plan.owedNotCounted.length, 'invoice') + (plan.owedNotCounted.every((x) => x.late) ? ' that ' + (plan.owedNotCounted.length > 1 ? 'are' : 'is') + ' late' : ' that ' + (plan.owedNotCounted.length > 1 ? 'are' : 'is') + ' late or ' + (plan.owedNotCounted.length > 1 ? 'have' : 'has') + ' no due date') +
         ' isn’t counted here until it’s paid.') + ' <button type="button" class="link link--btn" data-owed>See them</button></span></p>' : '') +
       reclaimNote(plan) +
-      (days.length > 2 && ev.length ? '<div class="panel__body ahead__chart">' + GU.charts.line(days.map((d) => ({ value: d.value, tip: fmtDate(d.date, { weekday: true }) + ': ' + money(d.value) })), { height: 150, labels, color: '--series-in' }) + '</div>' : '') +
+      (days.length > 2 && ev.length ? '<div class="panel__body ahead__chart">' + GU.charts.line(days.map((d) => ({ value: d.value, tip: fmtDate(d.date, { weekday: true }) + ': ' + money(d.value) })), { height: 120, labels, color: '--series-in' }) + '</div>' : '') +
       (ev.length ? '<ol class="flow">' + Array.from(groups).map(([d, items]) => '<li class="flow-day' + (d === t ? ' is-today' : '') + '"><h3>' + esc(d === t ? 'Today' : fmtDate(d, { weekday: true })) + '</h3><ul>' +
         items.map((e) => '<li class="flow-row' + (e.amount > 0 ? ' is-in' : '') + (e.review || e.rough || e.soft ? ' is-soft' : '') + '"><span class="kind kind--' + (e.kind === 'income' || e.kind === 'owed' || e.kind === 'reclaim' ? 'income' : e.kind === 'debt' ? 'debt' : 'bill') + '">' + esc(KIND_LABEL[e.kind] || '') + '</span>' +
           '<button type="button" class="flow-row__main" ' + (e.kind === 'reclaim' && e.tab ? 'data-go="' + esc(e.tab) + '"' : 'data-open="' + esc(e.ref.c + ':' + e.ref.id) + '"') + '><b>' + esc(e.label) + '</b><em>' + esc((e.overdue ? 'Overdue · ' : '') + (e.sub || '')) + '</em></button>' +
           '<span class="flow-row__amt">' + esc(money(e.amount, { sign: true })) + '</span><span class="flow-row__after' + (e.after < 0 ? ' is-neg' : '') + '">' + esc(money(e.after)) + '</span></li>').join('') + '</ul></li>').join('') + '</ol>'
         : '<div class="panel__body"><p class="muted">Nothing expected in this period yet. Add your income, bills and payment schedules and I’ll plan around them.</p></div>') +
+      (ev.length > AHEAD_FIRST ? '<div class="ahead__more"><button type="button" class="btn btn--sm btn--ghost" data-ahead-all aria-expanded="' + aheadAll + '">' + (aheadAll ? 'Show the first ' + AHEAD_FIRST : 'Show all ' + ev.length) + '</button></div>' : '') +
       '<footer class="panel__foot ahead__add"><button type="button" class="btn btn--sm btn--ghost" data-add-income>' + icon('in') + 'Expected income</button>' +
       '<button type="button" class="btn btn--sm btn--ghost" data-add-bill>' + icon('bills') + 'A bill</button>' +
       '<button type="button" class="btn btn--sm btn--ghost" data-add-schedule>' + icon('card') + 'Klarna or PayPal schedule</button></footer>' +
       '</section>';
   }
 
-  /* Money your employer owes you that the plan leaves out: things not sent yet, and things sent that are
-     taking longer than usual to come back. One tap to send them. */
+  /* Money your employer owes you that the plan leaves out, apart from what you haven't sent yet (that's the Send button on the
+     Due back card): things sent that are taking longer than usual to come back, and money that's come in but isn't ticked off. */
   function reclaimNote(plan) {
     const rc = plan.reclaimNotCounted;
-    if (!rc || !(rc.total > 0 || rc.confirmTotal > 0)) return '';
+    if (!rc || !(rc.lateTotal > 0 || rc.confirmTotal > 0)) return '';
     const c = co(store.state);
-    let text;
-    if (rc.toSendTotal > 0 && rc.lateTotal > 0) text = money(rc.total) + ' ' + c + ' owes you isn’t counted here: ' + money(rc.toSendTotal) + ' you haven’t sent yet, and ' + money(rc.lateTotal) + ' that’s taking longer than usual to come back.';
-    else if (rc.toSendTotal > 0) text = money(rc.toSendTotal) + ' ' + c + ' owes you isn’t counted until you send it.';
-    else if (rc.lateTotal > 0) text = money(rc.lateTotal) + ' you sent ' + c + ' isn’t counted here, because it’s taking longer than usual to come back.';
-    else text = '';
+    let text = rc.lateTotal > 0 ? money(rc.lateTotal) + ' you sent ' + c + ' isn’t counted here, because it’s taking longer than usual to come back.' : '';
     // Paid back already, but not ticked off: it's in your balance, so it isn't counted again as still to come.
     if (rc.confirmTotal > 0) text = (text ? text + ' ' : '') + money(rc.confirmTotal) + ' from ' + c + ' has come in already. Confirm what it was for in Get paid back.';
-    const btn = rc.toSendTotal > 0
-      ? '<button type="button" class="btn btn--sm btn--soft" data-send-back>' + icon('send') + esc('Send to ' + c) + '</button>'
-      : '<button type="button" class="btn btn--sm btn--ghost" data-go="work-back">Get paid back' + icon('chevron') + '</button>';
-    return '<p class="note-line note-line--back">' + icon('coin') + '<span>' + esc(text) + '</span>' + btn + '</p>';
+    return '<p class="note-line note-line--back">' + icon('coin') + '<span>' + esc(text) + '</span>' +
+      '<button type="button" class="btn btn--sm btn--ghost" data-go="work-back">Get paid back' + icon('chevron') + '</button></p>';
   }
 
   /* The opening line, as HTML: each figure kept on one line so a sign never wraps away from its amount. */
@@ -280,12 +298,16 @@
     // Home things only: work has its own checks on Work › Overview.
     const mine = (i) => i.part !== 'work';
     const items = GU.agenda.timeline(s, horizon, 'home').filter((i) => mine(i) && !['bill', 'income', 'invoice', 'owed', 'debt', 'ktk', 'reclaim'].includes(i.kind));
-    const attention = GU.agenda.attention(s).filter((a) => mine(a) && !/need a category/.test(a.title));
+    // An overdrawn account is already a red card under Right now (and a line under Money ahead), so it isn't a third time here.
+    const onShow = new Set(GU.money.accounts(s).filter((x) => x.info).map((x) => x.account.id));
+    const shownAbove = (a) => !!a.account && onShow.has(a.account) && /(?:is|was) overdrawn by|near its overdraft limit/.test(a.title);
+    const attention = GU.agenda.attention(s).filter((a) => mine(a) && !/need a category/.test(a.title) && !shownAbove(a));
     const waiting = GU.agenda.waiting(s).filter(mine);
+    const aside = listCard('Needs attention', attention) + scheduleCard(s) + listCard('Waiting on', waiting);
 
     root.innerHTML =
       (GU.parts && GU.parts.doorsHTML ? GU.parts.doorsHTML(s, 'home') : '') +
-      '<div class="brief">' +
+      '<div class="brief' + (aside ? '' : ' brief--solo') + '">' +
       '<div class="brief__feed">' +
       '<p class="eyebrow">Home · ' + esc(fmtLongDate(t)) + '</p>' +
       '<h1 class="brief__title">' + esc(greeting() + (s.settings.name ? ', ' + s.settings.name : '')) + '. Here’s where you stand.</h1>' +
@@ -301,15 +323,13 @@
       timelineHTML(items) +
       '<button type="button" class="btn btn--ghost brief__more" data-horizon>' + (horizon === 14 ? 'Show the next 30 days' : 'Show the next 14 days only') + '</button></section>' +
       '</div>' +
-      '<aside class="brief__aside">' +
-      listCard('Needs attention', attention, 'Nothing needs your attention right now.') +
-      scheduleCard(s) +
-      listCard('Waiting on', waiting) +
-      '</aside></div>' +
+      (aside ? '<aside class="brief__aside">' + aside + '</aside>' : '') +
+      '</div>' +
       '<div class="dropcover" hidden><div>' + icon('upload') + '<b>Drop to let me sort it</b></div></div>';
 
     root.querySelectorAll('input[name="ahead-range"]').forEach((el) => el.addEventListener('change', () => {
       range = el.value;
+      aheadAll = false;
       GU.render();
     }));
     const form = root.querySelector('[data-capture]');
@@ -361,6 +381,10 @@
         else if (a.ref) GU.view.open(a.ref);
         else GU.view.go(a.tab, a.go ? { filter: a.go } : null);
         return;
+      }
+      if (e.target.closest('[data-ahead-all]')) {
+        aheadAll = !aheadAll;
+        return GU.render();
       }
       if (e.target.closest('[data-balances]')) return GU.tabs.transactions.updateBalances();
       if (e.target.closest('[data-owed]')) return GU.tabs.receipts.showOwed ? GU.tabs.receipts.showOwed() : GU.view.go('receipts');

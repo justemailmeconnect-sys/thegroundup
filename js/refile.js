@@ -985,52 +985,6 @@
       options: [opt('claim', 'Claim it back'), opt('mine', 'Mine')] }];
   }
 
-  /* 8. Cost ideas with no payer: the employer's, yours to claim back, or just yours. The suggestion comes from
-     which of your records share their words; with no clue, the employer pays. */
-  function qIdeas(f) {
-    const { s, co, Co, tx, emp } = f;
-    const ideas = (s.costIdeas || []).filter((i) => i && !i.payer && i.context !== 'home' && i.status !== 'done' && i.status !== 'dropped');
-    if (!ideas.length) return [];
-    const home = new Set();
-    const work = new Set();
-    const put = (set, text) => words(text).forEach((w) => !emp.has(w) && set.add(w));
-    for (const p of s.paperwork || []) put(p.context === 'work' ? work : home, (p.party || '') + ' ' + (p.title || ''));
-    for (const t of tx) {
-      if (t.category === TRANSFER) continue;
-      put(WORK.includes(t.category) ? work : home, t.description);
-    }
-    const isWorkBill = GU.parts && GU.parts.isWorkBill ? GU.parts.isWorkBill : (b) => b.context === 'work';
-    for (const b of s.bills || []) put(isWorkBill(b) ? work : home, b.name);
-    for (const x of s.sectionItems || []) put(home, (x.title || '') + ' ' + (x.party || ''));
-    for (const d of s.documents || []) put(d.context === 'work' ? work : home, d.title);
-    for (const d of s.debts || []) put(home, d.name);
-    const isWorkTask = GU.parts && GU.parts.isWorkTask ? (t) => GU.parts.isWorkTask(s, t) : (t) => t.context === 'work';
-    for (const t of s.tasks || []) put(isWorkTask(t) ? work : home, t.title);
-    for (const p of s.projects || []) put(work, p.name || p.title);
-    const items = ideas.map((i) => {
-      const iw = words((i.name || '') + ' ' + (i.notes || ''));
-      const h = iw.filter((w) => home.has(w)).length;
-      const k = iw.filter((w) => work.has(w)).length;
-      const mine = h > k;
-      const setTo = (context, payer) => (st, tr) => {
-        const x = findIn(st, 'costIdeas', i.id);
-        if (!x) return;
-        tr.set('costIdeas', x, 'context', context);
-        tr.set('costIdeas', x, 'payer', payer);
-      };
-      const cost = money(Number(i.cost) || 0, { whole: true }) + (Number(i.monthly) ? ' + ' + money(Number(i.monthly), { whole: true }) + ' a month' : '');
-      return { key: 'idea:' + i.id, ref: { c: 'costIdeas', id: i.id }, amount: Number(i.cost) || 0, label: clean(i.name) + ' · ' + cost,
-        detail: mine ? 'It sounds like one of your own things.' : '',
-        options: [Object.assign(opt('company', Co + ' pays', setTo('work', 'company')), { suggested: !mine }),
-          opt('me', 'I pay, get it back', setTo('work', 'me')),
-          Object.assign(opt('home', 'Mine', setTo('home', undefined), { hint: 'Moves it to Home › Plans' }), { suggested: mine })] };
-    });
-    return [{ key: 'ideas', kind: 'ideas', items,
-      title: 'Your ' + plural(ideas.length, 'cost idea') + ': who pays?',
-      detail: 'Ideas ' + co + ' pays for aren’t planned on your money.',
-      options: [opt('company', Co + ' pays'), opt('me', 'I pay, get it back'), opt('home', 'Mine')] }];
-  }
-
   /* 9. A to-do to pay something that's already paid and in Get paid back. */
   const AMOUNT = /£\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/g;
   function qTasks(f) {
@@ -1092,7 +1046,7 @@
       })), opt('keep', 'Keep')] }];
   }
 
-  const MAKERS = [qMerge, qDupes, qForeign, qSentBack, qRepaid, qUnmatched, qMaybeWork, qIdeas, qTasks, qWages];
+  const MAKERS = [qMerge, qDupes, qForeign, qSentBack, qRepaid, qUnmatched, qMaybeWork, qTasks, qWages];
   let qCache = null;
   /* The questions still open: [{key, kind, title, detail, options:[{id, label, suggested, apply(st, tr)}], items?}].
      A question with items (several things to decide, each one tap) has items [{key, label, detail, options}];

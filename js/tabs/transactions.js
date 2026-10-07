@@ -298,7 +298,7 @@
     root.innerHTML = GU.view.head({
       eyebrow: 'Money so far',
       title: 'Bank transactions',
-      text: 'Every payment in and out of your accounts, with each account’s balance worked out from your statements. Import statements from your bank and I’ll sort each line into a category.',
+      text: 'Every payment in and out of your accounts, with each account’s balance worked out from your statements. I sort each line into a category.',
       actions: (s.transactions.length || s.accounts.length > 1 ? '<button type="button" class="btn" data-balances>' + icon('coin') + 'Update balances</button>' : '') +
         '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button>' +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add transaction</button>',

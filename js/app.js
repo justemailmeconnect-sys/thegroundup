@@ -237,6 +237,15 @@
       }
       return 'today';
     }
+    // The Cost forecast page was folded into To buy (the old ideas are offered there): old links open it.
+    if (id === 'work-costs' && !GU.tabs['work-costs'] && GU.tabs['work-requests']) {
+      try {
+        history.replaceState(null, '', '#work-requests');
+      } catch (e) {
+        /* the address bar just stays as it is */
+      }
+      return 'work-requests';
+    }
     if (GU.tabs[id]) return id;
     const start = PARTS[parts.partOf(id) === 'work' ? 'work' : part].start;
     return GU.tabs[start] ? start : 'today';

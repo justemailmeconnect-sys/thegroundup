@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   const GU = window.GU;
-  const { esc, uid, today, money, fmtDate, relDays, daysUntil, sum, plural, debounce } = GU.util;
+  const { esc, uid, today, money, fmtDate, relDays, daysUntil, sum, plural, debounce, monthLabel, shiftMonth } = GU.util;
   const { icon, pill, emptyState, chips, formDialog, toast, thumbHTML, viewFiles } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
@@ -17,7 +17,12 @@
   ];
   const KIND_SHORT = { receipt: 'Receipt', 'invoice-in': 'Invoice', 'invoice-out': 'Sent invoice', warranty: 'Warranty' };
   const FILTERS = ['all', 'receipt', 'to-pay', 'owed', 'paid', 'warranty'];
-  const ui = { filter: 'all', q: '' };
+  /* months: which months are open once you've opened them (open) or shut them (shut), and how many rows each shows (shown).
+     They live here, not in the page, so they're still as you left them when the page redraws. */
+  const ui = { filter: 'all', q: '', open: new Set(), shut: new Set(), shown: {} };
+  const FIRST_ROWS = 40; // rows an open month shows, then 'Show 40 more'
+  const SEARCH_ROWS = 60; // while searching or filtering, months open (newest first) until about this many rows are showing
+  const FLAT = ['to-pay', 'owed', 'warranty']; // lists of things to act on: kept in one list in their own order, not by month
 
   /* ---------- home or work ---------- */
   const WORK_OUT = F.WORK_OUT || 'Work expenses';
@@ -137,8 +142,7 @@
       '<div><span>Due in the next 30 days</span><b>' + esc(money(sum(soon, (x) => x.left))) + '</b><em>' + esc(soon.length ? plural(soon.length, 'invoice') : 'nothing due soon') + '</em></div>' +
       '<div><span>Paid to you since ' + esc(fmtDate(ty, { short: true })) + '</span><b>' + esc(money(got)) + '</b><em>this tax year</em></div>' +
       '</div>' +
-      '<ol class="tally__list">' + rows.join('') + '</ol>' +
-      '<footer class="tally__foot"><span>Total owed to you</span><b class="is-in">' + esc(money(total)) + '</b></footer></section>';
+      '<ol class="tally__list">' + rows.join('') + '</ol></section>';
   }
 
   /* One line pointing to Work, where the business's paperwork and the things you paid for it live now. */
@@ -161,6 +165,45 @@
     return null;
   }
 
+  /* ---------- the list: by month, newest first ---------- */
+  const monthOf = (p) => (p.date || '').slice(0, 7) || 'none';
+  const monthName = (k) => (k === 'none' ? 'No date' : monthLabel(k, true));
+  function moreRow(key, shown, total) {
+    return '<div class="rc-more"><button type="button" class="btn btn--sm btn--ghost" data-more="' + esc(key) + '">Show ' + Math.min(FIRST_ROWS, total - shown) + ' more</button><span class="muted">' + shown + ' of ' + total + '</span></div>';
+  }
+  /* The matching records as months. This month and last are open; older months are a line with their count and total, and open
+     when you click them. While you search or filter, the months with matches open (newest first, until there's a screenful),
+     so what you were looking for is showing. A month you've opened or shut yourself stays that way. */
+  function listHTML(list, t) {
+    if (FLAT.includes(ui.filter)) {
+      const n = ui.shown.flat || FIRST_ROWS;
+      return '<ul class="doc-rows">' + list.slice(0, n).map(rowHTML).join('') + '</ul>' + (list.length > n ? moreRow('flat', n, list.length) : '');
+    }
+    const by = new Map();
+    for (const p of list) {
+      const k = monthOf(p);
+      if (!by.has(k)) by.set(k, []);
+      by.get(k).push(p);
+    }
+    const keys = Array.from(by.keys()).sort((a, b) => (a === 'none' ? 1 : b === 'none' ? -1 : b.localeCompare(a)));
+    const prev = shiftMonth(t.slice(0, 7), -1);
+    const filtering = !!ui.q.trim() || ui.filter !== 'all';
+    let used = 0;
+    return keys.map((k) => {
+      const items = by.get(k);
+      // This month, last month and anything dated later, plus what has no date yet, start open.
+      const auto = filtering ? used === 0 || used + Math.min(items.length, FIRST_ROWS) <= SEARCH_ROWS : k === 'none' || k >= prev;
+      const isOpen = ui.open.has(k) || (!ui.shut.has(k) && auto);
+      const n = ui.shown[k] || FIRST_ROWS;
+      if (isOpen) used += Math.min(items.length, n);
+      const total = sum(items, (p) => Number(p.amount) || 0);
+      return '<section class="rc-month' + (isOpen ? ' is-open' : '') + '"><h2 class="rc-month__h"><button type="button" class="rc-month__btn" data-month="' + esc(k) + '" aria-expanded="' + isOpen + '">' + icon('chevron') +
+        '<span class="rc-month__name">' + esc(monthName(k)) + '</span> <span class="rc-month__n">' + esc(items.length + (filtering ? (items.length === 1 ? ' match' : ' matches') : items.length === 1 ? ' item' : ' items')) + '</span> ' +
+        (total ? '<span class="rc-month__sum">' + esc(money(total)) + '</span>' : '') + '</button></h2>' +
+        (isOpen ? '<ul class="doc-rows">' + items.slice(0, n).map(rowHTML).join('') + '</ul>' + (items.length > n ? moreRow(k, n, items.length) : '') : '') + '</section>';
+    }).join('');
+  }
+
   function render(root) {
     const s = store.state;
     const t = today();
@@ -179,6 +222,20 @@
       { value: 'owed', label: 'Owed to me' }, { value: 'paid', label: 'Paid invoices' }, { value: 'warranty', label: 'Warranties' },
     ].map((o) => Object.assign(o, { count: counts[o.value] }));
 
+    // The four figures only when there's something to pay, collect or keep an eye on; otherwise one line says so.
+    const ledgerHTML = () => {
+      if (!toPay.length && !owed.length && !warranties.length) {
+        return '<p class="summary-line">' + esc('Nothing to pay, and nobody owes you. ' + plural(all.length, 'item') + ' filed, ' + thisMonth.length + ' this month.') + '</p>';
+      }
+      const late = (list) => list.filter((p) => p.dueDate && p.dueDate < t).length;
+      return '<div class="ledger">' +
+        '<div><span>Invoices to pay</span><b>' + esc(money(sum(toPay, (p) => p.amount || 0))) + '</b><em>' + esc(plural(toPay.length, 'invoice')) + (late(toPay) ? ' · ' + late(toPay) + ' overdue' : '') + '</em></div>' +
+        '<div><span>Owed to you</span><b class="' + (owed.length ? 'is-in' : '') + '">' + esc(money(sum(owed, (p) => F.outstanding(p)))) + '</b><em>' + esc(plural(owed.length, 'invoice')) + (late(owed) ? ' · ' + late(owed) + ' late' : ' sent') + '</em></div>' +
+        '<div><span>Under warranty</span><b>' + warranties.length + '</b><em>' + (warranties.length ? 'next ends ' + esc(fmtDate(warranties.map((p) => p.warrantyUntil).sort()[0], { short: true })) : 'items covered') + '</em></div>' +
+        '<div><span>Filed this month</span><b>' + thisMonth.length + '</b><em>' + esc(plural(all.length, 'item')) + ' in total</em></div>' +
+        '</div>';
+    };
+
     const sorted = () => {
       const list = all.filter(matches);
       if (ui.filter === 'to-pay' || ui.filter === 'owed') return list.sort((a, b) => (a.dueDate || '9').localeCompare(b.dueDate || '9'));
@@ -189,32 +246,28 @@
     root.innerHTML = GU.view.head({
       eyebrow: 'Paperwork',
       title: 'Receipts',
-      text: 'Snap or upload every receipt, invoice and warranty the moment you get it. Your assistant reads it and fills in the details.',
+      text: 'Every receipt, invoice and warranty, by month. Upload one and your assistant fills in the details.',
       actions: '<button type="button" class="btn" data-import-orders>' + icon('download') + 'Import Amazon orders</button><button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
     }) +
       workLineHTML(s) +
       GU.ui.dropbar('Drop receipts, invoices or warranties here, or a whole folder', 'Photos and PDFs both work. Subfolders like Warranties or Paid are used.') +
-      '<div class="ledger">' +
-      '<div><span>Invoices to pay</span><b>' + esc(money(sum(toPay, (p) => p.amount || 0))) + '</b><em>' + esc(plural(toPay.length, 'invoice')) + (toPay.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + toPay.filter((p) => p.dueDate && p.dueDate < t).length + ' overdue' : '') + '</em></div>' +
-      '<div><span>Owed to you</span><b class="' + (owed.length ? 'is-in' : '') + '">' + esc(money(sum(owed, (p) => F.outstanding(p)))) + '</b><em>' + esc(plural(owed.length, 'invoice')) + (owed.filter((p) => p.dueDate && p.dueDate < t).length ? ' · ' + owed.filter((p) => p.dueDate && p.dueDate < t).length + ' late' : ' sent') + '</em></div>' +
-      '<div><span>Under warranty</span><b>' + warranties.length + '</b><em>' + (warranties.length ? 'next ends ' + esc(fmtDate(warranties.map((p) => p.warrantyUntil).sort()[0], { short: true })) : 'items covered') + '</em></div>' +
-      '<div><span>Filed this month</span><b>' + thisMonth.length + '</b><em>' + esc(plural(all.length, 'item')) + ' in total</em></div>' +
-      '</div>' +
+      ledgerHTML() +
       '<div class="toolbar">' + chips('filter', filterOpts, ui.filter) + '<span class="toolbar__gap"></span>' +
       '<label class="search">' + icon('search') + '<input type="search" id="rc-search" placeholder="Search" value="' + esc(ui.q) + '" aria-label="Search receipts and invoices"></label></div>' +
       (ui.filter === 'all' || ui.filter === 'owed' ? owedHTML(s, t) : '') +
-      '<section class="panel"><ul class="doc-rows" id="rc-list"></ul></section>';
+      '<section class="panel rc-panel"><div id="rc-list"></div></section>';
 
     const draw = () => {
       const list = sorted();
-      root.querySelector('#rc-list').innerHTML = list.length ? list.map(rowHTML).join('')
-        : '<li>' + emptyState({ icon: 'receipt', title: all.length ? 'Nothing matches' : 'Nothing filed yet', text: all.length ? 'Try another filter or search.' : 'Upload your first receipt or invoice above.' }) + '</li>';
+      root.querySelector('#rc-list').innerHTML = list.length ? listHTML(list, t)
+        : emptyState({ icon: 'receipt', title: all.length ? 'Nothing matches' : 'Nothing filed yet', text: all.length ? 'Try another filter or search.' : 'Upload your first receipt or invoice above.' });
       GU.ui.hydrate(root);
     };
     draw();
 
     root.querySelector('#rc-search').addEventListener('input', debounce((e) => {
       ui.q = e.target.value;
+      ui.shut.clear(); // a month you'd closed opens again when something in it matches
       draw();
     }, 150));
     GU.ui.wireDropbar(root, (files) => create({ files }));
@@ -222,7 +275,22 @@
       const c = e.target.closest('[data-chip]');
       if (c) {
         ui[c.dataset.chip] = c.dataset.value;
+        ui.shut.clear();
         return GU.render();
+      }
+      const mo = e.target.closest('[data-month]');
+      if (mo) {
+        const k = mo.dataset.month;
+        const now = mo.getAttribute('aria-expanded') === 'true';
+        ui.open[now ? 'delete' : 'add'](k);
+        ui.shut[now ? 'add' : 'delete'](k);
+        return draw();
+      }
+      const more = e.target.closest('[data-more]');
+      if (more) {
+        const k = more.dataset.more;
+        ui.shown[k] = (ui.shown[k] || FIRST_ROWS) + FIRST_ROWS;
+        return draw();
       }
       if (e.target.closest('[data-upload]')) return create({ pick: true });
       if (e.target.closest('[data-import-orders]')) return importOrders();

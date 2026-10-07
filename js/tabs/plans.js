@@ -1,12 +1,11 @@
 /* The Ground Up: Home › Plans. Things you're saving up for and when you can afford each one: the cost
-   forecast on your own money (GU.costs), with your ideas grouped by whether they fit yet. Work ideas live in
-   Work › Cost forecast, but the ones you pay for yourself still take room in this plan, so a line says so.
-   The rows, the idea form and the forecast come from GU.work, with plain stand-ins while those aren't there. */
+   forecast on your own money (GU.costs), with your ideas grouped by whether they fit yet. Only your own ideas are
+   planned: what the business wants you to get is in Work › To buy. The rows, the idea form and the forecast come from GU.work, with plain stand-ins while those aren't there. */
 (function () {
   'use strict';
   const GU = window.GU;
   const { esc, today, fmtDate, money, plural, sum, daysUntil } = GU.util;
-  const { icon, pill, emptyState, toast, menu, viewFiles } = GU.ui;
+  const { icon, pill, toast, menu, viewFiles } = GU.ui;
   const store = GU.store;
   const C = 'costIdeas';
   const ui = { showDone: false };
@@ -14,7 +13,6 @@
   const work = () => GU.work || {};
   const ideaPart = (i) => (GU.parts && GU.parts.ideaPart ? GU.parts.ideaPart(i) : i && i.context === 'home' ? 'home' : 'work');
   const isHome = (i) => ideaPart(i) === 'home';
-  const co = (s) => (GU.parts && GU.parts.co ? GU.parts.co(s) : 'the company');
 
   /* ---------- changes ---------- */
   function editIdea(id) {
@@ -37,19 +35,14 @@
     });
     toast(status === 'done' ? 'Marked done' : status === 'dropped' ? 'Dropped from the plan' : 'Back in the plan', { action: 'Undo', onAction: () => store.upsert(C, before) });
   }
-  /* 'It's for work': moves the idea to Work › Cost forecast, where you say who pays. */
+  /* 'It's for work': adds the idea to Work › To buy (and takes it out of this plan). The row's own ⋯ menu does this too. */
   function moveToWork(id) {
-    const before = Object.assign({}, store.find(C, id));
-    store.commit((s) => {
-      const i = (s.costIdeas || []).find((x) => x.id === id);
-      if (i) i.context = 'work';
-    });
-    toast('Moved to Work › Cost forecast', { action: 'Undo', onAction: () => store.upsert(C, before) });
+    return GU.requests && GU.requests.addIdeas ? GU.requests.addIdeas([id]) : null;
   }
   function forecastSettings() {
     const w = work();
     if (typeof w.forecastSettings === 'function') return w.forecastSettings();
-    return GU.view.go(GU.tabs['work-costs'] ? 'work-costs' : 'work');
+    return GU.view.go('work');
   }
 
   /* ---------- the forecast ---------- */
@@ -90,25 +83,11 @@
       '<button type="button" class="icon-btn" data-more="' + esc(C + ':' + i.id) + '" aria-label="' + esc('More for ' + i.name) + '">' + icon('more') + '</button></span></li>';
   }
 
-  /* Work ideas planned on your money too: ones you pay for and get back, and ones nobody's said who pays for. */
-  function workLine(s, plan) {
-    const fronted = plan.results.filter((r) => r.part === 'work' && r.dip);
-    const unsorted = plan.results.filter((r) => r.part === 'work' && !r.dip);
-    if (!fronted.length && !unsorted.length) return '';
-    const c = co(s);
-    const parts = [];
-    if (fronted.length) parts.push('This plan also counts ' + plural(fronted.length, 'work thing') + ' you’ll pay for and get back from ' + c + ' (' + money(sum(fronted, (r) => r.cost), { whole: true }) + '). ' +
-      (fronted.length === 1 ? 'It only takes' : 'Each only takes') + ' room until it’s paid back, about ' + plural(plan.repayDays || 14, 'day') + ' later.');
-    if (unsorted.length) parts.push(plural(unsorted.length, 'work idea') + ' ' + (unsorted.length === 1 ? 'is' : 'are') + ' planned on your money too (' + money(sum(unsorted, (r) => r.cost), { whole: true }) + '), because nobody’s said who pays yet.');
-    return '<p class="note-line plans__work">' + icon('briefcase') + '<span>' + esc(parts.join(' ')) + '</span>' +
-      '<button type="button" class="btn btn--sm" data-go-costs>Work › Cost forecast' + icon('chevron') + '</button></p>';
-  }
-
   /* ---------- the page ---------- */
   function render(root) {
     const s = store.state;
     const plan = GU.costs.schedule(s);
-    const ideas = (s.costIdeas || []).filter(isHome);
+    const ideas = (s.costIdeas || []).filter((i) => isHome(i) && !i.movedToRequest); // one added to Work › To buy has moved there
     const at = (i) => (plan.results.find((r) => r.idea.id === i.id) || {}).date || '9999';
     const open = ideas.filter(GU.costs.isOpen);
     const groups = [
@@ -119,17 +98,16 @@
     const list = groups.length
       ? groups.map((g) => (g.closed ? '<details class="wk-group"' + (ui.showDone ? ' open' : '') + '><summary>' + esc(g.title) + ' (' + g.items.length + ')</summary>' : '<h3 class="wk-group__title">' + esc(g.title) + '</h3>') +
         '<ul class="wk-rows">' + g.items.map((i) => rowHTML(s, plan, i)).join('') + '</ul>' + (g.closed ? '</details>' : '')).join('')
-      : emptyState({ icon: 'trend', title: 'Nothing planned yet', text: 'Add something you’re saving up for, like a holiday, a new laptop or a sofa, and I’ll tell you the earliest date you can afford it.',
-        action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Something to save for</button>' });
+      : '<div class="panel__body plans__none"><p>Nothing planned yet. Add something you’re saving up for, like a holiday, a new laptop or a sofa, and it shows here with the earliest date you can afford it.</p></div>';
 
     root.innerHTML = GU.view.head({
       eyebrow: 'Money ahead',
       title: 'Plans',
-      text: 'When can I afford it? Add what you’re saving up for and I’ll find the earliest date each one fits, without your accounts dropping below what you want to keep.',
+      text: 'When can I afford it? I find the earliest date each thing fits, without your accounts dropping below what you want to keep.',
       actions: '<button type="button" class="btn" data-cf-settings>' + icon('settings') + 'Forecast settings</button>' +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Something to save for</button>',
     }) +
-      '<div class="stack plans">' + forecastHTML(s, plan) + workLine(s, plan) + '<section class="panel">' + list + '</section></div>';
+      '<div class="stack plans">' + forecastHTML(s, plan) +'<section class="panel">' + list + '</section></div>';
 
     root.querySelectorAll('.wk-group').forEach((d) => d.addEventListener('toggle', () => (ui.showDone = d.open)));
     root.addEventListener('click', onClick);
@@ -143,7 +121,7 @@
       items.push({ icon: 'check', label: 'Mark done', onClick: () => setStatus(id, 'done') });
       items.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => setStatus(id, 'dropped') });
     } else items.push({ icon: 'repeat', label: 'Back to the plan', onClick: () => setStatus(id, 'open') });
-    items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Moves it to Work › Cost forecast', onClick: () => moveToWork(id) });
+    items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Adds it to Work › To buy', onClick: () => moveToWork(id) });
     items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(C, id, i.name) });
     menu(anchor, items);
   }
@@ -152,7 +130,6 @@
     const b = (sel) => e.target.closest(sel);
     let el;
     if (b('[data-add]')) return editIdea(null);
-    if (b('[data-go-costs]')) return GU.view.go(GU.tabs['work-costs'] ? 'work-costs' : 'work');
     // The rows come from GU.work, so its own handler runs their buttons and ⋯ menu.
     const w = work();
     if (typeof w.rowClick === 'function' && w.rowClick(e)) return;

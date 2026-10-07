@@ -9,6 +9,7 @@
   const store = GU.store;
 
   const period = { in: 'this-month', out: 'this-month' };
+  const foldOpen = {}; // Income's folded panels (past income, regular income), open or shut, so a redraw keeps them as they were
 
   /* ---------- work money ---------- */
   /* Your employer's short name for sentences ('the company' when none is set). */
@@ -88,32 +89,30 @@
     }
     upcoming.sort((a, b) => a.d.localeCompare(b.d));
     root.innerHTML = GU.view.head({
-      eyebrow: 'Money ahead',
+      eyebrow: 'Money so far',
       title: 'Income',
       text: 'The money you expect: benefits, salary and anything else that comes in on a schedule. It’s all in the plan on your Home page.',
       actions: '<button type="button" class="btn btn--primary" data-add-source>' + icon('plus') + 'Add expected income</button>',
     }) +
-      '<div class="cols cols--main-side">' +
       '<div class="stack">' +
-      '<section class="panel"><header class="panel__head"><h2>Coming in</h2><span class="muted">next 2 months</span></header>' +
+      '<section class="panel"><header class="panel__head"><h2>Coming in</h2><span class="muted">' + esc('next 2 months · ' + money(next30) + ' in the next 30 days') + '</span></header>' +
       (upcoming.length ? '<ul class="rows rows--tight">' + upcoming.map(({ d, x }) =>
         '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__icon">' + icon('in') + '</span><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' + esc([x.from, F.freqLabel(x.frequency)].filter(Boolean).join(' · ')) + '</em></span></button>' +
-        '<span class="row-item__date"><b>' + esc(fmtDate(d, { weekday: true })) + '</b><em>' + esc(relDays(d)) + '</em></span><span></span><span class="row-item__amt is-in">' + esc(money(x.amount, { sign: true })) + '</span><span></span></li>').join('') + '</ul>'
+        '<span class="row-item__date"><b>' + esc(fmtDate(d, { weekday: true })) + '</b><em>' + esc(relDays(d)) + '</em></span><span class="row-item__amt is-in">' + esc(money(x.amount, { sign: true })) + '</span></li>').join('') + '</ul>'
         : '<div class="panel__body"><p class="muted">Add your salary, benefits or any income you get on a schedule and I’ll plan around it.</p></div>') + '</section>' +
-      '<details class="panel panel--details"><summary class="panel__head"><h2>Past income</h2><span class="muted">from your statements</span></summary>' +
-      '<div class="panel__body">' + (chartHTML(list, 'in') || '<p class="muted">Nothing to chart yet.</p>') + '</div>' +
-      '<header class="panel__head"><h3>Payments received</h3>' + chips('period', F.PERIODS, period.in) + '</header>' + txList(filt, 'in', 40) + '</details>' +
-      '</div><aside class="stack">' +
-      '<section class="panel"><header class="panel__head"><h2>Regular income</h2><button type="button" class="btn btn--sm btn--ghost" data-add-source>' + icon('plus') + 'Add</button></header>' +
+      paidBackNote(s) +
+      '<details class="panel panel--details" data-fold="regular"' + (foldOpen.regular ? ' open' : '') + '><summary class="panel__head"><h2>Regular income</h2><span class="muted">' + esc(plural(sources.length, 'source')) + '</span></summary>' +
       (sources.length ? '<ul class="rows rows--tight">' + sources.map((x) =>
         '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' +
         esc([F.freqLabel(x.frequency), x.nextDate ? 'next ' + fmtDate(x.nextDate, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></span></button>' +
         '<span class="row-item__amt is-in">' + esc(money(x.amount)) + '</span></li>').join('') + '</ul>'
-        : '<div class="panel__body"><p class="muted">Nothing yet.</p></div>') + '</section>' +
-      '<section class="panel"><div class="panel__body"><p><b>' + esc(money(next30)) + '</b> <span class="muted">expected in the next 30 days</span></p></div></section>' +
-      paidBackNote(s) +
-      '</aside></div>';
+        : '<div class="panel__body"><p class="muted">Nothing yet.</p></div>') + '</details>' +
+      '<details class="panel panel--details" data-fold="past"' + (foldOpen.past ? ' open' : '') + '><summary class="panel__head"><h2>Past income</h2><span class="muted">from your statements</span></summary>' +
+      '<div class="panel__body">' + (chartHTML(list, 'in') || '<p class="muted">Nothing to chart yet.</p>') + '</div>' +
+      '<header class="panel__head"><h3>Payments received</h3>' + chips('period', F.PERIODS, period.in) + '</header>' + txList(filt, 'in', 40) + '</details>' +
+      '</div>';
 
+    root.querySelectorAll('details[data-fold]').forEach((d) => d.addEventListener('toggle', () => (foldOpen[d.dataset.fold] = d.open)));
     root.addEventListener('click', (e) => {
       const c = e.target.closest('[data-chip="period"]');
       if (c) {

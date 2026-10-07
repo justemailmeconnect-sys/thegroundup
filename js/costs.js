@@ -1,8 +1,9 @@
-/* The Ground Up: cost forecast. Takes the ideas you want to spend on, and works out from your money ahead
-   (income, bills, debts and instalments, plus your usual everyday spending) when each one could be done
-   without your accounts dropping below the amount you want to keep, and which account it could come from.
-   Work ideas the business pays for aren't planned on your money (see ktkFund). Ones you pay for and get
-   back are a dip that comes back after the business's usual wait. */
+/* The Ground Up: cost forecast for Home › Plans. Takes the things you want to save for, and works out from your
+   money ahead (income, bills, debts and instalments, plus your usual everyday spending) when each one could be
+   done without your accounts dropping below the amount you want to keep, and which account it could come from.
+   Only your own ideas (Home) are planned. What the business has asked you to get is added up in Work › To buy
+   (js/tabs/requests.js), and an idea left over from the old Work cost forecast page is never planned on your
+   money: it can only be added to To buy from there. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -15,7 +16,7 @@
   const isOpen = (i) => i.status !== 'done' && i.status !== 'dropped';
 
   /* ---------- whose money ---------- */
-  /* Ideas were first made in Work, so one with no context is a work idea. */
+  /* Ideas were first made in Work, so one with no context is a work idea (left from the old Work page, not planned). */
   const ideaPart = (i) => (GU.parts && GU.parts.ideaPart ? GU.parts.ideaPart(i) : i && i.context === 'home' ? 'home' : 'work');
   /* For a work idea: 'company' (the business pays), 'me' (you pay, it pays you back) or null (not sorted yet).
      Your own ideas are always your money, so null. */
@@ -103,9 +104,8 @@
     return i >= 0 ? i : date > dates[dates.length - 1] ? dates.length : 0;
   };
 
-  /* Places each idea, most important first, on the earliest day it fits. Ideas with a fixed date go where they're booked.
-     Ideas the business pays for are left out. One you pay for and get back only counts from its day until it's
-     back (its monthly cost belongs in a work bill instead). */
+  /* Places each of your own ideas (Home only), most important first, on the earliest day it fits. Ideas with a fixed
+     date go where they're booked. Work ideas are left out: they aren't planned on your money. */
   let cache = null;
   function schedule(s) {
     const key = (GU.store.rev || 0) + '|' + today();
@@ -120,7 +120,7 @@
     const ser = b.total.slice();
     const acc = b.accounts.map((a) => ({ id: a.id, name: a.name, vals: a.vals.slice() }));
     const back = repayDays(s);
-    const ideas = (s.costIdeas || []).filter((i) => isOpen(i) && !companyPays(i)).sort((x, y) =>
+    const ideas = (s.costIdeas || []).filter((i) => isOpen(i) && ideaPart(i) === 'home').sort((x, y) =>
       (y.plannedDate ? 1 : 0) - (x.plannedDate ? 1 : 0) ||
       (PRIORITY[x.priority] ?? 1) - (PRIORITY[y.priority] ?? 1) ||
       (x.wantBy || '9999').localeCompare(y.wantBy || '9999') ||
@@ -221,30 +221,5 @@
     };
   }
 
-  /* Work ideas the business pays for: not tested against your money (its balance isn't known), just listed
-     with what they cost, soonest wanted first, and grouped by the month they're wanted ('' for no date). */
-  function ktkFund(s) {
-    s = s || GU.store.state;
-    const items = ((s && s.costIdeas) || []).filter((i) => isOpen(i) && companyPays(i)).map((i) => ({
-      idea: i,
-      cost: Math.abs(Number(i.cost) || 0),
-      monthly: Math.abs(Number(i.monthly) || 0),
-      date: i.plannedDate || i.wantBy || '',
-      booked: !!i.plannedDate,
-    })).sort((x, y) => (x.date || '9999').localeCompare(y.date || '9999') ||
-      (PRIORITY[x.idea.priority] ?? 1) - (PRIORITY[y.idea.priority] ?? 1) ||
-      (x.idea.created || '').localeCompare(y.idea.created || ''));
-    const months = [];
-    for (const x of items) {
-      const key = x.date.slice(0, 7);
-      let m = months.find((g) => g.key === key);
-      if (!m) months.push((m = { key, items: [], total: 0, monthly: 0 }));
-      m.items.push(x);
-      m.total = round2(m.total + x.cost);
-      m.monthly = round2(m.monthly + x.monthly);
-    }
-    return { items, count: items.length, total: round2(sum(items, (x) => x.cost)), monthly: round2(sum(items, (x) => x.monthly)), months };
-  }
-
-  GU.costs = { settings, everydayEstimate, schedule, isOpen, PRIORITY, ktkFund, ideaPart, ideaPayer, companyPays, fronted };
+  GU.costs = { settings, everydayEstimate, schedule, isOpen, PRIORITY, ideaPart, ideaPayer, companyPays, fronted };
 })();

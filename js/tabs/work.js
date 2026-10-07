@@ -1,6 +1,7 @@
 /* The Ground Up: Work. Everything for the business you work for, each area its own page in the Work part:
-   what the business pays for (its own money), Bills, Tasks, Projects, Cost forecast and Contracts & documents.
-   Get paid back (your own money) is in js/tabs/payback.js. Each page has its own folders and search, and notes
+   what the business pays for (its own money), Bills, Tasks, Projects and Contracts & documents. To buy (what the
+   business has asked you to get, and what it will cost) is js/tabs/requests.js. Get paid back (your own money) is
+   in js/tabs/payback.js. The cost-idea rows, form and forecast here are for Home › Plans (your own things). Each page has its own folders and search, and notes
    (a panel once there are some, a small '+ Note' button before). The Overview shows what needs attention, then a card
    for each page in two groups (Money, Running it), then the one-off tidy-up from the Home/Work split (js/refile.js).
    The business's name comes from Settings, never from here. */
@@ -18,13 +19,13 @@
     { id: 'bills', label: 'Bills', icon: 'bills', one: 'bill' },
     { id: 'tasks', label: 'Tasks', icon: 'todo', one: 'task' },
     { id: 'projects', label: 'Projects', icon: 'star', one: 'project' },
-    { id: 'costs', label: 'Cost forecast', icon: 'trend', one: 'idea' },
     { id: 'contracts', label: 'Contracts & documents', icon: 'file', one: 'document' },
   ];
   /* The page each area lives on. 'back' is Get paid back (js/tabs/payback.js). */
-  const TAB_OF = { tasks: 'work-tasks', invoices: 'work-ktk', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', costs: 'work-costs', back: 'work-back', requests: 'work-requests' };
+  const TAB_OF = { tasks: 'work-tasks', invoices: 'work-ktk', projects: 'work-projects', bills: 'work-bills', contracts: 'work-docs', back: 'work-back', requests: 'work-requests' };
+  // 'costs' is only the row kind Home › Plans asks for (its own ideas): there's no Work page for it.
   const COLL = { tasks: 'tasks', invoices: 'paperwork', projects: 'projects', bills: 'bills', contracts: 'documents', costs: 'costIdeas' };
-  const AREA_OF = { tasks: 'tasks', paperwork: 'invoices', projects: 'projects', bills: 'bills', documents: 'contracts', costIdeas: 'costs' };
+  const AREA_OF = { tasks: 'tasks', paperwork: 'invoices', projects: 'projects', bills: 'bills', documents: 'contracts' };
   const PRIORITIES = [{ value: 'must', label: 'Must have' }, { value: 'should', label: 'Should have' }, { value: 'could', label: 'Nice to have' }];
   const STATUSES = ['Idea', 'Planned', 'Booked', 'In progress', 'Done', 'Cancelled'];
   const CLOSED = ['Done', 'Cancelled'];
@@ -54,8 +55,6 @@
   }
   /* For a work bill: 'me' (out of your account, paid back) or 'company'. */
   const billPayer = (b) => (wm() ? wm().payerOf(b, 'bills') : b.payer === 'company' ? 'company' : 'me');
-  /* For a work idea: 'company', 'me' or null (not sorted yet). */
-  const ideaPayer = (i) => (GU.costs.ideaPayer ? GU.costs.ideaPayer(i) : i.payer === 'me' || i.payer === 'company' ? i.payer : null);
   /* An invoice the business still has to pay. */
   const isWaiting = (p) => p.kind === 'invoice-in' && p.status !== 'paid' && laneOf(p) === 'ktk';
   /* An older work invoice you sent the business (for your own spending): not a claim yet, so it waits under
@@ -83,7 +82,7 @@
      usual name, because the area means something new now. */
   function labelOf(area) {
     if (area === 'back') return 'Get paid back';
-    if (area === 'requests') return 'To buy';
+    if (area === 'requests' || area === 'costs') return 'To buy'; // notes from the old Cost forecast page now sit on To buy
     if (area === 'general' || area === 'overview') return 'Overview';
     if (area === 'invoices') return paysLabel();
     return ((store.state.settings.workLabels || {})[area]) || (AREAS.find((a) => a.id === area) || {}).label || 'General';
@@ -105,7 +104,6 @@
     if (area === 'projects') return s.projects || [];
     if (area === 'bills') return s.bills.filter(isWorkBill);
     if (area === 'contracts') return s.documents.filter(isWorkDoc);
-    if (area === 'costs') return (s.costIdeas || []).filter((i) => ideaPart(i) === 'work');
     return [];
   }
   const NAMED = ['bills', 'projects', 'workFolders', 'costIdeas'];
@@ -113,13 +111,13 @@
   const foldersOf = (s, area) => (s.workFolders || []).filter((f) => f.area === area).sort((a, b) => a.name.localeCompare(b.name));
   /* The folder a record sits in, if that folder still exists. */
   const folderOf = (s, rec, area) => (rec.workFolder && (s.workFolders || []).some((f) => f.id === rec.workFolder && f.area === area) ? rec.workFolder : '');
-  const notesOf = (s, area) => (s.workNotes || []).filter((n) => (n.area || 'general') === area);
+  const noteArea = (n) => (n.area === 'costs' ? 'requests' : n.area || 'general');
+  const notesOf = (s, area) => (s.workNotes || []).filter((n) => noteArea(n) === area);
 
   /* ---------- what needs doing ---------- */
   /* Everything at work that needs a look, worst first: the Overview's 'Needs attention' list and the pages' badges.
-     Each is {level, area, title, detail, ref?, go?, inv?, tidy?, acts?}. One line per real action: the cost forecast's
-     'earliest <date>' for each idea lives on the Cost forecast page, and the re-sort's questions (which include 'who
-     pays?' for the ideas) are one line that opens the tidy-up block. */
+     Each is {level, area, title, detail, ref?, go?, inv?, tidy?, acts?}. One line per real action: the re-sort's
+     questions are one line that opens the tidy-up block. */
   function checks(s) {
     const out = [];
     const add = (level, area, title, detail, ref, more) => out.push(Object.assign({ level, area, title, detail, ref: ref || null }, more || {}));
@@ -233,24 +231,6 @@
       else if (n >= 0 && n <= 60) add(n <= 30 ? 'warn' : 'info', 'contracts', d2.title + ' ends ' + relDays(d2.expiryDate), 'Check the notice period and decide whether to renew', { c: 'documents', id: d2.id });
     }
 
-    // Cost ideas: the business's own are listed, not tested against your money. The rest use the forecast.
-    const workIdeas = itemsOf(s, 'costs').filter(GU.costs.isOpen);
-    if (workIdeas.some((i) => ideaPayer(i) !== 'company')) {
-      const plan = GU.costs.schedule(s);
-      const mine = plan.results.filter((r) => ideaPart(r.idea) === 'work');
-      for (const r of mine) {
-        const i = r.idea;
-        const ref = { c: 'costIdeas', id: i.id };
-        if (r.fixed && r.short > 0) add('warn', 'costs', i.name + ' on ' + short(r.date) + ' would leave you ' + money(r.short) + ' short', 'Booked date · move it later or free up money first', ref);
-        else if (!r.date && i.wantBy) add('warn', 'costs', i.name + ' can’t be afforded by ' + short(i.wantBy), 'About ' + money(r.shortfall, { whole: true }) + ' short in the time ahead', ref);
-      }
-      const now = mine.filter((r) => r.date && !r.fixed && daysUntil(r.date) <= 0);
-      if (now.length) add('info', 'costs', now.length === 1 ? 'You can afford ' + now[0].idea.name + ' now' : 'You can afford ' + plural(now.length, 'idea') + ' now', now.map((r) => r.idea.name + ' (' + money(r.cost, { whole: true }) + (r.account ? ', from ' + r.account : '') + ')').join(', '), now.length === 1 ? { c: 'costIdeas', id: now[0].idea.id } : null);
-      // The re-sort asks 'who pays?' for these too, so the one line below covers them while it's asking.
-      const open = workIdeas.filter((i) => !ideaPayer(i));
-      if (open.length && !asks) add('info', 'costs', 'Who pays? ' + plural(open.length, 'cost idea') + (open.length === 1 ? ' isn’t' : ' aren’t') + ' sorted', 'Until you say, I plan ' + (open.length === 1 ? 'it' : 'them') + ' on your money', null, { go: TAB_OF.costs });
-    }
-
     // The one-off re-sort's questions: one line, which opens the tidy-up block on the Overview.
     if (asks) add('info', 'overview', plural(asks, 'thing') + ' to check from the Home/Work split', 'One tap each, in the tidy-up below', null, { tidy: true });
 
@@ -322,16 +302,6 @@
     const them = live.filter((b) => billPayer(b) === 'company');
     return { live, me, them, monthly: mo(live), meMonthly: mo(me), themMonthly: mo(them) };
   }
-  /* Work ideas split by who pays. */
-  function ideaTotals(s) {
-    const open = itemsOf(s, 'costs').filter(GU.costs.isOpen);
-    const fund = GU.costs.ktkFund ? GU.costs.ktkFund(s) : { items: [], count: 0, total: 0, monthly: 0 };
-    const me = open.filter((i) => ideaPayer(i) === 'me');
-    const unsorted = open.filter((i) => !ideaPayer(i));
-    const cost = (list) => sum(list, (i) => Math.abs(Number(i.cost) || 0));
-    return { open, fund, me, unsorted, meTotal: cost(me), unsortedTotal: cost(unsorted) };
-  }
-
   /* The card for each area on the Overview: {big, unit, line, lines, bad?, good?, warn?}. The card shows the figure and
      its one line; the other lines are for the Projects and Contracts pages' summary. */
   function figures(s, area) {
@@ -379,14 +349,6 @@
       const l1 = ending.length ? ending.length + ' ending in 90 days' : 'none ending soon';
       return { big: String(items.length), unit: items.length === 1 ? 'contract or document' : 'contracts and documents', line: l1, lines: [l1, next ? 'Next ends ' + short(next.expiryDate) : 'no end dates'], bad: ending.some((d) => daysUntil(d.expiryDate) <= 30) };
     }
-    if (area === 'costs') {
-      const x = ideaTotals(s);
-      if (!x.open.length) return { big: money(0), unit: 'for ' + c + ' to fund', line: 'add things ' + c + ' wants to buy', lines: ['Add things ' + c + ' wants to buy', 'and say who pays'] };
-      const l1 = x.fund.count ? plural(x.fund.count, 'idea') + (x.fund.monthly ? ' + ' + money(x.fund.monthly, { whole: true }) + ' a month' : '') : 'nothing for ' + c + ' to fund yet';
-      const l2 = x.unsorted.length ? plural(x.unsorted.length, 'idea') + ' not sorted yet' : x.me.length ? plural(x.me.length, 'idea') + ' you pay and get back' : 'none on your money';
-      // Ideas nobody has said who pays for are the thing to act on, so that's the line when there are some.
-      return { big: money(x.fund.total, { whole: true }), unit: 'for ' + c + ' to fund', line: x.unsorted.length ? l2 : l1, lines: [l1, l2], warn: x.unsorted.length > 0 };
-    }
     return { big: '', unit: '', lines: [] };
   }
 
@@ -409,13 +371,6 @@
         ['A month in all', money(b.monthly), plural(b.live.length, 'bill')],
         ['You pay, ' + c + ' pays you back', money(b.meMonthly), 'a month'],
         [paysLabel(), money(b.themMonthly), 'a month, not from your account'],
-      ];
-    } else if (area === 'costs') {
-      const x = ideaTotals(s);
-      boxes = [
-        ['For ' + c + ' to fund', money(x.fund.total, { whole: true }), plural(x.fund.count, 'idea') + (x.fund.monthly ? ' + ' + money(x.fund.monthly, { whole: true }) + ' a month' : '')],
-        ['You pay, ' + c + ' pays you back', money(x.meTotal, { whole: true }), plural(x.me.length, 'idea')],
-        ['Not sorted yet', money(x.unsortedTotal, { whole: true }), x.unsorted.length ? plural(x.unsorted.length, 'idea') : 'all sorted', x.unsorted.length ? 'is-warn' : ''],
       ];
     } else if (area === 'tasks') {
       const open = itemsOf(s, 'tasks').filter((k) => !k.done);
@@ -520,44 +475,30 @@
       '<span class="wk-row__end"></span><span class="wk-row__act">' + GU.ui.dlButton(r.files, r.title) + moreBtn(c, r) + '</span></li>';
   }
 
-  /* A cost idea. Work ideas show who pays: the business's own are only listed (its balance isn't known),
-     the rest show when you could afford them. */
+  /* A cost idea of your own (Home › Plans): when you could afford it, and which account it could come from. */
   function ideaRowHTML(s, r, chipF) {
     const c = 'costIdeas';
-    const work = ideaPart(r) === 'work';
-    const payer = work ? ideaPayer(r) : null;
     const open = GU.costs.isOpen(r);
     const pr = PRIORITIES.find((p) => p.value === (r.priority || 'should'));
-    const proj = r.projectId && (s.projects || []).find((p) => p.id === r.projectId);
     let when = '';
-    let act = '';
     if (r.status === 'done') when = pill('Done' + (r.doneDate ? ' ' + short(r.doneDate) : ''), 'good', 'check');
     else if (r.status === 'dropped') when = pill('Dropped', 'muted');
-    else if (payer === 'company') {
-      when = r.plannedDate ? pill('Booked ' + short(r.plannedDate), 'info', 'clock') : r.wantBy ? pill('Wanted by ' + short(r.wantBy), daysUntil(r.wantBy) < 0 ? 'crit' : daysUntil(r.wantBy) <= 30 ? 'warn' : 'muted', 'clock') : '';
-      if ((r.files || []).length) when += pill(plural(r.files.length, 'quote'), 'muted', 'clip');
-    } else {
+    else {
       const plan = GU.costs.schedule(s);
       const x = plan.results.find((y) => y.idea.id === r.id);
       if (x && x.date) {
         when = x.fixed ? pill('Booked ' + short(x.date), x.short > 0 ? 'crit' : 'info', 'clock') + (x.short > 0 ? pill(money(x.short, { whole: true }) + ' short', 'crit', 'alert') : '')
           : pill(daysUntil(x.date) <= 0 ? 'You can afford it now' : 'Earliest ' + short(x.date), daysUntil(x.date) <= 0 ? 'good' : 'info', 'clock');
         if (x.account) when += pill('from ' + x.account, 'muted', 'bank');
-        if (x.back) when += pill('back about ' + short(x.back), 'muted', 'repeat');
         if (r.wantBy) when += x.onTime ? pill('In time for ' + short(r.wantBy), 'good', 'check') : pill(x.lateDays + ' days after you wanted', 'warn', 'alert');
       } else if (x) when = pill('Not in the next ' + plan.base.cfg.months + ' months', 'crit', 'alert') + (x.shortfall ? pill('about ' + money(x.shortfall, { whole: true }) + ' short', 'warn') : '');
     }
-    const who = !work ? '' : payer === 'company' ? coPill(paysLabel()) : payer === 'me' ? minePill('You pay · get it back') : whoPill('Who pays?');
-    if (work && open && !payer) {
-      act = actBtn('data-idea-payer="' + esc(r.id) + ':company"', paysLabel(), 'briefcase', 'btn--soft') + actBtn('data-idea-payer="' + esc(r.id) + ':me"', 'I pay, get it back', 'coin', '') +
-        actBtn('data-idea-payer="' + esc(r.id) + ':home"', 'It’s mine', 'home', '');
-    } else if (open) act = actBtn('data-idea-done="' + esc(r.id) + '"', 'Done', 'check');
-    return '<li class="wk-row' + (open ? '' : ' is-done') + (work && open && !payer ? ' wk-row--acts' : '') + '"><span class="wk-row__lead wk-row__ico">' + icon('coin') + '</span>' +
+    return '<li class="wk-row' + (open ? '' : ' is-done') + '"><span class="wk-row__lead wk-row__ico">' + icon('coin') + '</span>' +
       '<button type="button" class="wk-row__main" data-open="' + esc(c + ':' + r.id) + '"><b>' + esc(r.name) + '</b><em>' +
-      esc([pr ? pr.label : '', proj ? 'for ' + proj.name : '', r.notBefore && payer !== 'company' ? 'not before ' + short(r.notBefore) : '', r.wantBy && payer !== 'company' ? 'wanted by ' + short(r.wantBy) : ''].filter(Boolean).join(' · ')) + '</em>' +
-      '<span class="wk-row__chips">' + who + when + (chipF || '') + '</span></button>' +
+      esc([pr ? pr.label : '', r.notBefore ? 'not before ' + short(r.notBefore) : '', r.wantBy ? 'wanted by ' + short(r.wantBy) : ''].filter(Boolean).join(' · ')) + '</em>' +
+      '<span class="wk-row__chips">' + when + (chipF || '') + '</span></button>' +
       '<span class="wk-row__end"><b>' + esc(money(r.cost)) + '</b>' + (Number(r.monthly) > 0 ? '<em>+ ' + esc(money(r.monthly)) + ' a month</em>' : '') + '</span>' +
-      '<span class="wk-row__act">' + act + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
+      '<span class="wk-row__act">' + (open ? actBtn('data-idea-done="' + esc(r.id) + '"', 'Done', 'check') : '') + GU.ui.dlButton(r.files, r.name) + moreBtn(c, r) + '</span></li>';
   }
 
   function noteHTML(s, n, showArea) {
@@ -572,7 +513,7 @@
   /* The cards, in two groups: the money, then running the place. To buy's card comes from js/tabs/requests.js. */
   const CARD_GROUPS = [
     { title: 'Money', cards: ['requests', 'back', 'invoices', 'bills'] },
-    { title: 'Running it', cards: ['tasks', 'projects', 'costs', 'contracts'] },
+    { title: 'Running it', cards: ['tasks', 'projects', 'contracts'] },
   ];
   const ICON_OF = { back: 'coin' };
   const SHOW_CHECKS = 5; // how many lines of 'Needs attention' show before '+ n more'
@@ -705,22 +646,6 @@
         { title: paysLabel() + ' · ' + mo(them), note: c.charAt(0).toUpperCase() + c.slice(1) + ' pays these itself, so they’re never in your Money ahead.', items: them },
         { title: 'Stopped', items: list.filter((b) => b.active === false), closed: true },
       ];
-    } else if (area === 'costs') {
-      const open = list.filter(GU.costs.isOpen);
-      const fund = open.filter((i) => ideaPayer(i) === 'company').sort((a, b) => (a.plannedDate || a.wantBy || '9999').localeCompare(b.plannedDate || b.wantBy || '9999'));
-      const me = open.filter((i) => ideaPayer(i) === 'me');
-      const unsorted = open.filter((i) => !ideaPayer(i));
-      if (me.length || unsorted.length) extra = forecastHTML(s, { context: 'work' });
-      const plan = GU.costs.schedule(s);
-      const at = (i) => (plan.results.find((r) => r.idea.id === i.id) || {}).date || '9999';
-      const cost = (i) => Math.abs(Number(i.cost) || 0);
-      const fundMonthly = sum(fund, (i) => Math.abs(Number(i.monthly) || 0));
-      groups = [
-        { title: 'For ' + c + ' to fund · ' + money(sum(fund, cost), { whole: true }) + (fundMonthly ? ' + ' + money(fundMonthly, { whole: true }) + ' a month' : ''), note: 'Not tested against your money, because ' + c + '’s balance isn’t known here. This is the list to show ' + c + '.', items: fund },
-        { title: 'You pay, ' + c + ' pays you back · ' + money(sum(me, cost), { whole: true }), note: 'Planned on your money as a dip that comes back after about ' + plural(plan.repayDays || 14, 'day') + '.', items: me.sort((a, b) => at(a).localeCompare(at(b))) },
-        { title: 'Not sorted yet · ' + money(sum(unsorted, cost), { whole: true }), note: 'Until you say who pays, I plan these on your money.', items: unsorted.sort((a, b) => at(a).localeCompare(at(b))) },
-        { title: 'Done or dropped', items: list.filter((i) => !GU.costs.isOpen(i)).sort((a, b) => (b.doneDate || '').localeCompare(a.doneDate || '')), closed: true },
-      ];
     } else {
       groups = [{ title: '', items: list.sort((a, b) => (a.expiryDate || '9999').localeCompare(b.expiryDate || '9999')) }];
     }
@@ -789,7 +714,6 @@
     if (area === 'bills') return 'Regular costs for ' + c + '. Say who pays each one: if it comes out of your account, each payment joins Get paid back by itself.';
     if (area === 'tasks') return 'Things to do for ' + c + '. They stay out of Home › To-do.';
     if (area === 'projects') return 'Jobs and pieces of work: on the go, coming up, ideas and done.';
-    if (area === 'costs') return 'Things ' + c + ' wants to buy, and who pays for each. The ones that come out of your money are planned for you below.';
     if (area === 'contracts') return C + '’s contracts, leases, licences, insurance, supplier terms and registrations, with reminders before they end. Your own payslips and P60s stay in Home › Documents.';
     return '';
   }
@@ -842,7 +766,6 @@
         '<button type="button" class="btn btn--primary" data-add="invoices">' + icon('plus') + esc('Something ' + c + ' is paying') + '</button>';
     }
     if (area === 'projects') return renameBtn + note + '<button type="button" class="btn btn--primary" data-add="projects">' + icon('plus') + 'New project</button>';
-    if (area === 'costs') return renameBtn + '<button type="button" class="btn" data-cf-settings>' + icon('settings') + 'Forecast settings</button>' + note + '<button type="button" class="btn btn--primary" data-add="costs">' + icon('plus') + 'New idea</button>';
     if (area === 'bills') return renameBtn + '<button type="button" class="btn" data-move-home="bills">' + icon('home') + 'Move a bill from Home</button>' + note + '<button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New bill</button>';
     return renameBtn + '<button type="button" class="btn" data-move-home="contracts">' + icon('home') + 'Move a document from Home</button>' + note + '<button type="button" class="btn btn--primary" data-add="contracts">' + icon('plus') + 'New contract or document</button>';
   }
@@ -1008,12 +931,6 @@
       if (W && W.setPayer) W.setPayer(c, id, who);
       return true;
     }
-    if ((el = b('[data-idea-payer]'))) {
-      const [id, who] = el.dataset.ideaPayer.split(':');
-      if (who === 'home') takeOut('costIdeas', id);
-      else if (W && W.setPayer) W.setPayer('costIdeas', id, who);
-      return true;
-    }
     if ((el = b('[data-send-co]'))) {
       sendToCo(el.dataset.sendCo.split(',').filter(Boolean));
       return true;
@@ -1132,7 +1049,6 @@
     }
     if (area === 'back') return R.create({ values: { kind: 'receipt', context: 'work', payer: 'me', date: today() }, onSaved: (r) => tag('paperwork', r.id, '', { payer: 'me' }) });
     if (area === 'projects') return editProject(null, { folder });
-    if (area === 'costs') return editIdea(null, { folder, context: 'work' });
     if (area === 'bills') return GU.tabs.bills.create({ category: (F.WORK_OUT || 'Work expenses'), context: 'work' }, { onSaved: (r) => tag('bills', r.id, folder) });
     if (area === 'contracts') return GU.tabs.documents.create({ type: CONTRACT, title: '', context: 'work' }, { onSaved: (r) => tag('documents', r.id, folder) });
     if (area === 'note') return editNote(null, { area: ui.area === 'overview' ? 'general' : ui.area, folder });
@@ -1257,13 +1173,12 @@
     });
   }
 
-  /* ---------- cost forecast ---------- */
-  /* When you can afford things. opts.context 'work' or 'home' marks and counts only those ideas (the line is
-     always all your money); Work leaves out ideas the business pays for, which aren't on your money. */
+  /* ---------- your own cost ideas (Home › Plans) ---------- */
+  /* When you can afford things. opts.context 'home' counts only your own ideas (the plan only holds those). */
   function forecastHTML(s, opts) {
     s = s || store.state;
     opts = opts || {};
-    const ctx = opts.context === 'home' || opts.context === 'work' ? opts.context : null;
+    const ctx = opts.context === 'home' ? 'home' : null;
     const plan = GU.costs.schedule(s);
     const b = plan.base;
     if (!b.known) {
@@ -1275,72 +1190,47 @@
     const allBy = results.length && results.every((r) => r.date) ? results.reduce((m, r) => (r.date > m ? r.date : m), '') : null;
     const keep = b.cfg.buffer ? money(b.cfg.buffer, { whole: true }) : '£0';
     const room = plan.months.slice(0, b.cfg.months);
-    const c = co();
-    let more = '';
-    // (The page's groups already say how the ones you pay for come back.)
-    if (ctx === 'work') more = ' Ideas ' + c + ' pays for aren’t counted.';
-    // Home › Plans says which work ideas are planned on your money in its own line, with a link.
-    else if (!ctx && plan.fronting && plan.fronting.length) more = ' Work ideas you pay for first come back after about ' + plural(plan.repayDays || 14, 'day') + '.';
     return '<section class="panel cf"><header class="panel__head"><h2>' + icon('trend') + 'When you can afford things</h2><span class="muted">next ' + b.cfg.months + ' months</span></header>' +
       '<div class="tally__sum">' +
       '<div><span>You could spend now</span><b>' + esc(money(plan.freeNow, { whole: true })) + '</b><em>' + esc('and never drop below ' + keep + (b.cfg.overdraft ? ' (with overdraft)' : '')) + '</em></div>' +
-      // On the Work page the 'you pay' and 'not sorted' figures above it already add up to this, so it isn't said twice.
-      (ctx === 'work' ? '' : '<div><span>Ideas to fund</span><b>' + esc(money(outstanding, { whole: true })) + '</b><em>' + esc(plural(results.length, 'idea') + ' on the list') + '</em></div>') +
+      '<div><span>Ideas to fund</span><b>' + esc(money(outstanding, { whole: true })) + '</b><em>' + esc(plural(results.length, 'idea') + ' on the list') + '</em></div>' +
       '<div><span>' + (notFitting ? 'Don’t fit yet' : 'All done by') + '</span><b class="' + (notFitting ? 'is-crit' : '') + '">' + esc(notFitting ? String(notFitting) : allBy ? short(allBy) : '–') + '</b><em>' + esc(notFitting ? 'not affordable in ' + b.cfg.months + ' months at this rate' : results.length ? 'at the earliest' : 'add an idea below') + '</em></div>' +
       '</div>' +
       '<div class="cf-room"><h3>Room to spend, month by month</h3><p class="muted">The most you could spend from the start of each month, after the ideas above, without dropping below ' + esc(keep) + ' later on.</p><ol>' +
       room.map((m) => '<li class="' + (m.room > 0 ? 'is-room' : '') + '"><span>' + esc(monthLabel(m.key) + (m.key.slice(0, 4) !== today().slice(0, 4) ? ' ' + m.key.slice(0, 4) : '')) + '</span><b>' + esc(money(m.room, { whole: true })) + '</b></li>').join('') + '</ol></div>' +
       '<footer class="panel__foot cf-note">' + icon('info') + '<span>' + esc('Starts from ' + money(b.plan.start) + ' across your accounts. Counts your income, bills, debt and instalment payments and invoices due, plus about ' + money(b.everyday, { whole: true }) + ' a month of everyday spending' +
-        (b.cfg.everyday != null && b.cfg.everyday !== '' ? ' (your figure)' : b.est ? ' (from your last ' + plural(b.est.months.length, 'month') + ' of statements)' : '') + '. It keeps at least ' + keep + ' in your accounts' + (b.cfg.overdraft ? ', counting your overdraft' : '') + '. Must-haves are planned first.' + more + ' ') + '<button type="button" class="link link--btn" data-cf-settings>Change these</button></span></footer></section>';
+        (b.cfg.everyday != null && b.cfg.everyday !== '' ? ' (your figure)' : b.est ? ' (from your last ' + plural(b.est.months.length, 'month') + ' of statements)' : '') + '. It keeps at least ' + keep + ' in your accounts' + (b.cfg.overdraft ? ', counting your overdraft' : '') + '. Must-haves are planned first. ') + '<button type="button" class="link link--btn" data-cf-settings>Change these</button></span></footer></section>';
   }
 
-  /* A cost idea. opts.context 'home' (Home › Plans) or 'work' (where it's made, otherwise the part you're in);
-     work ideas also ask who pays. opts.folder, opts.payer: starting values. */
-  function editIdea(id, opts) {
-    opts = opts || {};
-    const s = store.state;
+  /* A cost idea of your own: something to save for, in Home › Plans. (An idea left from the old Cost forecast keeps its
+     own mark and who pays when it's edited; they're added to Work › To buy rather than planned here.) */
+  function editIdea(id) {
     const i = id ? store.find('costIdeas', id) : null;
-    const ctx = i ? ideaPart(i) : opts.context === 'home' || opts.context === 'work' ? opts.context : parts().get() === 'work' ? 'work' : 'home';
-    const work = ctx === 'work';
-    const c = co();
+    const ctx = i ? ideaPart(i) : 'home';
     const fields = [
-      { name: 'name', label: 'What is it?', required: true, placeholder: work ? 'e.g. Shop signage, A new printer' : 'e.g. New laptop, A weekend away' },
-      work ? { name: 'payer', label: 'Who pays?', type: 'segmented', default: '', options: [
-        { value: 'company', label: paysLabel(), icon: 'briefcase' },
-        { value: 'me', label: 'I pay, ' + c + ' pays me back', icon: 'coin' },
-        { value: '', label: 'Not sure yet' },
-      ], help: 'If ' + c + ' pays, it’s listed for ' + c + ' to fund and not planned on your money.' } : null,
+      { name: 'name', label: 'What is it?', required: true, placeholder: 'e.g. New laptop, A weekend away' },
       { name: 'cost', label: 'What it’ll cost', type: 'money', required: true, half: true },
       { name: 'monthly', label: 'Ongoing cost a month', type: 'money', optional: true, half: true, help: 'For things that keep costing, like software or rent.' },
       { name: 'priority', label: 'How important', type: 'segmented', options: PRIORITIES, default: 'should' },
-      { name: 'notBefore', label: 'Not before', type: 'date', optional: true, half: true, showIf: (v) => v.payer !== 'company' },
+      { name: 'notBefore', label: 'Not before', type: 'date', optional: true, half: true },
       { name: 'wantBy', label: 'Want it by', type: 'date', optional: true, half: true },
-      { name: 'plannedDate', label: 'Already booked for', type: 'date', optional: true, half: true, help: 'Leave empty and I’ll find the earliest date you can afford it.', showIf: (v) => v.payer !== 'company' },
-      work ? { name: 'projectId', label: 'For project', type: 'select', options: [{ value: '', label: 'None' }].concat((s.projects || []).map((p) => ({ value: p.id, label: p.name }))), half: true } : null,
+      { name: 'plannedDate', label: 'Already booked for', type: 'date', optional: true, half: true, help: 'Leave empty and I’ll find the earliest date you can afford it.' },
       { name: 'status', label: 'Status', type: 'segmented', options: [{ value: 'open', label: 'To do' }, { value: 'done', label: 'Done' }, { value: 'dropped', label: 'Dropped' }], default: 'open' },
-      work ? { name: 'workFolder', label: 'Folder', type: 'select', options: [{ value: '', label: 'No folder' }].concat(foldersOf(s, 'costs').map((f) => ({ value: f.id, label: f.name }))), half: true } : null,
       { name: 'files', label: 'Quotes or files', type: 'files', dropLabel: 'Add quotes, links saved as PDFs or photos' },
       { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, optional: true },
-    ].filter(Boolean);
+    ];
     formDialog({
-      title: i ? 'Edit idea' : work ? 'New idea to cost' : 'Something to save for',
-      intro: i ? null : work ? esc('Add what it is, what it’ll cost and who pays. If you pay, I’ll find when you can afford it until ' + c + ' pays you back.')
-        : 'Add what it is and what it’ll cost. I’ll find the earliest date you can afford it without dropping below what you keep, and which account it could come from.',
+      title: i ? 'Edit idea' : 'Something to save for',
+      intro: i ? null : 'Add what it is and what it’ll cost. I’ll find the earliest date you can afford it without dropping below what you keep, and which account it could come from.',
       fields,
-      values: i ? Object.assign({ status: 'open' }, i, { payer: ideaPayer(i) || '' }) : { priority: 'should', status: 'open', payer: opts.payer || '', workFolder: opts.folder || '' },
-      submitLabel: i ? 'Save' : work ? 'Add idea' : 'Add it',
+      values: i ? Object.assign({ status: 'open' }, i) : { priority: 'should', status: 'open' },
+      submitLabel: i ? 'Save' : 'Add it',
       onSubmit: (v) => {
         const rec = Object.assign(i ? Object.assign({}, i) : { id: 'ci-' + uid(), created: today() }, v, { context: ctx, updated: today() });
-        if (!work || (rec.payer !== 'me' && rec.payer !== 'company')) delete rec.payer;
-        if (!work) {
-          delete rec.workFolder;
-          delete rec.projectId;
-        }
         if (rec.status === 'done' && !rec.doneDate) rec.doneDate = today();
         if (rec.status !== 'done') delete rec.doneDate;
         store.upsert('costIdeas', rec);
         if (i) return;
-        if (rec.payer === 'company') return toast(rec.name + ': added for ' + c + ' to fund');
         const r = GU.costs.schedule(store.state).results.find((x) => x.idea.id === rec.id);
         toast(r && r.date ? rec.name + ': ' + (daysUntil(r.date) <= 0 ? 'you can afford it now' : 'earliest ' + short(r.date)) + (r.account ? ', from ' + r.account : '') : rec.name + ' doesn’t fit in the time ahead yet');
       },
@@ -1385,7 +1275,7 @@
     opts = opts || {};
     const s = store.state;
     const n = id ? store.find('workNotes', id) : null;
-    const area = n ? n.area || 'general' : opts.area || 'general';
+    const area = n ? noteArea(n) : opts.area || 'general';
     const folderOpts = (a) => [{ value: '', label: 'No folder' }].concat(foldersOf(s, a).map((f) => ({ value: f.id, label: f.name })));
     formDialog({
       title: n ? 'Note' : 'New note',
@@ -1491,12 +1381,12 @@
       ]);
     }
     const area = AREA_OF[c];
-    const home = c === 'costIdeas' && ideaPart(r) === 'home';
+    const idea = c === 'costIdeas';
     const items = [
       { icon: 'edit', label: 'Open and edit', onClick: () => GU.view.open({ c, id }) },
       { icon: 'edit', label: 'Rename', onClick: () => rename(c, id) },
     ];
-    if (!home) items.push({ icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) });
+    if (!idea) items.push({ icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) });
     const setPayer = (who) => W && W.setPayer && W.setPayer(c, id, who);
     if (c === 'paperwork') {
       const ln = laneOf(r);
@@ -1507,13 +1397,7 @@
     } else if (c === 'bills') {
       if (billPayer(r) === 'company') items.push({ icon: 'coin', label: 'Comes out of my account', hint: co(true) + ' pays me back', onClick: () => setPayer('me') });
       else items.push({ icon: 'briefcase', label: C + ' pays it directly', hint: 'Not from your account', onClick: () => setPayer('company') });
-    } else if (c === 'costIdeas') {
-      if (!home) {
-        const who = ideaPayer(r);
-        if (who !== 'company') items.push({ icon: 'briefcase', label: paysLabel(), hint: 'Listed for ' + co() + ' to fund', onClick: () => setPayer('company') });
-        if (who !== 'me') items.push({ icon: 'coin', label: 'I pay, ' + co() + ' pays me back', onClick: () => setPayer('me') });
-        if (who) items.push({ icon: 'info', label: 'Not sure who pays', onClick: () => setPayer(null) });
-      }
+    } else if (idea) {
       if (GU.costs.isOpen(r)) {
         items.push({ icon: 'check', label: 'Mark done', onClick: () => ideaStatus(id, 'done') });
         items.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => ideaStatus(id, 'dropped') });
@@ -1521,8 +1405,9 @@
     } else if (c === 'projects') {
       for (const st of ['In progress', 'Done'].filter((x) => x !== r.status)) items.push({ icon: st === 'Done' ? 'check' : 'clock', label: 'Mark ' + st.toLowerCase(), onClick: () => store.commit((x) => (x.projects.find((p) => p.id === id).status = st)) });
     }
-    if (home) items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Moves it to Work › Cost forecast', onClick: () => toWork(c, id) });
-    else if (c !== 'projects') items.push({ icon: 'home', label: 'Move to Home', hint: c === 'costIdeas' ? 'It’s mine: Home › Plans' : 'It’s mine, not for work', onClick: () => takeOut(c, id) });
+    if (idea) {
+      if (GU.costs.isOpen(r)) items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Adds it to Work › To buy', onClick: () => toWork(id) });
+    } else if (c !== 'projects') items.push({ icon: 'home', label: 'Move to Home', hint: 'It’s mine, not for work', onClick: () => takeOut(c, id) });
     items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(c, id, nameOf(c, r)) });
     menu(anchor, items);
   }
@@ -1579,14 +1464,10 @@
     });
     toast('Moved to Home', { action: 'Undo', onAction: () => store.upsert(c, before) });
   }
-  /* The other way, for one of your own ideas: it's for work after all. */
-  function toWork(c, id) {
-    const before = Object.assign({}, store.find(c, id));
-    store.commit((s) => {
-      const r = s[c].find((x) => x.id === id);
-      if (r) r.context = 'work';
-    });
-    toast('Moved to Work › Cost forecast', { action: 'Undo', onAction: () => store.upsert(c, before) });
+  /* The other way, for one of your own ideas: it's for work after all, so it goes on Work › To buy (and leaves the plan). */
+  function toWork(id) {
+    if (GU.requests && GU.requests.addIdeas) return GU.requests.addIdeas([id]);
+    return null;
   }
 
   /* Opens a project, note or idea (from anywhere, e.g. Home's timeline). */

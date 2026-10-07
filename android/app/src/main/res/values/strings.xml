@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">The Ground Up</string>
+    <string name="share_title">Share</string>
+    <string name="saved_to_downloads">Saved to Downloads: %1$s</string>
+    <string name="save_failed">Couldn’t save %1$s</string>
+    <string name="storage_denied">Allow storage access to save files to Downloads, then try again.</string>
+    <string name="no_app_to_open">No app on this phone can open that.</string>
+    <string name="no_file_picker">No file picker is available on this phone.</string>
+    <string name="share_failed">Couldn’t share that.</string>
+</resources>

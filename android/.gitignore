@@ -1,0 +1,15 @@
+# The Android SDK and caches downloaded by build.sh
+.sdk/
+.cache/
+# Gradle and build output
+.gradle/
+build/
+app/build/
+local.properties
+dist/
+# Web files copied in at build time (the repo root is the source of truth)
+app/src/main/assets/
+# Never commit signing material
+*.jks
+*.keystore
+keystore.properties

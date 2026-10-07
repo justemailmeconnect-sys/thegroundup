@@ -1,6 +1,6 @@
 /* The Ground Up: Ask Claude. A chat with Claude from any page. It gets a summary of the dashboard with each
    message and can look things up (transactions, bills, debts, the forecast…) or make changes you can undo
-   (add a task, a bill, a note, an idea to cost). Inside the Claude app it uses your Claude account; anywhere
+   (add a task, a bill, a note, a thing to buy, something to save for). Inside the Claude app it uses your Claude account; anywhere
    else it uses your own API key from Settings, if you've added one. */
 (function () {
   'use strict';
@@ -230,9 +230,21 @@
       const projects = (s.projects || []).filter((p) => !['Done', 'Cancelled'].includes(p.status));
       if (projects.length) line('WORK PROJECTS: ' + projects.slice(0, 30).map((p) => clip(p.name) + ' [' + clip(p.status || 'Idea', 20) + ']' + (p.start ? ' starts ' + day(p.start) : '') + (p.deadline ? ' due ' + day(p.deadline) : '') + (Number(p.value) ? ' worth ' + money(p.value) : '')).join('; '));
     }
-    if (GU.costs && (s.costIdeas || []).some(GU.costs.isOpen)) {
+    // Work › To buy: what the things the business asked the user to get come to (a price is for one; qty × price is the line).
+    if (GU.requests && GU.requests.forecast) {
+      const f = GU.requests.forecast(s);
+      const open = (s.requests || []).filter((r) => r && r.id && r.status !== 'bought' && r.status !== 'dropped');
+      if (open.length || f.boughtCount) {
+        const item = (r) => clip(r.title) + (GU.requests.lineTotal(r) ? ' ' + (Number(r.qty) > 1 ? Math.round(Number(r.qty)) + ' x ' + money(GU.requests.unitOf(r)) + ' = ' : '') + money(GU.requests.lineTotal(r)) : ' (no price yet)') +
+          (day(r.needBy) ? ' needed ' + day(r.needBy) : '') + (r.payer === 'company' ? ' (' + co + ' pays)' : '') + (r.status === 'ordered' ? ' [ordered]' : '');
+        line('\nTO BUY (things ' + co + ' asked the user to get, still to get; the To buy page adds them up): ' + money(f.total) + ' for ' + plural(f.count, 'thing') + ', ' + money(f.me) + ' you pay and ' + co + ' pays back, ' + money(f.company) + ' ' + co + ' pays, ' +
+          money(f.soon) + ' needed within 7 days' + (f.unpriced ? '; ' + f.unpriced + ' with no price yet, not in the total' : '') + (f.boughtCount ? '; bought this month ' + money(f.bought) : '') + '.' +
+          (open.length ? ' Items: ' + open.slice(0, 25).map(item).join('; ') + '.' : ''));
+      }
+    }
+    if (GU.costs && (s.costIdeas || []).some((i) => GU.costs.isOpen(i) && GU.costs.ideaPart(i) === 'home')) {
       const c = GU.costs.schedule(s);
-      line('\nCOST FORECAST (ideas the user wants to afford; includes about ' + money(c.base.everyday, { whole: true }) + ' a month everyday spending): spare about ' + money(c.spare, { whole: true }) + ' a month; could spend ' + money(c.freeNow, { whole: true }) + ' now. Ideas: ' + c.results.slice(0, 30).map((r) => clip(r.idea.name) + ' ' + money(r.cost, { whole: true }) + ': ' + (r.date ? 'earliest ' + day(r.date) + (r.account ? ' from ' + clip(r.account, 40) : '') : 'does not fit in ' + c.base.cfg.months + ' months, ' + money(r.shortfall, { whole: true }) + ' short')).join('; '));
+      line('\nPLANS (things the user is saving up for, their own, not for work; includes about ' + money(c.base.everyday, { whole: true }) + ' a month everyday spending): spare about ' + money(c.spare, { whole: true }) + ' a month; could spend ' + money(c.freeNow, { whole: true }) + ' now. Ideas: ' + c.results.slice(0, 30).map((r) => clip(r.idea.name) + ' ' + money(r.cost, { whole: true }) + ': ' + (r.date ? 'earliest ' + day(r.date) + (r.account ? ' from ' + clip(r.account, 40) : '') : 'does not fit in ' + c.base.cfg.months + ' months, ' + money(r.shortfall, { whole: true }) + ' short')).join('; '));
     }
     const tasks = s.tasks.filter((k) => !k.done).sort((a, b) => (day(a.due) || '9').localeCompare(day(b.due) || '9'));
     if (tasks.length) line('\nOPEN TASKS: ' + tasks.slice(0, 25).map((k) => clip(k.title) + (k.due ? ' (due ' + day(k.due) + ')' : '') + ' [' + clip((s.todoLists.find((l) => l.id === k.listId) || {}).name, 30) + ']').join('; '));
@@ -512,12 +524,12 @@
     },
     {
       name: 'add_note',
-      description: 'Save a note in the Work section (meeting notes, ideas, who to call). area is one of general, tasks, invoices, projects, bills, contracts, costs.',
-      inputSchema: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' }, area: { type: 'string', enum: ['general', 'tasks', 'invoices', 'projects', 'bills', 'contracts', 'costs'] } }, required: ['title', 'body'] },
+      description: 'Save a note in the Work section (meeting notes, ideas, who to call). area is one of general, requests (the To buy page), tasks, invoices, projects, bills, contracts.',
+      inputSchema: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' }, area: { type: 'string', enum: ['general', 'requests', 'tasks', 'invoices', 'projects', 'bills', 'contracts'] } }, required: ['title', 'body'] },
       execute(i) {
         const title = squash(i.title, 120);
         if (!title) throw new Error('A title is needed');
-        const areas = ['general'].concat(GU.work ? GU.work.AREAS.map((a) => a.id) : ['tasks', 'invoices', 'projects', 'bills', 'contracts', 'costs']);
+        const areas = ['general', 'requests'].concat(GU.work ? GU.work.AREAS.map((a) => a.id) : ['tasks', 'invoices', 'projects', 'bills', 'contracts']);
         const area = oneOf(i.area, 'area', areas, 'general');
         const id = 'wn-' + uid();
         save((s) => s.workNotes.push({ id, area, folder: '', title, body: str(i.body, 8000), created: today(), updated: today() }), () => !!store.find('workNotes', id));
@@ -527,7 +539,7 @@
     },
     {
       name: 'add_cost_idea',
-      description: 'Add an idea to the Work cost forecast, which works out when it can be afforded. priority is must, should or could. want_by is optional YYYY-MM-DD. Returns the earliest affordable date if there is one.',
+      description: 'Add one of the user\'s OWN things to save for (Home › Plans), which works out when they can afford it. For personal things only: for something the business asked the user to get for work, use add_request instead. priority is must, should or could. want_by is optional YYYY-MM-DD. Returns the earliest affordable date if there is one.',
       inputSchema: { type: 'object', properties: { name: { type: 'string' }, cost: { type: 'number' }, monthly: { type: 'number' }, priority: { type: 'string', enum: ['must', 'should', 'could'] }, want_by: { type: 'string', description: 'YYYY-MM-DD' } }, required: ['name', 'cost'] },
       execute(i) {
         const name = squash(i.name, 100);
@@ -537,10 +549,30 @@
         const priority = oneOf(i.priority, 'priority', ['must', 'should', 'could'], 'should');
         const wantBy = realDate(i.want_by, 'want_by');
         const id = 'ci-' + uid();
-        save((s) => s.costIdeas.push({ id, name, cost, monthly, priority, wantBy, status: 'open', files: [], created: today() }), () => !!store.find('costIdeas', id));
-        record('Added “' + name + '” (' + money(cost, { whole: true }) + ') to the cost forecast', undoAdd('costIdeas', id, name));
+        save((s) => s.costIdeas.push({ id, name, cost, monthly, priority, wantBy, context: 'home', status: 'open', files: [], created: today() }), () => !!store.find('costIdeas', id));
+        record('Added “' + name + '” (' + money(cost, { whole: true }) + ') to Plans', undoAdd('costIdeas', id, name));
         const r = GU.costs ? GU.costs.schedule(store.state).results.find((x) => x.idea.id === id) : null;
         return { ok: true, id, earliest: r && r.date ? r.date : null, from: r && r.account ? clip(r.account, 40) : null, shortBy: r && !r.date ? r.shortfall : 0 };
+      },
+    },
+    {
+      name: 'add_request',
+      description: 'Note something the business (or someone there) has asked the user to get, in Work › To buy, which adds up what it will cost. estimate is the price of ONE in pounds (leave it out if not known) and qty how many, so the line comes to qty times estimate. need_by is optional YYYY-MM-DD. payer "me" (the default) means the user pays and gets it back; "company" means the business pays. Not for something already bought, and not for the user\'s own things (use add_cost_idea).',
+      inputSchema: { type: 'object', properties: { title: { type: 'string' }, estimate: { type: 'number' }, qty: { type: 'number' }, need_by: { type: 'string', description: 'YYYY-MM-DD' }, payer: { type: 'string', enum: ['me', 'company'] }, note: { type: 'string' } }, required: ['title'] },
+      execute(i) {
+        if (!GU.requests || !GU.requests.add) throw new Error('Work › To buy isn\'t available here.');
+        const title = squash(i.title, 120);
+        if (!title) throw new Error('A title is needed');
+        if (toNum(i.estimate) < 0) throw new Error('estimate can\'t be negative');
+        const estimate = i.estimate == null || i.estimate === '' ? null : amountIn(i.estimate, 'estimate', true);
+        let qty = 1;
+        if (i.qty != null && i.qty !== '') {
+          qty = Math.round(toNum(i.qty));
+          if (!Number.isFinite(qty) || qty < 1 || qty > 999) throw new Error('qty must be a whole number from 1 to 999');
+        }
+        const res = GU.requests.add({ title, estimate, qty, needBy: realDate(i.need_by, 'need_by'), payer: oneOf(i.payer, 'payer', ['me', 'company'], 'me'), note: str(i.note, 1000) });
+        record('Noted “' + title + '” to buy' + (estimate ? ' (' + (qty > 1 ? qty + ' × ' + money(estimate) + ' = ' + money(estimate * qty) : money(estimate)) + ')' : ''), undoAdd('requests', res.rec.id, title));
+        return { ok: true, id: res.rec.id };
       },
     },
     {

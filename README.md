@@ -29,12 +29,12 @@ The site has two parts, like the two halves of a shop's website: **Home** is you
 | Page | What it does |
 | --- | --- |
 | **Overview** | A box where you can type anything for work, like "Paid £18 for printer paper", then **Needs attention**: the five things that matter most, worst first (things to send, repayments to confirm, invoices the business still has to pay, late tasks, projects about to start, contracts ending), with the rest under "+ n more". Then a card for each page in two groups, **Money** and **Running it**, the one-off **Tidy-up from the Home/Work split** (closed, with how many are left to check) and notes. |
+| **To buy** | A simple calculator for what the business has asked you to get. Add each thing (type it like "3x gloves £12 each, by Friday") with how many and the price of one, and the **What it will cost** panel adds it up: the total for everything still to get, how much you pay and get back, how much the business pays, what's needed within 7 days, and what you've bought this month. Things with no price are counted apart ("2 have no price yet"), never as £0. The rows show the working (2 × £12.00 = £24.00); mark one ordered or bought (the receipt form opens ready to fill, then it goes to Get paid back), and **Download list** gives a spreadsheet with each price, the line totals and a total row. Every change has Undo. Ideas made on the old Cost forecast page wait in a closed fold at the bottom, to add one by one or all at once. |
 | **Get paid back** | Things you paid for the business with your own money, from **Not sent yet** to **Waiting** to **Paid back**. See below. |
 | **… pays** | Named after the business ("Acme pays"). Orders, invoices and receipts the business pays for itself, on its own card or account. None of it is your money, so it never shows in Home. Invoices wait until you mark them **Paid by …**. |
 | **Bills** | Regular work costs, in two groups: ones that come out of your account and the business pays you back (each payment joins Get paid back by itself), and ones the business pays directly. |
 | **Tasks** | The Work to-do list, with quick add. |
 | **Projects** | Jobs and pieces of work, from idea to done, with dates. |
-| **Cost forecast** | Things the business wants to buy, grouped by who pays: the business's own list to fund, the ones you'll pay for and get back (planned on your money until they're paid back), and ones not sorted yet. |
 | **Contracts & documents** | Leases, licences, insurance, supplier terms and registrations, with end-date reminders. |
 
 Every Work page keeps folders, search and notes (a small **+ Note** button until the page has some, then a Notes panel).
@@ -60,7 +60,7 @@ The full guide, with a row for each kind of thing, is under **+ Add › Where do
 
 ### Two kinds of work money
 
-Every work receipt, invoice, bill and idea to cost says whose money paid for it:
+Every work receipt, invoice, bill and thing to buy says whose money paid for it:
 
 - **The business's money.** It lives in Work and never touches your own figures: not in your money ahead, spending, budgets, income or plans.
 - **Your money, to get back.** It goes in **Get paid back**. The payment really leaves your account, so your balances and money ahead include it, but it's kept out of your spending and budgets.
@@ -162,7 +162,7 @@ Live bank connections (Open Banking) need a small server and an account with a p
 
 ## Planning ahead
 
-Home's menu is grouped by what you need: **Overview** and the **Sorting hub**; money ahead (**Bills**, **Debts**, **Income**, **Plans**); money so far (**Bank**, **Spending**); paperwork (**Receipts**, **Documents**); and life (**To-do** and your sections). Work's menu has **Overview** and the **Sorting hub**; money (**Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Cost forecast**, **Contracts & documents**).
+Home's menu is grouped by what you need: **Overview** and the **Sorting hub**; money ahead (**Bills**, **Debts**, **Income**, **Plans**); money so far (**Bank**, **Spending**); paperwork (**Receipts**, **Documents**); and life (**To-do** and your sections). Work's menu has **Overview** and the **Sorting hub**; money (**To buy**, **Get paid back**, **… pays**, **Bills**); and running it (**Tasks**, **Projects**, **Contracts & documents**).
 
 Home's overview starts from your balances (from your statements, or what you put in with **Update balances**) and adds everything expected from today: income on its next dates, bills, debt payments, every instalment of a payment schedule and unpaid invoices. Each account is followed separately, so if your income lands in one account and your bills leave another you'll see which one runs short and when.
 
@@ -225,7 +225,7 @@ js/folders.js         using your own folder names to decide where files go
 js/debts.js           account balances, lenders, matching debt payments, payoff maths
 js/recurring.js       finding regular bills in your bank statements
 js/forecast.js        money ahead: income, bills, debts and instalments from today, per account
-js/costs.js           cost forecast: when ideas fit, given money ahead and everyday spending
+js/costs.js           cost forecast for Home › Plans: when your own ideas fit, given money ahead and everyday spending
 js/parts.js           Home and Work: which pages and records belong where, the doors, + Add, "Where does it go?"
 js/workmoney.js       work money: the employer, whose money paid, Get paid back, bank matching, the claim pack
 js/refile.js          the one-off Home/Work re-sort, its questions and its undo
@@ -245,7 +245,6 @@ No frameworks and no build step: plain HTML, CSS and JavaScript. PDF text is rea
 
 ## More pages and tools
 
-- **Work › To buy**: things the business has asked you to get. Mark one bought and the receipt form opens ready to fill, then it goes to Get paid back.
 - **Home › Tax year**: what came in for each tax year or Universal Credit month, from your statements, with CSV and printable downloads. Work money is shown apart. From here, build an **evidence pack** for an application (a mortgage, tenancy or visa, say): a zip of statements, payslips and a wages summary.
 - **Bank › Statements to import**: a nudge when an account you import into has a missing month or has gone quiet.
 - **Return-by dates** on receipts, with a reminder on the day list and a way to take a returned item out of Get paid back.

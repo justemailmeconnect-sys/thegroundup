@@ -11,13 +11,14 @@
     home: {
       label: 'Home',
       start: 'today',
-      groups: [['today', 'hub'], ['bills', 'debts', 'incomings', 'plans'], ['transactions', 'outgoings', 'taxyear'], ['receipts', 'documents'], ['todos']],
-      titles: ['', 'Money ahead', 'Money so far', 'Paperwork', 'Life'],
+      // Overview, Sorting hub and To-do first (no heading), then what's coming, what's happened, and the paperwork.
+      groups: [['today', 'hub', 'todos'], ['bills', 'debts', 'plans'], ['transactions', 'outgoings', 'incomings', 'taxyear'], ['receipts', 'documents']],
+      titles: ['', 'Money ahead', 'Money so far', 'Paperwork'],
     },
     work: {
       label: 'Work',
       start: 'work',
-      groups: [['work', 'hub'], ['work-requests', 'work-back', 'work-ktk', 'work-bills'], ['work-tasks', 'work-projects', 'work-costs', 'work-docs']],
+      groups: [['work', 'hub'], ['work-requests', 'work-back', 'work-ktk', 'work-bills'], ['work-tasks', 'work-projects', 'work-docs']],
       titles: ['', 'Money', 'Running it'],
     },
   };
@@ -326,10 +327,6 @@
         } },
         { icon: 'star', label: 'Project', hint: 'A job or piece of work coming up', onClick: () => use(() => tabs().work.editProject, [null, {}], 'work-projects') },
         { icon: 'file', label: 'Contract or document', hint: 'Leases, licences, insurance, supplier terms', onClick: () => use(() => tabs().documents.create, [{ type: (GU.work && GU.work.CONTRACT) || 'Contract or agreement', title: '', context: 'work' }, { onSaved: (r) => r && tagWork('documents', r.id) }], 'work-docs') },
-        { icon: 'trend', label: 'Idea to cost', hint: 'Something ' + c + ' wants to buy', onClick: () => {
-          if (GU.work && typeof GU.work.editIdea === 'function') return GU.work.editIdea(null, { context: 'work' });
-          return use(() => tabs().work.edit, [null, 'costIdeas'], 'work-costs');
-        } },
         { icon: 'note', label: 'Note', hint: 'Anything to remember', onClick: () => use(() => tabs().work.editNote, [null, { area: 'general' }], 'work') },
         { icon: 'folder', label: 'Folder', hint: 'To group things together', onClick: () => use(() => (GU.work && GU.work.newFolder) || tabs().work.newFolder, [null], 'work') },
         { icon: 'home', label: 'Something personal →', hint: 'Switch to Home', onClick: () => switchAndAdd('home') },
@@ -376,7 +373,7 @@
     const to = (tab, label) => '<button type="button" class="link link--btn" data-where-go="' + esc(tab) + '">' + esc(label) + '</button>';
     const row = (q, dest, more) => '<li><b>' + esc(q) + '</b> <span class="where__to">→ ' + dest + '</span>' + (more ? '<em>' + esc(more) + '</em>' : '') + '</li>';
     const work = [
-      row(C + ' asked me to get something', to('work-requests', 'Work › To buy'), 'Note it there first. When you’ve bought it, add the receipt and it goes to Get paid back.'),
+      row(C + ' asked me to get something', to('work-requests', 'Work › To buy'), 'Note it there with its price and I’ll add up what it will cost. When you’ve bought it, add the receipt and it goes to Get paid back.'),
       row('I bought something for ' + c + ' with my own card or cash', to('work-back', 'Work › Get paid back'), 'Snap the receipt, or open the payment in Bank and choose ‘Paid for ' + c + ', get it back’. Then tap ‘Send to ' + c + '’.'),
       row('I set up an order or quote and ' + c + ' pays at the end', to('work-ktk', 'Work › ' + pays), 'It waits there for ' + c + '. Tap ‘Send to ' + c + '’, then ‘Paid by ' + c + '’ once it’s paid.'),
       row('It went on ' + c + '’s card or account', to('work-ktk', 'Work › ' + pays), 'It’s filed as paid by ' + c + '.'),
@@ -388,7 +385,6 @@
       row('A contract, lease, licence, insurance or supplier terms for ' + c, to('work-docs', 'Work › Contracts & documents')),
       row('Something to do for ' + c, to('work-tasks', 'Work › Tasks')),
       row('A job or piece of work coming up', to('work-projects', 'Work › Projects')),
-      row('Something ' + c + ' wants to buy', to('work-costs', 'Work › Cost forecast'), 'Say who pays.'),
     ];
     const home = [
       row('My wages from ' + c, 'nothing to do', 'They show in Home › Income by themselves.'),

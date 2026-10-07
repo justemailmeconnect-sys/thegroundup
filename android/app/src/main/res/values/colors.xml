@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's paper background and its dark bottom bar (the website's bg and rail colours); the dark set is in values-night. -->
+    <color name="paper">#f5f2ec</color>
+    <color name="bottom_bar">#1a1c21</color>
+    <color name="ic_launcher_background">#6b3a6e</color>
+</resources>
