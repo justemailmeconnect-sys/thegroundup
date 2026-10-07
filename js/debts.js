@@ -710,5 +710,46 @@
   }
 
   GU.money = { accountBalance, accounts, balanceSeries, moveTransactions, mergeAccounts, accountFixes, applyFix, tidyAll, twins, importWarning };
-  GU.debts = { parseSchedule, setSchedule, dataEnd, TYPES, LENDERS, lenderFor, keysFor, payments, borrowing, summary, claim, spotted, overdrafts, totals, upcoming, monthsToClear };
+  /* ---------- instalment plans (Klarna, PayPal Pay in 3, Amazon…) ---------- */
+  /* Splits each lender's payment schedule into its separate plans, so two TikTok Shop "Pay in 3"s or two
+     Samsung plans stay apart: a payment joins the plan whose last payment came 20 to 45 days earlier and is one
+     number before it ("2 of 3" then "3 of 3"), the closest in amount if more than one could fit. */
+  function instalments(state) {
+    const out = [];
+    for (const d of state.debts || []) {
+      if (d.closed) continue;
+      const s = summary(state, d);
+      if (!s.scheduled || !s.plan.length) continue;
+      const lender = (lenderFor(d.lender) || lenderFor(d.name) || {}).name || d.lender || d.name;
+      const chains = [];
+      for (const i of s.plan.slice().sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount)) {
+        const merchant = i.merchant || d.name;
+        const fits = chains.filter((c) => {
+          const last = c.items[c.items.length - 1];
+          const gap = toDays(i.date) - toDays(last.date);
+          const sameMerchant = c.merchant.toLowerCase() === merchant.toLowerCase();
+          // Numbered payments follow on by number (a refund can shrink the last one); unnumbered ones by amount.
+          const numbered = !!(i.n && last.n);
+          const follows = numbered ? i.n === last.n + 1 && (c.of || 0) === (i.of || 0) : !i.n && !last.n && Math.abs(i.amount - last.amount) <= Math.max(1, last.amount * 0.15);
+          return sameMerchant && follows && gap >= 20 && gap <= 45;
+        }).sort((a, b) => Math.abs(a.items[a.items.length - 1].amount - i.amount) - Math.abs(b.items[b.items.length - 1].amount - i.amount));
+        if (fits.length) fits[0].items.push(i);
+        else chains.push({ merchant, of: i.of || null, items: [i] });
+      }
+      for (const c of chains) {
+        const next = c.items[0];
+        const left = c.items.length;
+        out.push({
+          debt: d, lender, merchant: c.merchant, of: c.of, items: c.items, next,
+          stage: next.n && c.of ? next.n : null,
+          paid: next.n ? next.n - 1 : null,
+          left, leftTotal: round2(sum(c.items, (x) => x.amount)), last: c.items[left - 1].date,
+          account: next.account || d.account || (s.lastPayment && s.lastPayment.account) || null,
+        });
+      }
+    }
+    return out.sort((a, b) => a.next.date.localeCompare(b.next.date) || a.merchant.localeCompare(b.merchant));
+  }
+
+  GU.debts = { parseSchedule, setSchedule, dataEnd, TYPES, LENDERS, lenderFor, keysFor, payments, borrowing, summary, claim, spotted, overdrafts, totals, upcoming, monthsToClear, instalments };
 })();

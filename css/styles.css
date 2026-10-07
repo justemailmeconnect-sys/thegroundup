@@ -923,3 +923,29 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .cf-empty { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 26px 16px; }
 .cf-empty .ico { width: 28px; height: 28px; color: var(--accent-2); }
 .wk-row__end em { display: block; font-style: normal; font-size: 11.5px; color: var(--ink-3); text-align: right; white-space: nowrap; }
+
+/* ---------- Bills: instalment plans ---------- */
+.inst-group + .inst-group { border-top: 1px solid var(--line); }
+.inst-group__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0; padding: 12px 18px 2px; font: 600 13px/1.3 var(--font-body); color: var(--ink); }
+.inst-group__head em { font: 400 12.5px var(--font-body); font-style: normal; color: var(--ink-3); }
+.inst { list-style: none; border-bottom: 1px solid var(--line); }
+.inst:last-child { border-bottom: 0; }
+.inst__main { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1.15fr) minmax(0, 1fr) 96px 78px; gap: 10px 14px; align-items: center; padding: 10px 18px; background: none; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.inst__main:hover { background: var(--surface-2); }
+.inst__text { display: grid; gap: 2px; min-width: 0; }
+.inst__text b { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inst__text em { font-style: normal; font-size: 12.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inst__steps { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.inst__steps i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line-strong); background: transparent; }
+.inst__steps i.is-paid { background: var(--accent-2); border-color: var(--accent-2); }
+.inst__steps i.is-next { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.inst__stage { display: grid; justify-items: start; gap: 3px; }
+.inst__stage em { font-style: normal; font-size: 12px; color: var(--ink-3); }
+.inst__main .row-item__amt.is-soon { color: var(--warn); }
+.inst-note { padding: 10px 18px 14px; font-size: 12.5px; margin: 0; border-top: 1px solid var(--line); }
+@media (max-width: 720px) {
+  .inst__main { grid-template-columns: 34px minmax(0, 1fr) auto; }
+  .inst__stage { grid-column: 2 / -1; grid-row: 2; }
+  .inst__main .row-item__date { grid-column: 2; grid-row: 3; text-align: left; display: flex; gap: 6px; }
+  .inst__main .row-item__amt { grid-column: 3; grid-row: 1; }
+}

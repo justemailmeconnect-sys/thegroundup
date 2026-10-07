@@ -52,6 +52,38 @@
       }).join('') + '</ul></section>';
   }
 
+  /* Klarna, PayPal, Amazon and other instalment plans, each with the stage it's at ("Payment 2 of 3"). */
+  function instalmentsHTML(plans) {
+    if (!plans.length) return '';
+    const lenders = Array.from(new Set(plans.map((p) => p.lender)));
+    const steps = (p) => {
+      // Paid so far, then what's actually left (a refund can cut a plan short of its original count).
+      const total = p.stage ? p.stage - 1 + p.left : 0;
+      if (!total || total > 24) return '';
+      let h = '<span class="inst__steps" aria-hidden="true">';
+      for (let i = 1; i <= total; i++) h += '<i class="' + (i < p.stage ? 'is-paid' : i === p.stage ? 'is-next' : '') + '"></i>';
+      return h + '</span>';
+    };
+    const row = (p) => {
+      const n = daysUntil(p.next.date);
+      const stage = p.stage ? 'Payment ' + p.stage + ' of ' + p.of : plural(p.left, 'payment') + ' left';
+      const acct = p.account && (store.state.accounts.find((a) => a.id === p.account) || {}).name;
+      const rest = p.left > 1 ? plural(p.left, 'payment') + ' left, ' + money(p.leftTotal) + ' in all, last on ' + fmtDate(p.last, { short: true }) : 'Last payment';
+      return '<li class="inst"><button type="button" class="inst__main" data-open-debt="' + esc(p.debt.id) + '">' +
+        '<span class="row-item__icon">' + icon('card') + '</span>' +
+        '<span class="inst__text"><b>' + esc(p.merchant) + '</b><em>' + esc([p.of === 3 ? 'Pay in 3' : p.of ? p.of + ' payments' : '', acct ? 'from ' + acct : ''].filter(Boolean).join(' · ')) + '</em>' + steps(p) + '</span>' +
+        '<span class="inst__stage">' + pill(stage, p.stage && p.stage === p.of ? 'good' : 'info') + '<em>' + esc(rest) + '</em></span>' +
+        '<span class="row-item__date"><b>' + esc(fmtDate(p.next.date, { weekday: true })) + '</b><em>' + esc(relDays(p.next.date)) + '</em></span>' +
+        '<span class="row-item__amt' + (n <= 3 ? ' is-soon' : '') + '">' + esc(money(p.next.amount)) + '</span></button></li>';
+    };
+    return '<section class="panel inst-panel"><header class="panel__head"><h2>' + icon('card') + 'Instalments</h2><span class="muted">' + esc(plural(plans.length, 'plan') + ' · ' + money(sum(plans, (p) => p.leftTotal)) + ' left to pay') + '</span></header>' +
+      lenders.map((l) => {
+        const list = plans.filter((p) => p.lender === l);
+        return '<div class="inst-group"><h3 class="inst-group__head"><span>' + esc(l) + '</span><em>' + esc(plural(list.length, 'plan') + ' · ' + money(sum(list, (p) => p.leftTotal)) + ' left') + '</em></h3><ul class="rows">' + list.map(row).join('') + '</ul></div>';
+      }).join('') +
+      '<p class="panel__foot muted inst-note">From your payment schedules on the Debts page. Each payment is already in Money ahead on Home, so nothing is counted twice.</p></section>';
+  }
+
   function render(root) {
     const s = store.state;
     const t = today();
@@ -73,11 +105,13 @@
       byCat.set(c, (byCat.get(c) || 0) + F.monthlyEquivalent(b.amount, b.frequency));
     }
     const catItems = Array.from(byCat, ([label, value]) => ({ label, value: Math.round(value * 100) / 100 })).sort((a, b) => b.value - a.value);
+    const plans = GU.debts.instalments(s);
+    const instSoon = plans.flatMap((p) => p.items).filter((i) => daysUntil(i.date) >= 0 && daysUntil(i.date) <= 30);
 
     root.innerHTML = GU.view.head({
       eyebrow: 'Money ahead',
       title: 'Bills',
-      text: 'Your regular payments. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on your Today list until you mark them paid.',
+      text: 'Your regular payments, plus your Klarna, PayPal and Amazon instalments with the stage each plan is at. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on Home until you mark them paid.',
       actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +
@@ -88,11 +122,13 @@
       '<div><span>Bills per year</span><b>' + esc(money(monthly * 12, { whole: true })) + '</b><em>' + esc(plural(active.length, 'active bill')) + '</em></div>' +
       '<div><span>Due in the next 7 days</span><b>' + esc(money(sum(week, (b) => b.amount))) + '</b><em>' + esc(plural(week.length, 'bill')) + '</em></div>' +
       '<div><span>Overdue</span><b class="' + (overdue.length ? 'is-crit' : '') + '">' + overdue.length + '</b><em>' + (overdue.length ? esc(money(sum(overdue, (b) => b.amount))) + ' to pay' : 'all paid') + '</em></div>' +
+      (plans.length ? '<div><span>Instalments, next 30 days</span><b>' + esc(money(sum(instSoon, (i) => i.amount))) + '</b><em>' + esc(plural(instSoon.length, 'payment') + ' across ' + plural(plans.length, 'plan')) + '</em></div>' : '') +
       '</div>' +
       '<div class="cols cols--main-side">' +
       '<div class="stack">' +
       (groups.length ? groups.map((g) => '<section class="panel"><header class="panel__head"><h2>' + esc(g.title) + '</h2><span class="muted">' + esc(money(sum(g.items, (b) => b.amount))) + '</span></header><ul class="rows">' + g.items.map(rowHTML).join('') + '</ul></section>').join('')
         : '<section class="panel">' + emptyState({ icon: 'bills', title: 'No bills yet', text: 'Add your rent, energy, phone, subscriptions and anything else you pay regularly.', action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add your first bill</button>' }) + '</section>') +
+      instalmentsHTML(plans) +
       (stopped.length ? '<details class="panel panel--details"' + (showStopped ? ' open' : '') + '><summary class="panel__head"><h2>Stopped bills</h2><span class="muted">' + stopped.length + '</span></summary><ul class="rows">' + stopped.map(rowHTML).join('') + '</ul></details>' : '') +
       '</div>' +
       '<aside class="stack">' +
@@ -127,6 +163,7 @@
       }
       const pay = e.target.closest('[data-pay]');
       if (pay) return markPaid(pay.dataset.pay);
+      if (e.target.closest('[data-open-debt]')) return GU.view.go('debts');
       const ed = e.target.closest('[data-edit]');
       if (ed) edit(ed.dataset.edit);
     });
