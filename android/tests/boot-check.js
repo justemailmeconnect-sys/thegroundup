@@ -307,7 +307,7 @@ async function waitForCall(page, fn, timeout = 8000, min = 1) {
     await wait(1500);
     const bars = await callsOf(page, 'setBars');
     const last = bars[bars.length - 1] || {};
-    const want = scheme === 'light' ? { status: '#f5f2ec', nav: '#1a1c21' } : { status: '#141311', nav: '#0c0c0e' };
+    const want = scheme === 'light' ? { status: '#ffffff', nav: '#1a1c21' } : { status: '#141311', nav: '#0c0c0e' };
     check('status/navigation bar colours reported to the app (' + scheme + ')', last.status === want.status && last.nav === want.nav, { reported: bars.length, last });
     if (scheme === 'dark') {
       await page.evaluate(() => GU.view.go('today'));

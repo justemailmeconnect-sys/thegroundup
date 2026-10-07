@@ -15,15 +15,15 @@
   const PROCESSORS = /^(stripe|paypal|gocardless|sumup|worldpay|checkout|square|sq)$/;
   const NOISE = /\b(gbr|gb|uk|london|ltd|limited|plc|co|com|www|payment|payments|to|on|dd|so|bp|fpo|card|direct|debit|standing|order|ref|reference|mandate|no)\b/g;
 
-  /* The company a payment went to, as a stable key ("O2", "Taurus Insurance S", "Jd Gyms"). */
+  /* The company a payment went to, as a stable key ("O2", "Acme Insurance S", "Fit Gyms"). */
   function parts(desc) {
     const raw = String(desc || '').toLowerCase();
     const [head, ...rest] = raw.split(/\s+·\s+/);
-    // Reference codes change every month ("Spotify P4169947BA"): drop any longer word with a digit in it, but keep "O2".
+    // Reference codes change every month ("Spotify P1234567BA"): drop any longer word with a digit in it, but keep "O2".
     const clean = (s) => s.replace(/^(crv|sq|sumup|zettle_?|paypal|pp|iz|sp)\s*\*\s*/g, '').replace(/[^a-z0-9&+ ]+/g, ' ').split(' ').filter((w) => !(w.length > 3 && /\d/.test(w))).join(' ')
       .replace(/\d{3,}/g, ' ').replace(NOISE, ' ').replace(/\s+/g, ' ').trim();
     let payee = clean(head);
-    // Paid through a payment company: the real company is in the reference ("Stripe · …BRSK LTD").
+    // Paid through a payment company: the real company is in the reference ("Stripe · …ACME LTD").
     if ((PROCESSORS.test(payee) || !payee) && rest.length) {
       const ref = clean(rest.join(' ').split(/\s+/).filter((w) => !/\d/.test(w) && w.length > 2).join(' '));
       if (ref) payee = ref;

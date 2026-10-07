@@ -98,15 +98,12 @@
   }
   // Pay words: wages, and the extras that come with them (a bonus, overtime, holiday or sick pay).
   const WAGE = /\bwages?\b|salary|payroll|\bbonus|overtime|holiday pay|sick pay|commission/i;
-  /* Whether an amount is exactly what the employer owes you: one claim, one sent pack, everything not sent yet,
-     everything sent, or the lot. A payment like that is them paying you back, however close it is to your pay. */
-  function owedExactly(s, a) {
-    const hit = (x) => x > 0 && Math.abs(x - a) < 0.005;
-    const open = claims(s, 'open');
-    if (!open.length) return false;
-    if (open.some((x) => hit(x.left))) return true;
-    const d = dueBack(s);
-    return hit(d.toSendTotal) || hit(d.sentTotal) || hit(d.total) || d.packs.some((pk) => hit(pk.left));
+  /* Whether a payment could be the employer paying you back: there is something owed to you and it is no more than
+     that (one claim, a sent pack, a part of the lot, or all of it). A payment like that is them paying you back,
+     however close it is to your pay; only one bigger than anything owed can be mistaken for wages. */
+  function couldBeRepaid(s, a) {
+    if (!(a > 0) || !claims(s, 'open').length) return false;
+    return a <= dueBack(s).total + 0.005;
   }
   /* Money to or from the employer, before your own rules: 'Salary' for wages, 'Work reimbursements' for
      anything else (repayments in, money you sent back out). '' when the line isn't the employer's. */
@@ -116,7 +113,7 @@
     if (!s || !a || !Number.isFinite(a) || !isEmployerText(s, desc)) return '';
     if (a < 0) return WORK_IN;
     if (WAGE.test(String(desc))) return 'Salary';
-    if (owedExactly(s, round2(a))) return WORK_IN;
+    if (couldBeRepaid(s, round2(a))) return WORK_IN;
     const src = wageSource(s);
     const w = src ? Math.abs(Number(src.amount) || 0) : 0;
     if (w > 0 && Math.abs(a - w) <= 0.2 * w) return 'Salary';
@@ -285,7 +282,7 @@
   /* Words too general to name a shop by their start alone. */
   const GENERAL = new Set('shop store online mobile direct market trade trading house home food travel express global digital world best super'.split(' '));
   /* Whether a bank word names the shop on a record: a word of its shop or title; one starting with the shop's name,
-     as bank lines run names together ('EUROFFICELT', 'ADOBESYSTEM', 'JUSTEATCOUK'); or Amazon's own shorthand
+     as bank lines run names together ('ACMEOFFICELT', 'ADOBESYSTEM', 'JUSTEATCOUK'); or Amazon's own shorthand
      ('AMZNMKTPLACE'). */
   function namesShop(p) {
     const set = new Set(shopWords(p));

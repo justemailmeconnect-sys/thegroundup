@@ -938,6 +938,21 @@
           if (work && payer) rec.payer = payer;
           if (wm()) {
             wm().normalise(rec);
+            // The payment of a monthly work bill you pay yourself already has its claim: this invoice's files go on that
+            // claim rather than claiming the same money twice (as when it's filed from the receipts form).
+            const twin = wm().billTwin ? wm().billTwin(st, rec) : null;
+            if (twin) {
+              const have = new Set((twin.files || []).map((f) => f && f.id));
+              twin.files = (twin.files || []).concat(metas.filter((m) => m && !have.has(m.id)));
+              if (!twin.reference && rec.reference) twin.reference = rec.reference;
+              attachUndo = { id: twin.id, fileIds: metas.map((m) => m.id) };
+              sameTitle = twin.title;
+              const at = placeOf({ destination: r.destination, context: 'work', payer: 'me' });
+              tab = at.tab;
+              sameLabel = at.label;
+              ref = { c: 'paperwork', id: twin.id };
+              break;
+            }
             // Yours to get back: link your bank payment when it's sure, so it leaves your own spending.
             if (wm().isClaim(rec) && !rec.purchaseTx && (rec.kind !== 'invoice-in' || rec.status === 'paid')) {
               const m = wm().purchaseFor(st, rec);

@@ -4,10 +4,10 @@
 /* ---------- palette: "Stone & Paper" ----------
    One warm-paper neutral base shared by both parts; each part brings its own accent family.
    html[data-part="home"]  Damson   (your own life and money)
-   html[data-part="work"]  Petrol   (KTK Healthcare)
+   html[data-part="work"]  Petrol   (the employer's colour)
    With no data-part set, the Home accent is used. Every contrast pair is computed (WCAG 2.x). */
 :root {
-  --bg: #f5f2ec; --bg-2: #eeeae2; --surface: #fcfbf8; --surface-2: #f1ede6; --line: #e5dfd5; --line-strong: #d0c8bb;
+  --bg: #ffffff; --bg-2: #f6f4f0; --surface: #ffffff; --surface-2: #f6f4f0; --line: #e5e1d9; --line-strong: #cfc9bd;
   --ink: #181b21; --ink-2: #484c55; --ink-3: #64676e;
   --accent: #6b3a6e; --accent-2: #85588c; --accent-ink: #fdf9fd; --accent-soft: #f1eaf4; --part-tint: #f7f1f8; --part-ink: #301631;
   --rail: #1a1c21; --rail-ink: #a6a8ae; --rail-hover: #272a31; --rail-active: #754779;
@@ -127,6 +127,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: 6px; }
+/* The menu is dark in both themes, so its focus ring is the light text colour (the accent is too dim on it in Work). */
+.rail :focus-visible { outline-color: var(--rail-ink-hover); }
 .ico { width: 18px; height: 18px; flex: none; }
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .muted { color: var(--ink-3); }
@@ -162,6 +164,16 @@ img { max-width: 100%; }
 /* Settings and New category stay at the bottom of the menu, in view even when the page list scrolls. */
 .rail__foot { margin-top: auto; position: sticky; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding-top: 6px; background: var(--rail); box-shadow: 0 -1px 0 var(--rail-hover); }
 .rail__settings { margin-top: 0; }
+@media (min-width: 861px) {
+  /* The list scrolls when the screen is short and its scrollbar is hidden, so it says so: items fade out above
+     Settings while there are more below, and a soft shadow shows under the top edge once it has scrolled. */
+  .rail__foot::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 26px; background: linear-gradient(transparent, var(--rail)); pointer-events: none; }
+  .rail__items {
+    background:
+      linear-gradient(var(--rail) 30%, transparent) 0 0 / 100% 26px no-repeat local,
+      radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--rail-ink) 34%, transparent), transparent) 0 0 / 100% 10px no-repeat scroll;
+  }
+}
 .rail__sep { width: 32px; height: 1px; background: var(--rail-hover); margin: 6px 0; flex: none; }
 .rail__sep em { display: none; }
 .rail__badge { position: absolute; top: -4px; right: -6px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--rail-badge); color: var(--rail-badge-ink); font: 600 10.5px/17px var(--font-body); text-align: center; box-shadow: 0 0 0 2px var(--rail); }
@@ -305,6 +317,7 @@ input:disabled, select:disabled, textarea:disabled { opacity: 0.6; }
 .row-item__icon .ico { width: 17px; height: 17px; }
 .row-item__text { display: grid; min-width: 0; }
 .row-item__text b { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.row-item__text .pill { max-width: 100%; white-space: normal; }
 .row-item__text em { font-style: normal; font-size: 12.5px; color: var(--ink-3); }
 .row-item__main:hover b { color: var(--accent); }
 .row-item__date { display: grid; text-align: right; font-size: 13px; }
@@ -406,7 +419,8 @@ dialog.dlg::backdrop { background: var(--backdrop); }
 .toast button { background: none; border: 0; color: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; padding: 0; white-space: nowrap; }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 .tooltip { position: fixed; z-index: 1100; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 6px 9px; border-radius: 7px; max-width: 260px; white-space: pre-line; box-shadow: var(--shadow); }
-.popover { position: fixed; z-index: 1050; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2); padding: 6px; min-width: 250px; max-width: calc(100vw - 16px); max-height: min(70vh, 520px); overflow-y: auto; }
+.popover { position: fixed; z-index: 1050; background: linear-gradient(var(--surface) 30%, transparent) 0 0 / 100% 24px no-repeat local, linear-gradient(transparent, var(--surface) 70%) 0 100% / 100% 24px no-repeat local,
+  radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--ink) 24%, transparent), transparent) 0 0 / 100% 10px no-repeat scroll, radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--ink) 24%, transparent), transparent) 0 100% / 100% 10px no-repeat scroll, var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2); padding: 6px; min-width: 250px; max-width: calc(100vw - 16px); max-height: min(70vh, 520px); overflow-y: auto; }
 .popover button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border: 0; background: none; border-radius: 8px; text-align: left; cursor: pointer; color: var(--ink); }
 .popover button:hover, .popover button:focus-visible { background: var(--surface-2); outline: none; }
 .popover button .ico { color: var(--accent-2); }
@@ -900,12 +914,6 @@ dialog.dlg::backdrop { background: var(--backdrop); }
 
 /* ---------- Cost forecast (Home › Plans) ---------- */
 .cf .tally__sum { border-bottom: 1px solid var(--line); }
-.cf-chart { padding-top: 14px; }
-.cf-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
-.cf-legend > span { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
-.cf-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--series-in); }
-.cf-key--base { border-top: 1.5px dashed var(--ink-3); }
-.cf-key--mark { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--accent); }
 .cf-room { padding: 4px 18px 14px; border-top: 1px solid var(--line); }
 .cf-room h3 { font-size: 14px; margin: 12px 0 2px; }
 .cf-room .muted { font-size: 12.5px; margin: 0 0 10px; }
@@ -1023,6 +1031,8 @@ dialog.dlg::backdrop { background: var(--backdrop); }
   .rail__sep--titled em { display: block; font: 500 8.5px/1.25 var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; font-style: normal; color: color-mix(in srgb, var(--rail-ink) 72%, transparent); text-align: center; text-wrap: balance; }
 }
 @media (max-width: 860px) {
+  /* Jumps inside a page (Money ahead, the steps, Check these) and keyboard focus stop below the fixed top bar. */
+  html { scroll-padding-top: calc(var(--partbar-h) + env(safe-area-inset-top, 0px) + 12px); }
   .partswitch--rail { display: none; }
   .partbar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; display: flex; align-items: center; gap: 12px; height: calc(var(--partbar-h) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 16px 0; background: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: saturate(1.4) blur(14px); backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid var(--line); }
   .partbar__brand { width: 34px; height: 34px; border-radius: 10px; background: var(--rail-active); display: grid; place-items: center; text-decoration: none; flex: none; transition: background 0.2s; }
@@ -1081,16 +1091,22 @@ dialog.dlg::backdrop { background: var(--backdrop); }
 .doors__where { background: var(--part-tint); box-shadow: inset 0 0 0 1px var(--line); margin: -2px 0 18px; padding: 8px 8px 8px 14px; }
 .doors__where > .ico { color: var(--accent-2); }
 .doors__where .icon-btn { margin-left: auto; }
+/* Icon, text and close stay on one row, however narrow the screen. */
+.doors__where { flex-wrap: nowrap; align-items: flex-start; }
+.doors__where > span { flex: 1 1 auto; min-width: 0; }
 @media (max-width: 720px) {
   .doors { flex-direction: column; gap: 10px; margin-bottom: 14px; }
   .door { flex: none; padding: 18px 18px 20px; border-radius: 18px; }
   .door--active { order: 1; }
   .doors__seam { order: 2; align-self: center; width: 40px; height: 40px; margin: -25px 0; font-size: 17px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rail-ink) 22%, transparent), 0 0 0 5px var(--bg); }
-  .door:not(.door--active) { order: 3; padding: 24px 18px 16px; gap: 8px 10px; }
+  .door:not(.door--active) { order: 3; padding: 12px 16px 14px; gap: 2px 10px; align-items: center; }
   .door__eyebrow { font-size: 10.5px; letter-spacing: 0.1em; }
   .door__word { font-size: 46px; padding-top: 2px; }
-  .door:not(.door--active) .door__word { font-size: 34px; }
-  .door:not(.door--active) .door__chips { display: none; }
+  /* The other part is a slim row: its name and a button, then one line. The switch above already says where it is. */
+  .door:not(.door--active) .door__eyebrow, .door:not(.door--active) .door__chips { display: none; }
+  .door:not(.door--active) > .door__word { flex: 1 1 0; min-width: 0; order: 1; font-size: 28px; padding: 0; }
+  .door:not(.door--active) > .door__btn { flex: none; order: 2; min-height: 34px; padding: 0 13px; font-size: 13px; }
+  .door:not(.door--active) > .door__line { order: 3; font-size: 13px; }
   .door__line { font-size: 14px; margin-bottom: 2px !important; }
   .door__btn { min-height: 38px; padding: 0 15px; }
   .door__chips { flex-basis: 100%; gap: 5px; }
@@ -1405,7 +1421,7 @@ dialog.dlg::backdrop { background: var(--backdrop); }
   .pb-send__proof { grid-column: 2; grid-row: 2; }
 }
 
-/* ---------- signposts: 'Receipts for KTK are in Work (n)', '1 work bill (…) is in Work › Bills' ---------- */
+/* ---------- signposts: 'Receipts for <employer> are in Work (n)', '1 work bill (…) is in Work › Bills' ---------- */
 /* A quiet one-line pointer from a Home page to where its work items live now. Not a warning, so it uses the
    part tint rather than the amber of a plain .note-line. */
 .note-line--signpost { background: var(--part-tint); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-2); margin: -2px 0 16px; padding: 9px 14px; }
@@ -1481,7 +1497,7 @@ dialog.dlg::backdrop { background: var(--backdrop); }
 .hub-ask { margin-bottom: 18px; }
 .hub-ask .ask-card__opts { justify-content: flex-start; }
 /* Waiting to be sorted. */
-.hub-waiting, .hub-recent { margin-bottom: 18px; }
+.hub-waiting { margin-bottom: 18px; }
 .hub-count { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 600 12px/1 var(--font-body); }
 .hub-list, .hub-group__list { list-style: none; margin: 0; padding: 0; }
 .hub-list > li { border-bottom: 1px solid var(--line); }
@@ -1540,7 +1556,6 @@ button.hub-card__part:hover { color: var(--ink); }
 .hub-card--nested { padding: 12px 14px; grid-template-columns: 40px minmax(0, 1fr); }
 .hub-card--nested .thumb { width: 40px; height: 48px; }
 /* Your rules. */
-.hub-recent .row-item--change .row-item__icon { background: var(--accent-soft); color: var(--accent); }
 .hub-rules { margin-bottom: 18px; }
 .hub-rules summary .muted { display: inline-flex; align-items: center; gap: 6px; }
 .hub-rules__chev { width: 15px; height: 15px; transition: transform 0.15s; }

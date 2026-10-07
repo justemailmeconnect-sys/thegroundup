@@ -239,7 +239,7 @@
   function spendRow(s, t, hint) {
     return '<li class="pb-tx"><button type="button" class="pb-tx__main" data-tx="' + esc(t.id) + '"><b>' + esc(bankText(t)) + '</b><em>' + esc([short(t.date), acct(s, t.account), hint].filter(Boolean).join(' · ')) + '</em></button>' +
       '<b class="pb-tx__amt">' + esc(money(-t.amount)) + '</b>' +
-      '<span class="pb-tx__act"><button type="button" class="btn btn--sm btn--soft" data-claim-tx="' + esc(t.id) + '">' + icon('plus') + 'Add to claim</button>' +
+      '<span class="pb-tx__act"><button type="button" class="btn btn--sm btn--soft" data-claim-tx="' + esc(t.id) + '">' + icon('plus') + 'Add to Get paid back</button>' +
       '<button type="button" class="btn btn--sm btn--ghost" data-not-work="' + esc(t.id) + '">Not work</button></span></li>';
   }
   function creditRow(s, e, t) {

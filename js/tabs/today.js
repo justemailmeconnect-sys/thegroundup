@@ -14,7 +14,7 @@
   const AHEAD_FIRST = 8;
   let aheadAll = false;
 
-  /* The employer's short name for sentences ('KTK'), or 'the company' when none is set. */
+  /* The employer's short name for sentences (from Settings), or 'the company' when none is set. */
   const co = (s, cap) => (GU.parts && GU.parts.co ? GU.parts.co(s, cap) : cap ? 'The company' : 'the company');
 
   const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];

@@ -713,7 +713,7 @@
   /* ---------- instalment plans (Klarna, PayPal Pay in 3, Amazon…) ---------- */
   // Days between payments for lenders that don't collect monthly.
   const EVERY = { Clearpay: 14, Zilch: 14, Laybuy: 7 };
-  /* Splits each lender's payment schedule into its separate plans, so four TikTok Shop "Pay in 3"s or two
+  /* Splits each lender's payment schedule into its separate plans, so four "Pay in 3"s from one shop or two
      Samsung plans stay apart. Every way one payment could follow another is scored by how close its spacing is
      to the lender's usual one; the best links are taken first, each payment having one before and one after. */
   function instalments(state) {

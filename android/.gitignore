@@ -13,3 +13,7 @@ app/src/main/assets/
 *.jks
 *.keystore
 keystore.properties
+
+# also match when these are symlinks
+.sdk
+.cache

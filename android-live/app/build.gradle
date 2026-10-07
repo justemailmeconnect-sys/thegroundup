@@ -1,0 +1,91 @@
+plugins {
+    id 'com.android.application'
+}
+
+// versionCode comes from android-live/version.properties (bump it for every build you want to install over the last one).
+// versionName is the build date (YYYY.MM.DD); build.sh passes it in so the APK file name and the app agree.
+def versionProps = new Properties()
+rootProject.file('version.properties').withInputStream { versionProps.load(it) }
+def guVersionCode = (project.findProperty('gu.versionCode') ?: versionProps.getProperty('versionCode', '1')).toString().toInteger()
+def guVersionName = (project.findProperty('gu.versionName') ?: new Date().format('yyyy.MM.dd')).toString()
+
+// Signing: the same release key as the standalone app (android/), which lives OUTSIDE the repo. Its location is a
+// properties file (storeFile, storePassword, keyAlias, keyPassword) named by GU_KEYSTORE_PROPS.
+def keystorePropsPath = System.getenv('GU_KEYSTORE_PROPS') ?:
+        '/tmp/claude-0/-home-user-thegroundup/df97e034-9bb0-52b9-b2cd-bd324c50d3b7/scratchpad/android-keystore/keystore.properties'
+def keystoreProps = new Properties()
+def keystorePropsFile = new File(keystorePropsPath)
+def haveKeystore = keystorePropsFile.isFile()
+if (haveKeystore) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+} else {
+    logger.warn("No keystore properties at ${keystorePropsPath}: the release APK will be unsigned. Run android-live/build.sh.")
+}
+
+android {
+    namespace 'com.groundup.live'
+    compileSdk 34
+    buildToolsVersion '34.0.0'
+
+    defaultConfig {
+        applicationId 'com.groundup.live'
+        minSdk 24
+        targetSdk 34
+        versionCode guVersionCode
+        versionName guVersionName
+    }
+
+    if (haveKeystore) {
+        signingConfigs {
+            release {
+                storeFile new File(keystoreProps.getProperty('storeFile'))
+                storePassword keystoreProps.getProperty('storePassword')
+                keyAlias keystoreProps.getProperty('keyAlias')
+                keyPassword keystoreProps.getProperty('keyPassword')
+                enableV1Signing = false   // minSdk 24: v2 and v3 cover every supported Android version
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // R8 strips the unused library code (the browser library pulls in a lot of androidx code this app never calls):
+            // the APK drops from about 0.9 MB to a few tens of KB. Nothing here uses reflection, so no extra keep rules.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            debuggable false
+            vcsInfo.include = false   // do not write the git remote/revision into the APK
+            if (haveKeystore) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig = false
+    }
+
+    packaging {
+        resources {
+            // Metadata files that come with the libraries and are not needed at run time.
+            excludes += ['kotlin/**', 'META-INF/*.version']
+        }
+    }
+
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+    }
+}
+
+dependencies {
+    implementation 'androidx.browser:browser:1.8.0'
+}

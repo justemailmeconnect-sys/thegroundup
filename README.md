@@ -57,7 +57,7 @@ Two questions sort almost everything:
 1. **Is it for the business you work for?** If not, it goes in Home.
 2. **If it is, did the money come out of your own account, card, PayPal or Amazon?** Yes: Work › Get paid back. No (the business paid, or will pay): Work › … pays.
 
-The full guide, with a row for each kind of thing, is under **+ Add › Where does it go?**, in the Sorting hub and in Settings. Anything can be moved between Home and Work from its ⋯ menu or its **For** field.
+The full guide, with a row for each kind of thing, is under **+ Add › Where does it go?**, in the Sorting hub and in Settings. Anything in Work can go back to Home from its ⋯ menu (**Move to Home**); to move something into Work, open it and set its **For** field.
 
 ### Two kinds of work money
 
@@ -121,9 +121,9 @@ It files an item automatically when it's confident and shows an Undo button; any
 
 One page, shared by Home and Work, that sorts out whatever you put in it. It replaces the old Inbox (old `#inbox` links open it).
 
-- **One box for everything.** Drop, choose or photograph files, pick a whole folder, paste a screenshot, or type. What you type can be something to keep ("Dentist 14 Nov 3pm", "paid £18 for printer paper for KTK") or an instruction:
+- **One box for everything.** Drop, choose or photograph files, pick a whole folder, paste a screenshot, or type. What you type can be something to keep ("Dentist 14 Nov 3pm", "paid £18 for printer paper for work") or an instruction:
   - "make a Pets section and put the vet bill in it"
-  - "all the Amazon receipts from September were for KTK, I paid"
+  - "all the Amazon receipts from September were for work, I paid"
   - "create a Gym category for PureGym payments"
   - "file everything you're sure about"
   - "move the Netlify receipt to Get paid back"

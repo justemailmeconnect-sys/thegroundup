@@ -407,7 +407,7 @@
       fields: [
         { name: 'lender', label: 'From', type: 'select', options, default: lender && options.includes(lender) ? lender : 'Klarna' },
         { name: 'how', type: 'html', html: '<p class="field__help" data-how></p>' },
-        { name: 'text', label: 'Paste the upcoming payments', type: 'textarea', rows: 7, optional: true, placeholder: 'For example:\nASOS  £33.33  Due 15 Oct\nJD Sports  £86.67  Due 25 Oct' },
+        { name: 'text', label: 'Paste the upcoming payments', type: 'textarea', rows: 7, optional: true, placeholder: 'For example:\nASOS  £25.00  Due 15 Oct\nArgos  £40.00  Due 25 Oct' },
         { name: 'files', label: 'Or add screenshots', type: 'files', dropLabel: 'Add screenshots from the app' },
       ],
       values: { lender: lender && options.includes(lender) ? lender : 'Klarna' },

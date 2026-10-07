@@ -131,7 +131,7 @@
     const e = (st(s).settings || {}).employer;
     return e && typeof e === 'object' ? e : null;
   };
-  /* The employer's short name ('KTK'), or 'the company' when none is set. cap: 'The company' for the start of a sentence. */
+  /* The employer's short name (from Settings), or 'the company' when none is set. cap: 'The company' for the start of a sentence. */
   function co(s, cap) {
     const e = employerOf(s);
     const n = e && String(e.short || '').trim();
@@ -145,7 +145,7 @@
     if (!name) return co(s);
     return full ? name : name.replace(/[\s,]+(limited|ltd\.?|plc|llp)$/i, '').trim() || name;
   }
-  /* The label for money the company pays itself: 'KTK pays', or 'Company pays' with no employer set. */
+  /* The label for money the company pays itself: '<employer> pays', or 'Company pays' with no employer set. */
   const paysLabel = (s) => (employerOf(s) && String(employerOf(s).short || '').trim() ? co(s) + ' pays' : 'Company pays');
 
   /* ---------- what's work ---------- */
@@ -268,6 +268,8 @@
   }
 
   /* ---------- + Add ---------- */
+  /* The Work area each page holds, so + Add › Folder starts on the page you're looking at. */
+  const AREA_OF_PAGE = { 'work-ktk': 'invoices', 'work-bills': 'bills', 'work-tasks': 'tasks', 'work-projects': 'projects', 'work-docs': 'contracts' };
   /* Calls an app function if it's there, otherwise opens a fallback page. */
   function use(getFn, args, fallbackTab) {
     let fn = null;
@@ -320,7 +322,7 @@
       const c = co(s);
       return [
         { icon: 'upload', label: 'Upload anything for ' + c, hint: 'I’ll read it and file it under Work', onClick: () => upload({ kind: 'work', area: null, name: 'Work' }) },
-        { icon: 'bag', label: 'Something ' + c + ' wants me to get', hint: 'Note it down, then order it and claim it back', onClick: () => use(() => tabs()['work-requests'].create, [], 'work-requests') },
+        { icon: 'bag', label: 'Something ' + c + ' wants me to get', hint: 'Note it down, then order it and get it paid back', onClick: () => use(() => tabs()['work-requests'].create, [], 'work-requests') },
         { icon: 'coin', label: 'I paid for something (get it back)', hint: 'With your own card, cash or account', onClick: () => use(() => tabs().receipts.create, [{ values: { context: 'work', payer: 'me', kind: 'receipt' } }], 'work-back') },
         { icon: 'receipt', label: 'Something ' + c + ' is paying', hint: 'Or has already paid: an order, invoice or receipt', onClick: () => use(() => tabs().receipts.create, [{ values: { kind: 'invoice-in', context: 'work', payer: 'company', status: 'unpaid' } }], 'work-ktk') },
         { icon: 'bills', label: 'Regular work cost', hint: 'A bill that comes round again', onClick: () => use(() => tabs().bills.create, [{ category: WORK_OUT(), context: 'work' }, { onSaved: (r) => r && tagWork('bills', r.id) }], 'work-bills') },
@@ -331,7 +333,7 @@
         { icon: 'star', label: 'Project', hint: 'A job or piece of work coming up', onClick: () => use(() => tabs().work.editProject, [null, {}], 'work-projects') },
         { icon: 'file', label: 'Contract or document', hint: 'Leases, licences, insurance, supplier terms', onClick: () => use(() => tabs().documents.create, [{ type: (GU.work && GU.work.CONTRACT) || 'Contract or agreement', title: '', context: 'work' }, { onSaved: (r) => r && tagWork('documents', r.id) }], 'work-docs') },
         { icon: 'note', label: 'Note', hint: 'Anything to remember', onClick: () => use(() => tabs().work.editNote, [null, { area: 'general' }], 'work') },
-        { icon: 'folder', label: 'Folder', hint: 'To group things together', onClick: () => use(() => (GU.work && GU.work.newFolder) || tabs().work.newFolder, [null], 'work') },
+        { icon: 'folder', label: 'Folder', hint: 'To group things together', onClick: () => use(() => (GU.work && GU.work.newFolder) || tabs().work.newFolder, [null, null, AREA_OF_PAGE[(location.hash || '').slice(1)] || null], 'work') },
         { icon: 'home', label: 'Something personal →', hint: 'Switch to Home', onClick: () => switchAndAdd('home') },
         where,
       ];
@@ -421,7 +423,8 @@
       '<ul class="where__list where__list--plain">' +
       '<li>In Work it’s treated as ' + esc(c) + '’s, and I’ll ask ‘Whose money paid for this?’ if I can’t tell.</li>' +
       '<li>In Home it’s treated as yours.</li>' +
-      '<li>Anything can be moved between Home and Work from its ⋯ menu in one tap.</li>' +
+      '<li>Anything in Work can go back to Home from its ⋯ menu (Move to Home).</li>' +
+      '<li>To move something into Work, open it and set ‘For’ to Work, or use ‘Move a bill from Home’ and ‘Move a document from Home’ on the Work pages.</li>' +
       '</ul></div>';
     const d = GU.ui.openDialog({
       title: 'Where does it go?',
@@ -474,11 +477,23 @@
       return;
     }
     const sc = t.closest('[data-door-scroll]');
-    if (sc && sc.getAttribute('href') === location.hash) {
-      const el = document.querySelector(sc.getAttribute('data-door-scroll'));
-      if (el) {
-        ev.preventDefault();
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (sc) {
+      const href = sc.getAttribute('href');
+      const sel = sc.getAttribute('data-door-scroll');
+      if (href === location.hash) {
+        const el = document.querySelector(sel);
+        if (el) {
+          ev.preventDefault();
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } else {
+        // Another page: the link takes you there, then the page scrolls to that part once it's drawn.
+        let tries = 0;
+        const timer = setInterval(() => {
+          const el = location.hash === href ? document.querySelector(sel) : null;
+          if (el || ++tries > 25) clearInterval(timer);
+          if (el) el.scrollIntoView({ block: 'start' });
+        }, 40);
       }
     }
   });

@@ -749,7 +749,7 @@
       };
       out.push({ key: 'merge:' + inv.id, kind: 'merge', ref: { c: P, id: inv.id },
         title: 'Your ' + money(amountOf(inv)) + ' ' + name + ' invoice to ' + co + when + ' and the ' + (shopOf(claim) || nameOf(claim)) + ' expense in Get paid back look like the same money.',
-        detail: 'Merging moves its files onto the claim and puts the invoice in Recently deleted.',
+        detail: 'Merging moves its files onto the Get paid back item and puts the invoice in Recently deleted.',
         options: [suggest(opt('sent', 'Same: merge, I sent it' + (inv.date ? ' on ' + short(inv.date) : ''), merge(true))), opt('unsent', 'Same: merge, not sent yet', merge(false)), opt('different', 'Different', asClaim)] });
     }
     return out;
@@ -970,7 +970,7 @@
       if (!why) continue;
       items.push({ key: 'maybe:' + p.id, ref: { c: P, id: p.id }, amount: amountOf(p), date: p.date,
         label: nameOf(p) + ' · ' + money(amountOf(p)) + ' · ' + short(p.date), detail: why + '.',
-        options: [opt('claim', 'Claim it back', (st, tr) => {
+        options: [opt('claim', 'Get it back', (st, tr) => {
           const x = findIn(st, P, p.id);
           if (x && x.context !== 'work') toClaim(st, tr, x);
         }), opt('mine', 'Mine', (st, tr) => {
@@ -981,8 +981,8 @@
     if (!items.length) return [];
     return [{ key: 'maybe', kind: 'maybe', items,
       title: 'Were any of these for ' + co + '? None has been paid back yet.',
-      detail: '‘Claim it back’ adds it to Get paid back, not sent yet. ' + Co + ' won’t know until you send it.',
-      options: [opt('claim', 'Claim it back'), opt('mine', 'Mine')] }];
+      detail: '‘Get it back’ adds it to Get paid back, not sent yet. ' + Co + ' won’t know until you send it.',
+      options: [opt('claim', 'Get it back'), opt('mine', 'Mine')] }];
   }
 
   /* 9. A to-do to pay something that's already paid and in Get paid back. */

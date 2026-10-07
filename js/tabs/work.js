@@ -341,7 +341,7 @@
     if (area === 'bills') {
       const b = billTotals(s);
       const next = b.live.filter((x) => x.nextDue).sort((x, y) => x.nextDue.localeCompare(y.nextDue))[0];
-      const l1 = money(b.meMonthly) + ' you pay and claim · ' + money(b.themMonthly) + ' ' + c + ' pays';
+      const l1 = money(b.meMonthly) + ' you pay, ' + c + ' pays you back · ' + money(b.themMonthly) + ' ' + c + ' pays';
       return { big: money(b.monthly), unit: 'a month', line: l1, lines: [l1, next ? 'Next: ' + next.name + ', ' + short(next.nextDue) : plural(b.live.length, 'bill')] };
     }
     if (area === 'contracts') {
@@ -534,6 +534,15 @@
       warn: f.warn && !f.bad, cls: f.bad ? 'is-crit' : f.warn ? 'is-warn' : f.good ? 'is-in' : '' });
   }
 
+  /* The Overview's header over its checks. Late or due soon ones are 'to do', as in the Work door and the switch's
+     count; the rest are 'to look at', so all three agree. */
+  function attentionText(list, crit) {
+    if (!list.length) return 'all up to date';
+    const todo = list.filter((x) => x.level === 'crit' || x.level === 'warn').length;
+    const look = list.length - todo;
+    return (todo ? plural(todo, 'thing') + ' to do' + (crit ? ', ' + crit + ' overdue or late' : '') : 'nothing urgent') + (look ? ' · ' + look + ' to look at' : '');
+  }
+
   function overviewHTML(s) {
     const list = checks(s);
     const crit = list.filter((x) => x.level === 'crit').length;
@@ -557,7 +566,7 @@
       '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
       '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button></div></form>' +
       '<section class="panel wk-check"><header class="panel__head"><h2>' + icon(list.length ? 'alert' : 'check') + 'Needs attention</h2>' +
-      '<span class="muted">' + esc(list.length ? plural(list.length, 'thing') + (crit ? ', ' + crit + ' overdue or late' : '') : 'all up to date') + '</span></header>' +
+      '<span class="muted">' + esc(attentionText(list, crit)) + '</span></header>' +
       (list.length ? '<ul class="wk-check__list">' + lis.slice(0, SHOW_CHECKS).join('') + '</ul>' +
         (more.length ? '<details class="wk-check__more"' + (ui.moreChecks ? ' open' : '') + '><summary><span class="wk-check__more-open">+ ' + more.length + ' more</span><span class="wk-check__more-close">Show fewer</span>' + icon('chevron') + '</summary>' +
           '<ul class="wk-check__list">' + more.join('') + '</ul></details>' : '')
@@ -712,7 +721,7 @@
         '<div class="ask-card__opts">' + acts.map((a, k) => '<button type="button" class="btn btn--sm' + ((a.suggested != null ? a.suggested : k === 1 && mine) ? ' is-suggested' : '') + '" ' + a.attr + '>' + esc(a.label) + '</button>').join('') + '</div></li>';
     }).join('');
     return '<section class="ask-card wk-who" aria-label="Who paid?"><header class="ask-card__head"><h2>' + icon('alert') + 'Who paid?</h2>' +
-      '<p>' + esc(plural(list.length, 'thing') + ' for work with no answer yet. ' + C + '’s money stays here; yours moves to Get paid back so you can claim it.') + '</p></header>' +
+      '<p>' + esc(plural(list.length, 'thing') + ' for work with no answer yet. ' + C + '’s money stays here; yours moves to Get paid back so you can get it back.') + '</p></header>' +
       '<ul class="ask-card__list">' + rows + '</ul>' +
       (list.length > WHO_MAX ? '<footer class="ask-card__foot">' + esc(plural(list.length - WHO_MAX, 'more') + ' under Not sorted below.') + '</footer>' : '') + '</section>';
   }
@@ -1036,12 +1045,12 @@
 
   /* ---------- adding ---------- */
   const curFolder = () => (ui.folder !== 'all' && ui.folder !== 'none' ? ui.folder : '');
-  /* Marks a record made by another page's form as work, in the folder you're looking at. extra fills in
-     fields the form didn't set (who pays, say), without overriding what you chose. */
+  /* Marks a record made by another page's form as work, in the folder you're looking at, unless you switched its
+     For to Home. extra fills in fields the form didn't set (who pays, say), without overriding what you chose. */
   function tag(c, id, folder, extra) {
     store.commit((s) => {
       const r = (s[c] || []).find((x) => x.id === id);
-      if (!r) return;
+      if (!r || r.context === 'home') return;
       r.context = 'work';
       if (folder) r.workFolder = folder;
       if (c === 'tasks') r.listId = ensureWorkList(s);
@@ -1363,13 +1372,14 @@
   }
 
   /* ---------- folders and names ---------- */
-  function newFolder(area, then) {
+  /* area: the page it's for (no question), or null to ask which page; preset: the page the question starts on. */
+  function newFolder(area, then, preset) {
     const s = store.state;
     area = area && AREAS.some((a) => a.id === area) ? area : null;
     formDialog({
       title: 'New folder',
       fields: [{ name: 'name', label: 'Folder name', required: true, placeholder: 'e.g. Suppliers, 2026, Subscriptions' }].concat(area ? [] : [{ name: 'area', label: 'On the page', type: 'select', options: AREAS.map((a) => ({ value: a.id, label: labelOf(a.id) })) }]),
-      values: { area: 'tasks' },
+      values: { area: AREAS.some((a) => a.id === preset) ? preset : 'tasks' },
       submitLabel: 'Create folder',
       onSubmit: (v) => {
         const a = area || v.area;

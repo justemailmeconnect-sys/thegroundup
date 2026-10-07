@@ -179,10 +179,21 @@
     document.body.appendChild(el);
     const r = anchor.getBoundingClientRect();
     const w = el.offsetWidth;
+    // Its whole height, if there's room for it: below the button, else above. Neither side has room for all of it:
+    // the roomier side, scrolling inside what's there (the scrollbar is hidden on phones, so it fades at the edges).
+    el.style.maxHeight = 'none';
     const h = el.offsetHeight;
+    const below = window.innerHeight - r.bottom - 6 - 8;
+    const above = r.top - 6 - 8;
     let left = Math.min(window.innerWidth - w - 8, Math.max(8, r.left));
-    let top = r.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    let top;
+    if (h <= below) top = r.bottom + 6;
+    else if (h <= above) top = r.top - h - 6;
+    else {
+      const room = Math.max(160, Math.max(below, above));
+      el.style.maxHeight = room + 'px';
+      top = below >= above ? r.bottom + 6 : Math.max(8, r.top - el.offsetHeight - 6);
+    }
     el.style.left = left + 'px';
     el.style.top = top + 'px';
     el.addEventListener('click', (e) => {

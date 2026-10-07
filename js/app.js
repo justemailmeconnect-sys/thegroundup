@@ -117,7 +117,7 @@
       badge.textContent = n > 9 ? '9+' : n;
       const tip = p === 'work' ? workTip : 'Home: your life and money';
       b.title = tip;
-      b.setAttribute('aria-label', tip + (n ? ', ' + n + ' need attention' : ''));
+      b.setAttribute('aria-label', tip + (n ? ', ' + n + (n === 1 ? ' needs' : ' need') + ' attention' : ''));
     });
     document.querySelectorAll('.rail__brand, .partbar__brand').forEach((a) => a.setAttribute('href', '#' + PARTS[part].start));
   }
@@ -202,7 +202,7 @@
       badge.hidden = !n;
       badge.textContent = n > 9 ? '9+' : n;
       const tab = GU.tabs[id];
-      a.setAttribute('aria-label', (tab ? tab.label : id) + (n ? ', ' + n + ' need attention' : ''));
+      a.setAttribute('aria-label', (tab ? tab.label : id) + (n ? ', ' + n + (n === 1 ? ' needs' : ' need') + ' attention' : ''));
     });
   }
 
@@ -251,6 +251,25 @@
     return GU.tabs[start] ? start : 'today';
   }
 
+  /* Scrolls the menu itself (not the page) so the current page's item is in view: sideways on a phone, up or down
+     when the screen is too short for the whole list. Done by hand: scrollIntoView also moves where Tab starts. */
+  function revealInRail(item) {
+    const host = item && item.closest('.rail__items');
+    if (!host) return;
+    const h = host.getBoundingClientRect();
+    const r = item.getBoundingClientRect();
+    if (host.scrollWidth > host.clientWidth + 1) host.scrollLeft += r.left + r.width / 2 - (h.left + h.width / 2);
+    if (host.scrollHeight > host.clientHeight + 1) {
+      // Settings is pinned at the bottom of the list: items must clear it, not just the edge.
+      const foot = host.querySelector('.rail__foot');
+      const pinned = foot && getComputedStyle(foot).position === 'sticky';
+      if (pinned && foot.contains(item)) return;
+      const bottom = pinned ? foot.getBoundingClientRect().top : h.bottom;
+      if (r.top < h.top) host.scrollTop += r.top - h.top - 6;
+      else if (r.bottom > bottom) host.scrollTop += r.bottom - bottom + 6;
+    }
+  }
+
   function render() {
     GU.finance.useCustom(store.state);
     GU.sections.sync();
@@ -293,8 +312,7 @@
     document.title = (pagePart(tabId) === 'work' && !/^work\b/i.test(label) ? 'Work · ' : '') + (label ? label + ' · ' : '') + 'The Ground Up';
     if (changedTab) {
       window.scrollTo(0, 0);
-      const active = document.querySelector('.rail__item[aria-current="page"]');
-      if (active && active.scrollIntoView && window.matchMedia('(max-width: 860px)').matches) active.scrollIntoView({ block: 'nearest', inline: 'center' });
+      revealInRail(document.querySelector('.rail__item[aria-current="page"]'));
     }
   }
   GU.render = render;

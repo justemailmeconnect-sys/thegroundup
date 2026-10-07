@@ -676,7 +676,7 @@
     let m;
     while ((m = re.exec(t)) && !place) {
       const name = m[1].trim();
-      if (/^(me|it|this|that|them|work|home|the|dad|company|business|ktk)$/.test(name)) continue;
+      if (/^(me|it|this|that|them|work|home|the|dad|company|business)$/.test(name) || name === c) continue;
       const p = findPlace(name);
       if (p && !(p.kind === 'doctype' && r.destination !== 'document')) place = p;
     }

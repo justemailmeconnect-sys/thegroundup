@@ -75,7 +75,8 @@ From then on the app's data is separate from the website's. Export a backup from
 
 - **No sync.** Sync needs the claude.ai runtime, which is not there (`window.claude` does not exist in the app and
   nothing pretends it does). Settings shows "Sync across your devices: Off" and "Saved in this browser only"; read
-  "browser" as "this app". Use Export backup and Restore to move data between devices.
+  "browser" as "this app". Use Export backup and Restore to move data between devices. To use the real, synced
+  dashboard on the phone, install the companion app in `android-live/` (it opens the online dashboard).
 - **Ask Claude and the Sorting hub need your own Anthropic API key** (Settings > How your assistant reads things > Anthropic API key). Without a key they
   say so; everything else works without one. The key stays on the phone, in the app.
 - **Downloads** (claim packs, CSV, backups, PDFs) are saved into the phone's **Downloads** folder, with a

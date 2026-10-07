@@ -179,7 +179,7 @@
         const x = it.transform[4];
         const y = it.transform[5];
         const w = it.width || s.length * 5;
-        // A run like "29.39 514.95" holds two numbers: split it so each lands in its own column.
+        // A run like "12.34 567.89" holds two numbers: split it so each lands in its own column.
         const parts = s.split(' ');
         if (parts.length > 1 && parts.every((t) => MONEY.test(t))) {
           let off = 0;
