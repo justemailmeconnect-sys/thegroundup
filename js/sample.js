@@ -96,10 +96,12 @@
     push(d(-11), 'CARD PAYMENT 0042 ZETTLE', -9.5, '');
 
     const first = tx.reduce((m, x) => (x.date < m ? x.date : m), t);
+    const next15 = t.slice(8) < '15' ? t.slice(0, 8) + '15' : addMonths(t.slice(0, 8) + '01', 1).slice(0, 8) + '15';
     const debts = [
       Object.assign({ id: 'debt-' + uid(), name: 'Barclaycard', lender: 'Barclaycard', type: 'Credit card', balance: 2860, balanceDate: addDays(first, -1), startBalance: 3400, apr: 24.9, monthlyPayment: 120, paymentDay: 7,
         notes: '0% on balance transfers ended in January.', history: [] }, D),
-      Object.assign({ id: 'debt-' + uid(), name: 'Klarna (ASOS order)', lender: 'Klarna', type: 'Buy now pay later', balance: 99.99, balanceDate: addMonths(t.slice(0, 8) + '01', -1).slice(0, 8) + '14', monthlyPayment: 33.33, paymentDay: 15, history: [] }, D),
+      Object.assign({ id: 'debt-' + uid(), name: 'Klarna (ASOS order)', lender: 'Klarna', type: 'Buy now pay later', balance: 99.99, balanceDate: addMonths(t.slice(0, 8) + '01', -1).slice(0, 8) + '14', monthlyPayment: 33.33, paymentDay: 15, history: [],
+        schedule: [{ id: 'in-demo-1', date: next15, amount: 33.33, merchant: 'ASOS', n: 2, of: 3 }, { id: 'in-demo-2', date: addMonths(next15, 1), amount: 33.34, merchant: 'ASOS', n: 3, of: 3 }] }, D),
     ];
 
     const bill = (o) => Object.assign({ id: 'b-' + uid(), history: [], active: true, account: cur, anchorDay: +o.nextDue.slice(8) }, D, o, { autopay: o.method !== 'Pay manually' });

@@ -111,7 +111,7 @@
     root.innerHTML = GU.view.head({
       eyebrow: 'Money ahead',
       title: 'Bills',
-      text: 'Your regular payments, plus your Klarna, PayPal and Amazon instalments with the stage each plan is at. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on Home until you mark them paid.',
+      text: 'Your regular payments' + (plans.length ? ', plus your instalment plans (Klarna, PayPal, Amazon and the like) with the stage each one is at' : '') + '. Direct debits and standing orders roll on by themselves; bills you pay by hand show up on Home until you mark them paid.',
       actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +

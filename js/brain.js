@@ -928,19 +928,20 @@
     type: 'object', additionalProperties: false, required: ['lender', 'payments'],
     properties: {
       lender: NULLABLE('string'),
-      payments: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'amount', 'merchant', 'paid'],
-        properties: { date: { type: 'string' }, amount: { type: 'number' }, merchant: NULLABLE('string'), paid: { type: 'boolean' } } } },
+      payments: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'amount', 'merchant', 'paid', 'n', 'of'],
+        properties: { date: { type: 'string' }, amount: { type: 'number' }, merchant: NULLABLE('string'), paid: { type: 'boolean' }, n: NULLABLE('number'), of: NULLABLE('number') } } },
     },
   };
   function schedulePrompt(text) {
     return 'These are the user\'s payments from a buy now pay later or credit account (Klarna, PayPal Pay in 3, Clearpay, Monzo Flex or similar), as a screenshot or copied text. Today is ' + today() + '. ' +
       'List every payment in it. date: YYYY-MM-DD (UK dates, so 03/04 is 3 April; "Tomorrow" is the day after today; a date with no year is the next one from today). amount: the payment in pounds as a plain number. ' +
-      'merchant: the shop or plan it is for, or null. paid: true if it has already been paid, false if it is still to pay. lender: the company, for example "Klarna" or "PayPal Pay in 3".' +
+      'merchant: the shop or plan it is for, or null. paid: true if it has already been paid, false if it is still to pay. ' +
+      'n: which payment this is in its plan (2 for "2 of 3", "2/3" or "payment 2 of 3"), or null if not shown. of: how many payments that plan has (3 for "2 of 3"), or null. lender: the company, for example "Klarna" or "PayPal Pay in 3".' +
       (text ? '\n\nTHE TEXT:\n<<<\n' + text.slice(0, 12000) + '\n>>>' : '');
   }
   function cleanSchedule(data) {
     const list = ((data && data.payments) || []).filter((p) => p && !p.paid && GU.util.isISO(p.date) && Number(p.amount) > 0)
-      .map((p) => ({ date: p.date, amount: round2(Math.abs(Number(p.amount))), merchant: (p.merchant || '').trim(), n: null, of: null }));
+      .map((p) => ({ date: p.date, amount: round2(Math.abs(Number(p.amount))), merchant: (p.merchant || '').trim(), n: Number(p.n) > 0 ? Math.round(+p.n) : null, of: Number(p.of) > 0 ? Math.round(+p.of) : null }));
     return { lender: (data && data.lender) || null, payments: list.sort((a, b) => a.date.localeCompare(b.date)) };
   }
   /* input: {text, files}. Pasted text is read on this device; screenshots go to Claude when it's connected,
@@ -968,7 +969,7 @@
         try {
           const opts = { modelTier: 'default' };
           if (images.length) opts.images = images;
-          const data = await sample.json(schedulePrompt(all) + '\n\nReply with only a JSON object: {"lender": string or null, "payments": [{"date", "amount", "merchant", "paid"}]}', opts);
+          const data = await sample.json(schedulePrompt(all) + '\n\nReply with only a JSON object: {"lender": string or null, "payments": [{"date", "amount", "merchant", "paid", "n", "of"}]}', opts);
           return Object.assign(cleanSchedule(data), { via: 'claude-app' });
         } catch (e) {
           console.warn('[brain] schedule via Claude failed', e);

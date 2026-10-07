@@ -936,7 +936,7 @@ dialog.dlg::backdrop { background: rgba(8, 14, 11, 0.5); }
 .inst__text b { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inst__text em { font-style: normal; font-size: 12.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inst__steps { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
-.inst__steps i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line-strong); background: transparent; }
+.inst__steps i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--ink-3); background: transparent; }
 .inst__steps i.is-paid { background: var(--accent-2); border-color: var(--accent-2); }
 .inst__steps i.is-next { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .inst__stage { display: grid; justify-items: start; gap: 3px; }

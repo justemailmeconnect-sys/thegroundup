@@ -711,40 +711,68 @@
 
   GU.money = { accountBalance, accounts, balanceSeries, moveTransactions, mergeAccounts, accountFixes, applyFix, tidyAll, twins, importWarning };
   /* ---------- instalment plans (Klarna, PayPal Pay in 3, Amazon…) ---------- */
-  /* Splits each lender's payment schedule into its separate plans, so two TikTok Shop "Pay in 3"s or two
-     Samsung plans stay apart: a payment joins the plan whose last payment came 20 to 45 days earlier and is one
-     number before it ("2 of 3" then "3 of 3"), the closest in amount if more than one could fit. */
+  // Days between payments for lenders that don't collect monthly.
+  const EVERY = { Clearpay: 14, Zilch: 14, Laybuy: 7 };
+  /* Splits each lender's payment schedule into its separate plans, so four TikTok Shop "Pay in 3"s or two
+     Samsung plans stay apart. Every way one payment could follow another is scored by how close its spacing is
+     to the lender's usual one; the best links are taken first, each payment having one before and one after. */
   function instalments(state) {
     const out = [];
     for (const d of state.debts || []) {
       if (d.closed) continue;
       const s = summary(state, d);
       if (!s.scheduled || !s.plan.length) continue;
-      const lender = (lenderFor(d.lender) || lenderFor(d.name) || {}).name || d.lender || d.name;
-      const chains = [];
-      for (const i of s.plan.slice().sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount)) {
-        const merchant = i.merchant || d.name;
-        const fits = chains.filter((c) => {
-          const last = c.items[c.items.length - 1];
-          const gap = toDays(i.date) - toDays(last.date);
-          const sameMerchant = c.merchant.toLowerCase() === merchant.toLowerCase();
-          // Numbered payments follow on by number (a refund can shrink the last one); unnumbered ones by amount.
-          const numbered = !!(i.n && last.n);
-          const follows = numbered ? i.n === last.n + 1 && (c.of || 0) === (i.of || 0) : !i.n && !last.n && Math.abs(i.amount - last.amount) <= Math.max(1, last.amount * 0.15);
-          return sameMerchant && follows && gap >= 20 && gap <= 45;
-        }).sort((a, b) => Math.abs(a.items[a.items.length - 1].amount - i.amount) - Math.abs(b.items[b.items.length - 1].amount - i.amount));
-        if (fits.length) fits[0].items.push(i);
-        else chains.push({ merchant, of: i.of || null, items: [i] });
+      const l = lenderFor(d.lender) || lenderFor(d.name);
+      const lender = (l || {}).name || d.lender || d.name || 'Other';
+      const every = (l && EVERY[l.name]) || 30;
+      const lo = Math.round((every * 2) / 3);
+      const hi = Math.round(every * 1.5);
+      const shop = (i) => String(i.merchant || d.name || d.lender || '').trim();
+      const key = (i) => shop(i).toLowerCase();
+      const similar = (a, b) => Math.abs(a.amount - b.amount) <= Math.max(1, b.amount * 0.15);
+      const gapOf = (p, q) => toDays(q.date) - toDays(p.date);
+      const items = s.plan.slice().sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount);
+      const links = [];
+      items.forEach((p, a) => {
+        for (let b = a + 1; b < items.length; b++) {
+          const q = items[b];
+          const gap = gapOf(p, q);
+          if (gap > Math.max(45, hi)) break;
+          if (key(p) !== key(q)) continue;
+          let cost;
+          if (p.n && q.n) {
+            // Numbered: "2 of 3" then "3 of 3", at any sensible spacing (Pay in 4 every two weeks too).
+            if (q.n !== p.n + 1 || (p.of || 0) !== (q.of || 0) || gap < 5) continue;
+            cost = Math.abs(gap - every);
+          } else if (!p.n && !q.n) {
+            if (gap < lo || gap > hi) continue;
+            // A refund comes off the last payments, so a smaller one can end a plan when nothing like it follows.
+            const tail = q.amount < p.amount && !items.some((r) => r !== q && !r.n && key(r) === key(q) && gapOf(q, r) >= lo && gapOf(q, r) <= hi && similar(r, q));
+            if (!similar(q, p) && !tail) continue;
+            cost = Math.abs(gap - every) + (similar(q, p) ? 0 : 10);
+          } else continue;
+          links.push({ p, q, cost, diff: Math.abs(q.amount - p.amount) });
+        }
+      });
+      links.sort((x, y) => x.cost - y.cost || x.diff - y.diff);
+      const next = new Map();
+      const prev = new Map();
+      for (const k of links) {
+        if (next.has(k.p) || prev.has(k.q)) continue;
+        next.set(k.p, k.q);
+        prev.set(k.q, k.p);
       }
-      for (const c of chains) {
-        const next = c.items[0];
-        const left = c.items.length;
+      for (const head of items.filter((i) => !prev.has(i))) {
+        const chain = [];
+        for (let x = head; x; x = next.get(x)) chain.push(x);
+        const first = chain[0];
+        const of = first.of || null;
         out.push({
-          debt: d, lender, merchant: c.merchant, of: c.of, items: c.items, next,
-          stage: next.n && c.of ? next.n : null,
-          paid: next.n ? next.n - 1 : null,
-          left, leftTotal: round2(sum(c.items, (x) => x.amount)), last: c.items[left - 1].date,
-          account: next.account || d.account || (s.lastPayment && s.lastPayment.account) || null,
+          debt: d, lender, merchant: shop(first) || lender, of, items: chain, next: first,
+          stage: first.n && of ? first.n : null,
+          paid: first.n ? first.n - 1 : null,
+          left: chain.length, leftTotal: round2(sum(chain, (x) => x.amount)), last: chain[chain.length - 1].date,
+          account: first.account || d.account || (s.lastPayment && s.lastPayment.account) || null,
         });
       }
     }
