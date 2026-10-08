@@ -586,10 +586,7 @@
         action: 'See what changed', timeout: 15000,
         onAction: () => {
           showChanges = true;
-          tidyOpen = true;
-          if (GU.parts) GU.parts.set('work');
-          if (GU.view) GU.view.go('work');
-          setTimeout(openTidy, 200);
+          openTidy();
         },
       });
     }
@@ -1211,10 +1208,11 @@
       '<button type="button" class="link link--btn" data-refile-undo>Undo the re-sort</button></p></div></details>';
   }
 
-  /* ---------- the tidy-up block on Work › Overview ---------- */
-  /* The one-off re-sort's leftovers folded into one closed block: the 'Check these' questions, then what the re-sort
+  /* ---------- the Home/Work tidy-up panel in Settings ---------- */
+  /* The one-off re-sort's leftovers in one closed panel of Settings: the 'Check these' questions, then what the re-sort
      changed (with its Undo). '' once nothing is open and the 30 days to undo it are over. The badge counts the open
-     questions. The buttons are the same as ever (data-refile-*), just inside the block. */
+     questions. The buttons are the same as ever (data-refile-*), just inside the panel. Work's Needs attention has one line
+     ('n things to check from the Home/Work split') that opens it. */
   function tidyHTML(s) {
     s = s || store.state;
     const card = cardHTML(s);
@@ -1222,17 +1220,26 @@
     if (!card && !changes) return '';
     const icon = GU.ui.icon;
     const n = count(s);
-    return '<details class="panel wk-tidy" id="wk-tidy"' + (tidyOpen ? ' open' : '') + '><summary>' + icon('check') + '<span class="wk-tidy__title">Tidy-up from the Home/Work split</span>' +
+    return '<details class="panel wk-tidy" id="wk-tidy"' + (tidyOpen ? ' open' : '') + '><summary>' + icon('check') + '<span class="wk-tidy__title">Home/Work tidy-up</span>' +
       '<span class="pill pill--' + (n ? 'warn' : 'muted') + ' wk-tidy__n">' + esc(n ? n + ' to check' : 'nothing to check') + '</span>' + icon('chevron', 'wk-tidy__chev') + '</summary>' +
       '<div class="wk-tidy__body">' + card + changes + '</div></details>';
   }
-  /* Opens the tidy-up block (if it's on the page) and scrolls to it. */
+  /* Opens the tidy-up panel and scrolls to it, going to Settings first when you're somewhere else. */
   function openTidy() {
     tidyOpen = true;
-    const el = document.getElementById('wk-tidy');
-    if (!el) return false;
-    el.open = true;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const show = () => {
+      const el = document.getElementById('wk-tidy');
+      if (!el) return false;
+      el.open = true;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return true;
+    };
+    if (show()) return true;
+    if (GU.view) GU.view.go('settings');
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (show() || ++tries > 25) clearInterval(timer);
+    }, 40);
     return true;
   }
   // The page is drawn again after every change, so what's open is remembered here.

@@ -146,7 +146,7 @@
   /* ---------- Recently deleted ---------- */
   const KEEP_DAYS = 30;
   const KIND = { bills: 'Bill', debts: 'Debt', paperwork: 'Receipt or invoice', documents: 'Document', visas: 'Visa application', incomeSources: 'Income', tasks: 'Task',
-    transactions: 'Transaction', sectionItems: 'Item', sections: 'Section', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea', sortRules: 'Sorting rule', requests: 'Thing to get' };
+    transactions: 'Transaction', sectionItems: 'Item', sections: 'Category', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea', sortRules: 'Sorting rule', requests: 'Thing to get' };
   const trash = {
     KIND,
     /* Adds a deleted record (and anything deleted along with it, in `extra`) to the bin. Call inside a commit. */

@@ -1,6 +1,9 @@
-/* The Ground Up: your own sections. Created by you or by the assistant when something doesn't fit
-   the built-in tabs (Car, Pets, Travel, Kids & school…). Each one is a simple filing drawer.
-   A section belongs to Home unless it's marked as Work (section.part), and shows in that part's menu. */
+/* The Ground Up: your own categories (the records call them sections). Created by you or by the assistant when something
+   doesn't fit the menu (Car, Pets, Wedding, Kids & school…). Each one is a simple filing drawer.
+   A category belongs to Home unless it's marked as Work (section.part), and shows in that part's menu unless it's hidden
+   (section.hidden). One named after a lender whose payment schedule Debts reads (Klarna, PayPal) is hidden by default,
+   because it holds records rather than something you open every day; it's linked from Bills & debts and can be shown
+   again in Settings. */
 (function () {
   'use strict';
   const GU = window.GU;
@@ -19,6 +22,37 @@
   const queries = {};
   /* The part a section shows in: 'work' only when marked so. */
   const partOf = (sec) => (sec && sec.part === 'work' ? 'work' : 'home');
+  /* ---------- in the menu, or hidden ---------- */
+  const firstWord = (name) => String(name || '').toLowerCase().trim().split(/\s+/)[0] || '';
+  /* The words that name a lender whose schedule Debts can read: the buy-now-pay-later ones (Klarna, PayPal, Clearpay…) and
+     any lender you've added a debt for. Debts reads a category with that first word as the payment schedule. */
+  function lenderWords(state) {
+    const words = new Set();
+    for (const l of (GU.debts && GU.debts.LENDERS) || []) if (l.type === 'Buy now pay later' && !l.exact) words.add(firstWord(l.name));
+    for (const d of (state && state.debts) || []) for (const n of [d.lender, d.name]) words.add(firstWord(n));
+    return new Set(Array.from(words).filter((w) => w.length >= 4));
+  }
+  /* Whether a category is a lender's records (Klarna, PayPal), by its name. */
+  const isLenderRecord = (sec) => !!sec && lenderWords(store.state).has(firstWord(sec.name));
+  /* Whether the menu leaves it out: what you chose, or by default when it's a lender's records. */
+  const isHidden = (sec) => !!sec && (typeof sec.hidden === 'boolean' ? sec.hidden : isLenderRecord(sec));
+  /* The pages of the categories shown in a part's menu. */
+  const menuIds = (part) => sync().filter((id) => {
+    const sec = (store.state.sections || []).find((x) => 's-' + x.id === id);
+    return sec && partOf(sec) === part && !isHidden(sec);
+  });
+  /* The categories that are a lender's records, for the line at the bottom of Debts. */
+  const lenderRecords = () => (store.state.sections || []).filter((x) => isLenderRecord(x));
+  function setHidden(id, hidden) {
+    const sec = (store.state.sections || []).find((x) => x.id === id);
+    if (!sec) return;
+    const was = sec.hidden;
+    store.commit((st) => {
+      const x = (st.sections || []).find((y) => y.id === id);
+      if (x) x.hidden = !!hidden;
+    });
+    return was;
+  }
   const startOf = (part) => (GU.parts && GU.parts.PARTS[part] ? GU.parts.PARTS[part].start : 'today');
   const co = () => (GU.parts ? GU.parts.co(store.state) : 'work');
   const PART_OPTIONS = () => [{ value: 'home', label: 'Home', icon: 'home' }, { value: 'work', label: 'Work', icon: 'briefcase' }];
@@ -54,16 +88,22 @@
       const q = (queries[sec.id] || '').toLowerCase();
       const list = all.filter((x) => !q || [x.title, x.party, x.notes, x.reference].join(' ').toLowerCase().includes(q));
       const work = partOf(live) === 'work';
+      const hidden = isHidden(live);
+      const lender = hidden && isLenderRecord(live);
+      const note = lender
+        ? '<p class="note-line note-line--back">' + icon('info') + '<span>Records from your lenders. They’re kept out of the menu, and Debts reads the payment schedule from here. <a class="link" href="#debts">Open Debts</a></span>' +
+          '<button type="button" class="btn btn--sm" data-show-menu>Show in the menu</button></p>'
+        : hidden ? '<p class="note-line note-line--back">' + icon('info') + '<span>This category is hidden from the menu. You can find it in Settings › Your categories.</span><button type="button" class="btn btn--sm" data-show-menu>Show in the menu</button></p>' : '';
       root.innerHTML = GU.view.head({
-        eyebrow: live.byAssistant ? 'Section started by your assistant' : 'Your section',
+        eyebrow: lender ? 'Records from your lenders' : live.byAssistant ? 'Category started by your assistant' : 'Your category',
         title: live.name,
-        text: live.byAssistant ? 'I started this section on ' + esc(fmtDate(live.created)) + ' because some things you sent me belong together. Rename it, move it or add to it any time.'
+        text: live.byAssistant ? 'I started this category on ' + esc(fmtDate(live.created)) + ' because some things you sent me belong together. Rename it, move it or add to it any time.'
           : work ? 'A filing drawer for ' + esc(co()) + '. Drop anything related in here.' : 'Your own filing drawer. Drop anything related in here.',
         actions: '<button type="button" class="btn" data-rename>' + icon('edit') + 'Rename or move</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add</button>',
-      }) +
+      }) + note +
         GU.ui.dropbar('Drop anything for ' + live.name + ' here, or a whole folder', 'It all stays in ' + live.name + '. Subfolders become groups, so your own organisation is kept.') +
         '<div class="toolbar"><label class="search">' + icon('search') + '<input type="search" id="sec-search" placeholder="Search ' + esc(live.name) + '" value="' + esc(queries[sec.id] || '') + '" aria-label="Search"></label>' +
-        '<span class="toolbar__gap"></span><button type="button" class="btn btn--sm btn--ghost" data-delete-section>' + icon('trash') + 'Delete section</button></div>' +
+        '<span class="toolbar__gap"></span><button type="button" class="btn btn--sm btn--ghost" data-delete-section>' + icon('trash') + 'Delete category</button></div>' +
         (list.length ? groupsOf(list).map((g) => '<section class="panel">' + (g.name ? '<header class="panel__head"><h2>' + icon('folder') + esc(g.name) + '</h2><span class="muted">' + g.items.length + '</span></header>' : '') +
           '<ul class="doc-rows">' + g.items.map(itemRow).join('') + '</ul></section>').join('')
           : '<section class="panel"><ul class="doc-rows"><li>' + emptyState({ icon: live.icon || 'star', title: all.length ? 'Nothing matches' : 'Nothing here yet', text: 'Drop files or a folder above, or tell the Sorting hub to put things here.' }) + '</li></ul></section>');
@@ -79,18 +119,22 @@
         }
       }, 250));
       root.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-show-menu]')) {
+          setHidden(sec.id, false);
+          return toast('Showing ' + live.name + ' in the menu', { action: 'Undo', onAction: () => setHidden(sec.id, true) });
+        }
         if (e.target.closest('[data-add]')) return createItem(sec.id);
         if (e.target.closest('[data-rename]')) return rename(sec.id);
         if (e.target.closest('[data-delete-section]')) {
           const n = all.length;
-          const ok = await confirmBox({ title: 'Delete ' + esc(live.name) + '?', message: (n ? 'This deletes the section and the ' + n + ' thing' + (n === 1 ? '' : 's') + ' filed in it, including attached files.' : 'The section is empty.') + ' You can undo it, and it stays in Settings → Recently deleted for 30 days.', confirmLabel: 'Delete section', danger: true });
+          const ok = await confirmBox({ title: 'Delete ' + esc(live.name) + '?', message: (n ? 'This deletes the category and the ' + n + ' thing' + (n === 1 ? '' : 's') + ' filed in it, including attached files.' : 'The category is empty.') + ' You can undo it, and it stays in Settings → Recently deleted for 30 days.', confirmLabel: 'Delete category', danger: true });
           if (!ok) return;
           let entry = null;
           store.commit((st) => {
             const items = st.sectionItems.filter((x) => x.sectionId === sec.id);
             st.sections = st.sections.filter((x) => x.id !== sec.id);
             st.sectionItems = st.sectionItems.filter((x) => x.sectionId !== sec.id);
-            entry = GU.trash.put(st, 'sections', live, live.name + ' section', { sectionItems: items });
+            entry = GU.trash.put(st, 'sections', live, live.name + ' category', { sectionItems: items });
           });
           GU.trash.offerUndo(entry);
           GU.view.go(startOf(partOf(live)));
@@ -128,7 +172,7 @@
   function createItem(sectionRef, prefill, opts) {
     opts = opts || {};
     const existing = typeof sectionRef === 'string' ? (store.state.sections || []).find((x) => x.id === sectionRef) : null;
-    const name = existing ? existing.name : (sectionRef && sectionRef.name) || 'New section';
+    const name = existing ? existing.name : (sectionRef && sectionRef.name) || 'New category';
     formDialog({
       title: 'Add to ' + name,
       fields: (existing ? [] : [{ name: 'sectionName', label: 'Category name', required: true }]).concat(fields()),
@@ -177,7 +221,7 @@
     if (!sec) return;
     const was = partOf(sec);
     formDialog({
-      title: 'Rename or move section',
+      title: 'Rename or move category',
       fields: [
         { name: 'name', label: 'Name', required: true },
         { name: 'part', label: 'Show it in', type: 'segmented', options: PART_OPTIONS(), default: 'home', help: 'Work is for ' + esc(co()) + ' only. Everything else is Home.' },
@@ -205,7 +249,7 @@
     formDialog({
       title: part === 'work' ? 'New work category' : 'New category',
       intro: part === 'work' ? 'Add a page for anything for ' + esc(co()) + ' that doesn’t fit the other Work pages, for example Vehicles, Premises or Training.'
-        : 'Add a page to your menu for anything that doesn’t fit the other tabs, for example Car, Pets, Wedding or Garden.',
+        : 'Add a page to your menu for anything that doesn’t fit the menu, for example Car, Pets, Wedding or Garden.',
       fields: [{ name: 'name', label: 'Category name', required: true }],
       submitLabel: 'Create category',
       onSubmit: (v) => {
@@ -228,5 +272,5 @@
     return ids;
   }
 
-  GU.sections = { iconFor, sync, createItem, editItem, newSection, rename, partOf };
+  GU.sections = { iconFor, sync, createItem, editItem, newSection, rename, partOf, isHidden, isLenderRecord, menuIds, lenderRecords, setHidden };
 })();

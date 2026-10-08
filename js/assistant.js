@@ -282,7 +282,7 @@
   /* The standing instructions. The dashboard data goes separately, fenced in <dashboard_data> tags. */
   function rules(list) {
     const change = list.some((t) => WRITES.test(t.name));
-    return 'You are Claude, the assistant built into "The Ground Up", the user\'s personal dashboard for money, bills, debts, paperwork and work.' + who() + ' ' +
+    return 'You are Claude, the assistant built into "The Ground Up", the user\'s personal dashboard for money, bills, debts, receipts, documents and work.' + who() + ' ' +
       'Answer in plain, friendly UK English, short and practical, using £ and dates like "Fri 9 Oct". Use simple Markdown (bold, short lists) only when it helps. ' +
       'Base money answers on the dashboard data' + (list.length ? ' and the tools' : '') + '; never make figures up, and say what an answer is based on when it matters (for example that Money ahead leaves out everyday spending). ' +
       (list.length ? 'Use the tools to look up details (transactions, records, the forecast). ' : 'You cannot look anything up beyond the dashboard data. ') +
@@ -587,11 +587,13 @@
     },
     {
       name: 'open_page',
-      description: 'Show the user a page of the dashboard: today (Home), hub (the Sorting hub), work, work-back (Get paid back), bills, debts, incomings (Income), todos, home-projects (Home projects), receipts, documents, transactions (Bank), outgoings (Spending) or settings.',
+      description: 'Show the user a page of the dashboard. The menu pages are: today (Today), hub (the Sorting hub), money (Money: Bank, Spending, Income, Tax year), bills-debts (Bills & debts: Bills, Debts, Plans), paperwork (Paperwork: Receipts, Documents), todo (To-do: Tasks, Home projects), work (the Work overview), orders (Orders & claims: To buy, Get paid back, the company\'s own money, Regular costs), jobs (Jobs: Tasks, Projects), work-docs (Contracts & documents) and settings. To open one page inside a menu item, use its own name: transactions (Bank), outgoings (Spending), incomings (Income), taxyear, bills, debts, plans, receipts, documents, todos, home-projects, work-requests (To buy), work-back (Get paid back), work-ktk (the company\'s own money), work-bills (Regular costs), work-tasks, work-projects.',
       inputSchema: { type: 'object', properties: { page: { type: 'string' } }, required: ['page'] },
       execute(i) {
         const want = squash(i.page, 40).toLowerCase();
-        const ALIAS = { home: 'today', income: 'incomings', bank: 'transactions', spending: 'outgoings', tasks: 'todos', 'to-dos': 'todos', inbox: 'hub', 'sorting hub': 'hub' };
+        const inWork = !!(GU.parts && GU.parts.get() === 'work');
+        const ALIAS = { home: 'today', income: 'incomings', bank: 'transactions', spending: 'outgoings', tasks: inWork ? 'work-tasks' : 'todos', projects: inWork ? 'work-projects' : 'home-projects', 'to-dos': 'todos', 'to do': 'todos', inbox: 'hub', 'sorting hub': 'hub', 'bills & debts': 'bills-debts', 'bills and debts': 'bills-debts',
+          'orders & claims': 'orders', 'orders and claims': 'orders', 'to-do': 'todo', 'tax year': 'taxyear', 'contracts & documents': 'work-docs', 'get paid back': 'work-back', 'to buy': 'work-requests', 'regular costs': 'work-bills', 'home projects': 'home-projects' };
         const ok = (id) => own(GU.tabs, id) && !!GU.tabs[id] && typeof GU.tabs[id].render === 'function';
         let page = own(ALIAS, want) ? ALIAS[want] : want;
         if (!ok(page)) page = Object.keys(GU.tabs).find((id) => ok(id) && [GU.tabs[id].label, GU.tabs[id].short].some((x) => String(x || '').toLowerCase() === want)) || page;
@@ -1083,7 +1085,7 @@
     // Until it's known how Claude is reached here, assume it can make changes; once known, say only what it can do.
     const writes = conn === undefined || (!!conn && TOOLS.slice(0, conn.tools).some((t) => WRITES.test(t.name)));
     const html = none ? '<p class="chat__hello">' + (off ? esc(COPY[off]) : 'Claude isn’t connected here. Open your dashboard in the Claude app, or <a href="#settings" data-chat-settings>add an Anthropic API key in Settings → How your assistant reads things</a>.') + '</p>'
-      : turns.length ? '' : '<p class="chat__hello">Hi' + (name ? ' ' + esc(name) : '') + '. I can see your accounts, bills, instalments, debts, work and paperwork. Try:</p>' +
+      : turns.length ? '' : '<p class="chat__hello">Hi' + (name ? ' ' + esc(name) : '') + '. I can see your accounts, bills, instalments, debts, receipts, documents and work. Try:</p>' +
         '<div class="chat__suggest">' + SUGGEST.filter((x) => writes || !x.write).map((x) => '<button type="button" class="chip" data-suggest="' + esc(x.q) + '">' + esc(x.q) + '</button>').join('') + '</div>';
     empty.hidden = !html;
     if (html !== emptyHTML) {
@@ -1264,7 +1266,7 @@
     // Closing: give focus back to where it was before, never leave it on a hidden panel (or on nothing).
     const lost = !document.activeElement || document.activeElement === document.body;
     if (!open && was && (lost || el.contains(document.activeElement))) {
-      const back = opener && opener.isConnected && opener !== document.body && !el.contains(opener) ? opener : document.querySelector('[data-chat-toggle]');
+      const back = opener && opener.isConnected && opener !== document.body && !el.contains(opener) ? opener : Array.from(document.querySelectorAll('[data-chat-toggle]')).find((b) => b.getClientRects().length);
       if (back) back.focus();
     }
     el.hidden = !open;

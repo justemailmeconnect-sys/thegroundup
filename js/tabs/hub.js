@@ -9,6 +9,8 @@
   const { esc, uid, today, money, fmtDate, plural } = GU.util;
   const { icon, pill, emptyState, toast, thumbHTML, viewFiles, formDialog, menu } = GU.ui;
   const store = GU.store;
+  /* Where a page is in the menu, for hints and labels: 'Work › Orders & claims › Get paid back'. */
+  const pageAt = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
   const S = () => GU.sorter;
 
   const AUTO_FILE_AT = 0.75;
@@ -524,7 +526,7 @@
       case 'transaction_out': case 'transaction_in':
         return GU.tabs.transactions.create({ direction: r.destination === 'transaction_in' ? 'in' : 'out', description: r.party || r.title, amount: r.amount, date: r.date || today(), category: r.category, notes: r.notes }, { onSaved: done });
       case 'section':
-        return GU.sections.createItem(r.section_id || { name: r.new_section_name || 'New section' }, { title: r.title, party: r.party, amount: r.amount, date: r.date, dueDate: r.due_date || r.expiry_date, reference: r.reference, notes: [r.summary, r.notes].filter(Boolean).join('\n'), files }, { onSaved: done, byAssistant: true });
+        return GU.sections.createItem(r.section_id || { name: r.new_section_name || 'New category' }, { title: r.title, party: r.party, amount: r.amount, date: r.date, dueDate: r.due_date || r.expiry_date, reference: r.reference, notes: [r.summary, r.notes].filter(Boolean).join('\n'), files }, { onSaved: done, byAssistant: true });
       case 'debt':
         return GU.tabs.debts.create({ name: r.party || r.title, lender: r.party || '', type: r.debt_type || undefined, balance: r.amount, balanceDate: r.date || today(), monthlyPayment: r.monthly_payment,
           apr: r.interest_rate, paymentDay: r.due_date ? +r.due_date.slice(8, 10) : null, notes: [r.reference ? 'Ref ' + r.reference : '', r.notes].filter(Boolean).join('\n'), files }, { onSaved: done });
@@ -615,7 +617,7 @@
     // For the company: keep a receipt or invoice as it was read, otherwise it's a receipt (yours) or an invoice (theirs).
     const forWork = (payer) => set({ context: 'work', payer, destination: ['receipt', 'invoice_to_pay'].includes(r0.destination) ? r0.destination : payer === 'me' ? 'receipt' : 'invoice_to_pay' });
     const workOpts = [
-      { icon: 'coin', label: 'For ' + c + ': I paid, get it back', hint: 'Work › Get paid back', onClick: () => forWork('me') },
+      { icon: 'coin', label: 'For ' + c + ': I paid, get it back', hint: pageAt('work-back', 'Work › Get paid back'), onClick: () => forWork('me') },
       { icon: 'briefcase', label: 'For ' + c + ': ' + (parts() ? parts().paysLabel(s) : 'Company pays'), hint: 'It’s ' + c + '’s money, not yours', onClick: () => forWork('company') },
     ];
     const paperOpts = [
@@ -640,7 +642,7 @@
       { icon: 'bills', label: 'Regular bill', onClick: () => set({ destination: 'bill' }) },
       { icon: 'card', label: 'Debt', hint: 'Card, loan, Klarna, finance', onClick: () => set({ destination: 'debt' }) },
       { icon: 'folder', label: 'Important document', onClick: () => set({ destination: 'document', document_type: (first.result && first.result.document_type) || 'Other' }) },
-      { icon: 'todo', label: 'Task', hint: isWork ? 'Work › Tasks' : 'Home › To-do', onClick: () => set({ destination: 'task' }) },
+      { icon: 'todo', label: 'Task', hint: isWork ? pageAt('work-tasks', 'Work › Tasks') : pageAt('todos', 'Home › To-do'), onClick: () => set({ destination: 'task' }) },
     ]
       .concat(isWork ? [] : homeLists.map((l) => ({ icon: 'list', label: 'To-do list: ' + l.name, onClick: () => toPlace(S().placeById('list:' + l.id)) })))
       .concat([{ icon: 'plus', label: 'New list…', hint: 'A to-do list of its own', onClick: () => ask('New list', 'List name', 'e.g. Errands, Wedding jobs', [], (v) => set({ destination: 'task', context: 'home', new_list_name: v.name.trim() })) }])
@@ -648,8 +650,8 @@
         { icon: 'out', label: 'Money out', onClick: () => set({ destination: 'transaction_out' }) },
         { icon: 'in', label: 'Money in', onClick: () => set({ destination: 'transaction_in' }) },
       ])
-      .concat(custom.map((x) => ({ icon: 'tag', label: 'Category: ' + x.name, hint: 'Your category', onClick: () => toPlace(S().placeById('category:' + x.name)) })))
-      .concat([{ icon: 'tag', label: 'New category…', hint: 'Spending or money in, with budgets', onClick: () => ask('New category', 'Category name', 'e.g. Gym, Pets, Gifts',
+      .concat(custom.map((x) => ({ icon: 'tag', label: 'Money category: ' + x.name, hint: 'Your money category', onClick: () => toPlace(S().placeById('category:' + x.name)) })))
+      .concat([{ icon: 'tag', label: 'New money category…', hint: 'Spending or money in, with budgets', onClick: () => ask('New money category', 'Category name', 'e.g. Gym, Pets, Gifts',
         [{ name: 'kind', label: 'It’s for', type: 'segmented', options: [{ value: 'out', label: 'Money out' }, { value: 'in', label: 'Money in' }] }],
         (v) => {
           const name = GU.finance.tidyCategory(v.name);
@@ -663,8 +665,8 @@
           const dest = MONEY_DESTS.includes(r0.destination) && r0.destination !== 'invoice_owed_to_me' ? r0.destination : k === 'in' ? 'transaction_in' : 'receipt';
           set(Object.assign({ destination: k === 'in' && dest !== 'transaction_in' && !GU.brain.PAPER.includes(dest) ? 'transaction_in' : dest, context: 'home', payer: null }, found ? { category: found } : { category: name, new_category: name }));
         }) }])
-      .concat((s.sections || []).map((x) => ({ icon: x.icon || 'star', label: x.name, hint: (x.part === 'work' ? 'Work' : 'Home') + ' section', onClick: () => set({ destination: 'section', section_id: x.id, context: x.part === 'work' ? 'work' : 'home', payer: null }) })))
-      .concat([{ icon: 'plus', label: 'New section…', hint: 'Car, Pets, Wedding…', onClick: () => ask('New section', 'Section name', 'e.g. Car, Pets, Wedding',
+      .concat((s.sections || []).map((x) => ({ icon: x.icon || 'star', label: x.name, hint: (x.part === 'work' ? 'Work' : 'Home') + ' category', onClick: () => set({ destination: 'section', section_id: x.id, context: x.part === 'work' ? 'work' : 'home', payer: null }) })))
+      .concat([{ icon: 'plus', label: 'New category…', hint: 'A page of your own: Car, Pets, Wedding…', onClick: () => ask('New category', 'Category name', 'e.g. Car, Pets, Wedding',
         [{ name: 'part', label: 'Show it in', type: 'segmented', options: PARTS }],
         (v) => set({ destination: 'section', section_id: null, new_section_name: v.name.trim(), section_part: v.part === 'work' ? 'work' : 'home', context: v.part === 'work' ? 'work' : 'home', payer: null })) }]));
     menu(anchor || document.querySelector('.main'), opts);
@@ -1012,8 +1014,8 @@
   function hints(agent) {
     const c = co();
     const list = agent
-      ? ['Dentist 14 Nov 3pm', 'Paid £18 for printer paper for ' + c, 'Make a Pets section and put the vet bill in it', 'File everything you’re sure about', 'Move the Netlify receipt to Get paid back', 'Create a Gym category for PureGym payments']
-      : ['Dentist 14 Nov 3pm', 'Paid £18 for printer paper', 'Make a Pets section', 'File everything you’re sure about', 'Always put Amazon in Get paid back'];
+      ? ['Dentist 14 Nov 3pm', 'Paid £18 for printer paper for ' + c, 'Make a Pets category and put the vet bill in it', 'File everything you’re sure about', 'Move the Netlify receipt to Get paid back', 'Create a Gym category for PureGym payments']
+      : ['Dentist 14 Nov 3pm', 'Paid £18 for printer paper', 'Make a Pets category', 'File everything you’re sure about', 'Always put Amazon in Get paid back'];
     return '<div class="hub-hints" aria-label="Things you can say"><span class="hub-hints__label">Try</span>' + list.map((h) => '<button type="button" class="chip hub-hint" data-hint="' + esc(h) + '">' + esc(h) + '</button>').join('') + '</div>';
   }
 
@@ -1030,7 +1032,7 @@
   function newRule() {
     const ps = S().places().filter((p) => p.kind !== 'doctype');
     const order = ['page', 'section', 'list', 'category', 'folder'];
-    const groupsOf = order.map((k) => ({ group: { page: 'Pages', section: 'Sections', list: 'To-do lists', category: 'Your categories', folder: 'Work folders' }[k], options: ps.filter((p) => p.kind === k).map((p) => ({ value: p.id, label: p.label })) })).filter((g) => g.options.length);
+    const groupsOf = order.map((k) => ({ group: { page: 'Pages', section: 'Your categories', list: 'To-do lists', category: 'Money categories', folder: 'Work folders' }[k], options: ps.filter((p) => p.kind === k).map((p) => ({ value: p.id, label: p.label })) })).filter((g) => g.options.length);
     formDialog({
       title: 'New rule',
       intro: 'Anything from or mentioning these words goes straight to the place you choose.',
@@ -1088,8 +1090,7 @@
     root.innerHTML = GU.view.head({
       eyebrow: 'Home and Work · Your assistant',
       title: 'Sorting hub',
-      text: 'Put anything here, or tell me what to do. I’ll work out where each thing goes and file it in Home or Work, and make a new place when nothing fits.',
-      actions: '<button type="button" class="btn btn--ghost" data-where-help>' + icon('info') + 'Where does it go?</button>',
+      text: 'Add anything here: a photo, a PDF, a pasted email or a few words. I’ll work out where it goes.',
     }) +
       '<form class="hub-compose" data-compose>' +
       '<label class="visually-hidden" for="hub-box">Drop, paste or type anything, or tell me what to do</label>' +

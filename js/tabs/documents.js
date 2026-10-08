@@ -8,6 +8,8 @@
   const { esc, uid, today, fmtDate, relDays, daysUntil, mask, debounce, plural } = GU.util;
   const { icon, pill, emptyState, chips, formDialog, toast, thumbHTML, viewFiles } = GU.ui;
   const store = GU.store;
+  /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
+  const at = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
 
   const TYPES = [
     'Passport', 'ID card or driving licence', 'Residence permit or eVisa', 'Birth, marriage or death certificate',
@@ -20,7 +22,7 @@
   const revealed = new Set();
   const isWork = (d) => (GU.parts ? GU.parts.isWorkDoc(d) : !!d && d.context === 'work');
   const workDocsTab = () => (GU.tabs['work-docs'] ? 'work-docs' : 'work');
-  const WORK_PAGE = 'Work › Contracts & documents';
+  const WORK_PAGE = () => at('work-docs', 'Work › Contracts & documents');
   function employer() {
     return GU.workMoney ? GU.workMoney.employer(store.state) : { set: false, short: '', label: 'the company' };
   }
@@ -162,7 +164,7 @@
     const work = rec.context === 'work';
     const here = (GU.parts ? GU.parts.get() : 'home') === (work ? 'work' : 'home');
     if (here && !undo) return toast('Added ' + rec.title);
-    toast(verb + ' ' + rec.title + ' to ' + (work ? WORK_PAGE : 'Home › Documents'),
+    toast(verb + ' ' + rec.title + ' to ' + (work ? WORK_PAGE() : at('documents', 'Home › Documents')),
       undo ? { action: 'Undo', onAction: undo } : { action: 'Open', onAction: work ? goWork : () => GU.view.go('documents') });
   }
 

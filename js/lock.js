@@ -521,7 +521,7 @@
       (sync ? 'your dashboard comes back from sync.' : 'your dashboard comes back from sync. Sync isn’t on here, so export a backup first (below) so you can restore it.') + '</p>';
     return '<header class="panel__head"><h2>' + icon('lock') + 'Privacy screen</h2>' + GU.ui.pill(on ? 'On for this device' : 'Off', on ? 'good' : 'muted') + '</header>' +
       '<div class="panel__body stack"><p>Hides your dashboard on this device until you enter the passcode. It doesn’t encrypt your data.</p>' +
-      '<p class="muted">It’s a screen cover for when you open the app or step away, so people nearby can’t see your money and paperwork. Anyone who knows how to look inside this browser can still reach your data, and backups aren’t covered. Each device has its own passcode, and only a scrambled copy is kept, on this device.</p>' +
+      '<p class="muted">It’s a screen cover for when you open the app or step away, so people nearby can’t see your money and documents. Anyone who knows how to look inside this browser can still reach your data, and backups aren’t covered. Each device has its own passcode, and only a scrambled copy is kept, on this device.</p>' +
       (on
         ? '<div class="field lock-after"><label class="field__label" for="lock-after">Lock after</label><select id="lock-after" data-lock-after>' +
           GU.ui.selectOptions(AFTER, AFTER.some((a) => a.value === cfg.after) ? cfg.after : 5) + '</select></div>' +

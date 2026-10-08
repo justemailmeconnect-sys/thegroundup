@@ -291,7 +291,7 @@
       Object.assign({ id: 'log-' + uid(), date: d(-2), summary: 'Receipt from Pret A Manger for lunch on the training day, £18.45. You paid, so it’s in Get paid back.', title: 'Lunch for the training day', label: 'Work › Get paid back', tab: 'work-back', ref: { c: 'paperwork', id: byTitle('Lunch for the training day') }, via: 'offline' }, D),
       Object.assign({ id: 'log-' + uid(), date: d(-4), summary: 'Receipt from Tesco for your weekly shop, £64.20.', title: 'Weekly shop', label: 'Home › Receipts', tab: 'receipts', ref: { c: 'paperwork', id: byTitle('Weekly shop') }, via: 'offline' }, D),
       Object.assign({ id: 'log-' + uid(), date: d(-10), summary: 'Invoice from Hart & Sons Plumbing for a boiler repair, £180.00, due in 14 days.', title: 'Boiler repair', label: 'Home › Receipts', tab: 'receipts', ref: { c: 'paperwork', id: byTitle('Boiler repair') }, via: 'offline' }, D),
-      Object.assign({ id: 'log-' + uid(), date: d(-30), summary: 'Your MOT certificate. I started a Car section for it.', title: 'MOT certificate', label: 'Car', tab: 's-' + carId, ref: { c: 'sectionItems', id: sectionItems[0].id }, via: 'offline' }, D),
+      Object.assign({ id: 'log-' + uid(), date: d(-30), summary: 'Your MOT certificate. I started a Car category for it.', title: 'MOT certificate', label: 'Car', tab: 's-' + carId, ref: { c: 'sectionItems', id: sectionItems[0].id }, via: 'offline' }, D),
     ];
 
     store.commit((s) => {

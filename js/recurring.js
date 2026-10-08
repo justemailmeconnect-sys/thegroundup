@@ -244,8 +244,8 @@
     const workTab = GU.tabs && GU.tabs['work-bills'] ? 'work-bills' : 'work';
     let msg;
     if (!work) msg = 'I found ' + plural(found.length, 'regular payment') + ' in your statements and added ' + (found.length === 1 ? 'it' : 'them') + ' to Bills.';
-    else if (!home) msg = 'I found ' + plural(work, 'regular work payment') + ' in your statements and added ' + (work === 1 ? 'it' : 'them') + ' to Work › Bills.';
-    else msg = 'I found ' + plural(found.length, 'regular payment') + ' in your statements: ' + plural(home, 'bill') + ' added to Bills, and ' + work + ' for work added to Work › Bills.';
+    else if (!home) msg = 'I found ' + plural(work, 'regular work payment') + ' in your statements and added ' + (work === 1 ? 'it' : 'them') + ' to ' + (GU.parts && GU.parts.pathOf && GU.tabs['work-bills'] ? GU.parts.pathOf('work-bills') : 'Work › Regular costs') + '.';
+    else msg = 'I found ' + plural(found.length, 'regular payment') + ' in your statements: ' + plural(home, 'bill') + ' added to Bills, and ' + work + ' for work added to ' + (GU.parts && GU.parts.pathOf && GU.tabs['work-bills'] ? GU.parts.pathOf('work-bills') : 'Work › Regular costs') + '.';
     GU.ui.toast(msg + ' Have a quick look and tell me which aren’t right.', {
       timeout: 12000,
       action: found.length === 1 ? 'Check it' : 'Check them',

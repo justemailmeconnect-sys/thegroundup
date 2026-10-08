@@ -313,7 +313,7 @@
       '<h1 class="brief__title">' + esc(greeting() + (s.settings.name ? ', ' + s.settings.name : '')) + '. Here’s where you stand.</h1>' +
       '<p class="brief__summary">' + summaryLine(s, t) + '</p>' +
       '<form class="capture" data-capture>' +
-      '<label class="capture__field">' + icon('plus') + '<input type="text" name="task" id="quick-task" autocomplete="off" placeholder="Tell me anything, e.g. Renew car tax on Friday" aria-label="Tell your assistant anything"></label>' +
+      '<label class="capture__field">' + icon('plus') + '<input type="text" name="task" id="quick-task" autocomplete="off" placeholder="Add anything, e.g. Renew car tax on Friday" aria-label="Add anything"></label>' +
       '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
       '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button></div>' +
       '</form>' +
@@ -433,5 +433,5 @@
     });
   }
 
-  GU.tabs.today = { label: 'Home overview', short: 'Overview', icon: 'today', part: 'home', render, parseQuickTask };
+  GU.tabs.today = { label: 'Today', short: 'Today', icon: 'today', part: 'home', render, parseQuickTask };
 })();

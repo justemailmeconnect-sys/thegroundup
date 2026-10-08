@@ -10,6 +10,8 @@
   const { esc, uid, today, addDays, daysUntil, fmtDate, relDays, money, plural, sum, round2, isISO } = GU.util;
   const { icon, pill, formDialog, openDialog, toast, menu } = GU.ui;
   const store = GU.store;
+  /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
+  const at = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
 
   const SOON = 3; // days before it's needed when it turns amber
   const TAB = 'work-requests';
@@ -506,7 +508,7 @@
         if (v.link && !cleanLink(v.link)) return badLink();
         if (formProblem(d, v)) return false;
         const res = add(v);
-        toast('Added ' + describe(res.rec) + ' to Work › To buy', { action: 'Undo', onAction: res.undo });
+        toast('Added ' + describe(res.rec) + ' to ' + at(TAB, 'Work › To buy'), { action: 'Undo', onAction: res.undo });
         if (opts.onSaved) opts.onSaved(res.rec);
       },
     });
@@ -560,7 +562,7 @@
           return false;
         }
         const res = addAll(items.map((x) => Object.assign({}, x, { payer: v.payer === 'company' ? 'company' : x.payer, askedDate: today() })));
-        toast('Added ' + plural(res.recs.length, 'thing') + ' to Work › To buy', { action: 'Undo', onAction: res.undo });
+        toast('Added ' + plural(res.recs.length, 'thing') + ' to ' + at(TAB, 'Work › To buy'), { action: 'Undo', onAction: res.undo });
       },
     });
     const box = d.form.querySelector('[name="lines"]');

@@ -104,7 +104,7 @@
         esc(s.byTerm ? money(s.start, { whole: true }) + ' to pay in all' : 'of ' + money(s.start, { whole: true })) + '</span></p>');
     }
     if (s.scheduled) {
-      extra.push('<div class="debt__plan"><h3>Still to pay <span class="muted">' + esc(plural(s.plan.length, 'payment') + (s.scheduleFrom ? ', from your ' + s.scheduleFrom + ' section' : ', updated ' + fmtDate(d.scheduleUpdated || today(), { short: true }))) + '</span></h3><ul>' +
+      extra.push('<div class="debt__plan"><h3>Still to pay <span class="muted">' + esc(plural(s.plan.length, 'payment') + (s.scheduleFrom ? ', from your ' + s.scheduleFrom + ' category' : ', updated ' + fmtDate(d.scheduleUpdated || today(), { short: true }))) + '</span></h3><ul>' +
         s.plan.slice(0, 8).map((i) => '<li><span>' + esc(fmtDate(i.date, { weekday: true })) + '</span><span class="muted">' + esc([i.merchant, i.of ? i.n + ' of ' + i.of : ''].filter(Boolean).join(' · ')) + '</span><b>' + esc(money(i.amount)) + '</b></li>').join('') +
         (s.plan.length > 8 ? '<li class="muted">and ' + (s.plan.length - 8) + ' more</li>' : '') + '</ul>' +
         '<button type="button" class="btn btn--sm btn--ghost" data-schedule="' + esc(d.id) + '">' + icon('upload') + 'Update the schedule</button></div>');
@@ -164,6 +164,14 @@
     if (d) btn.setAttribute('aria-label', d.name + ': ' + (open ? 'hide' : 'show') + ' the details');
   }
 
+  /* 'Records from your lenders: Klarna · PayPal': the categories that hold a lender's records, kept out of the menu. */
+  function lenderLine() {
+    const secs = GU.sections && GU.sections.lenderRecords ? GU.sections.lenderRecords() : [];
+    if (!secs.length) return '';
+    return '<p class="note-line note-line--quiet lender-line">' + icon('folder') + '<span>Records from your lenders: ' +
+      secs.map((x) => '<a class="link" href="#s-' + esc(x.id) + '">' + esc(x.name) + '</a>').join(' · ') + '</span></p>';
+  }
+
   function render(root) {
     const s = store.state;
     const active = (s.debts || []).filter((d) => !d.closed);
@@ -174,7 +182,7 @@
     const stale = daysUntil(tot.dataEnd) < -14;
 
     root.innerHTML = GU.view.head({
-      eyebrow: 'Money ahead',
+      eyebrow: 'Bills & debts',
       title: 'Debts',
       text: 'Everything you owe in one place, with what’s left to pay and when you’ll be clear.',
       actions: '<button type="button" class="btn" data-schedule>' + icon('list') + 'Add a payment schedule</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>',
@@ -201,7 +209,7 @@
       '</div><aside class="stack">' +
       overdraftsPanel(s, ods) +
       '<details class="panel panel--details debt__how"' + (howOpen ? ' open' : '') + '><summary class="panel__head"><h2>' + icon('info') + 'How these figures are worked out</h2></summary><div class="panel__body tip"><p>I match payments by the lender’s name on your bank statement (for example KLARNA, PAYPAL PAYIN3 or Flex on Monzo). Left to pay is the balance you gave me, less what you’ve paid since, plus interest if you gave me the rate. Update the balance now and then from a real statement to keep it exact.</p></div></details>' +
-      '</aside></div>';
+      '</aside></div>' + lenderLine();
 
     GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'debts', name: 'Debts' } }));
     if (GU.payoff) GU.payoff.wire(root);
@@ -510,5 +518,5 @@
     }) };
   }
 
-  GU.tabs.debts = { label: 'Debts', short: 'Debts', icon: 'card', render, create, edit, updateBalance, fromInbox, accountsCard, balanceLine, staleNote, scheduleDialog };
+  GU.tabs.debts = { label: 'Debts', short: 'Debts', icon: 'card', part: 'home', render, create, edit, updateBalance, fromInbox, accountsCard, balanceLine, staleNote, scheduleDialog };
 })();

@@ -93,7 +93,9 @@
     const sources = (s.incomeSources || []).map((i) => ({ value: i.id, label: (i.name || 'Income') + (i.from && i.from !== i.name ? ' (' + i.from + ')' : '') }));
     const accounts = (s.accounts || []).map((a) => ({ value: a.id, label: a.name }));
     const info = GU.refile && GU.refile.info ? GU.refile.info(s) : null;
-    const canUndo = !!(GU.refile && GU.refile.canUndo && GU.refile.canUndo(s));
+    // While the Home/Work tidy-up panel is showing, that's where the re-sort's Undo is; this is for when it isn't.
+    const tidyShown = !!(GU.refile && GU.refile.tidyHTML && GU.refile.tidyHTML(s));
+    const canUndo = !tidyShown && !!(GU.refile && GU.refile.canUndo && GU.refile.canUndo(s));
     // The one-off re-sort: undo it for 30 days; or, if it found nothing to go on, run it now you've said who you work for.
     let resort = '';
     if (canUndo) {
@@ -105,7 +107,7 @@
         '<span class="muted">Moves things you bought for ' + esc(c) + ' into Work and splits their payments into wages and money paid back. You can undo it for 30 days.</span></div>';
     }
     return '<section class="panel" id="work-settings"><header class="panel__head"><h2>' + icon('briefcase') + esc(e.set ? 'Work · ' + (e.fullName || e.short) : 'Work') + '</h2>' +
-      '<button type="button" class="btn btn--sm btn--ghost" data-where-help>' + icon('info') + 'Where does it go?</button></header>' +
+      '</header>' +
       '<form class="panel__body form-grid" data-form="employer">' +
       '<div class="field"><p class="tip">' + icon('info') + '<span>' + (e.set
         ? 'Work is for ' + esc(e.name) + ' and nothing else. Your own life and money stay in Home.'
@@ -120,7 +122,7 @@
       '<div class="field"><label class="field__label" for="emp-match">How they show on your bank statement</label><input id="emp-match" name="empMatch" type="text" value="' + esc((Array.isArray(raw.match) ? raw.match : []).join(', ')) + '" placeholder="' + esc(e.set ? e.match.join(', ') : 'e.g. acme care') + '" autocomplete="off">' +
       '<p class="field__help">Words from their payments to you, separated by commas.</p></div>' +
       '<div class="field field--half"><label class="field__label" for="emp-wage">Your wages come in as</label><select id="emp-wage" name="empWage">' + selectOptions([{ value: '', label: 'Work it out from the name' }].concat(sources), raw.wageSource || '') + '</select>' +
-      '<p class="field__help">From Home › Income.</p></div>' +
+      '<p class="field__help">From Money › Income.</p></div>' +
       '<div class="field field--half"><label class="field__label" for="emp-into">They pay you back into</label><select id="emp-into" name="empInto">' + selectOptions([{ value: '', label: 'Any of my accounts' }].concat(accounts), raw.payInto || '') + '</select>' +
       '<p class="field__help">Money ahead shows money coming back in this account.</p></div>' +
       '<div class="field emp-days">' +
@@ -129,7 +131,7 @@
       num('emp-chase', 'empChase', 'Remind me to chase after (days)', 'chaseDays', 'If something you sent isn’t paid back by then, I’ll remind you.') +
       '</div>' +
       '<div class="field"><p class="tip">' + icon('coin') + '<span><b>Wages or money paid back?</b> Your wages from ' + esc(c) + ' are your own money, so they count as income in Home. ' +
-      'When ' + esc(c) + ' pays you back for something you bought for them, that’s ‘Work reimbursements’: it’s kept out of your income, spending and budgets, and ticks things off in Work › Get paid back. ' +
+      'When ' + esc(c) + ' pays you back for something you bought for them, that’s ‘Work reimbursements’: it’s kept out of your income, spending and budgets, and ticks things off in Get paid back. ' +
       'I tell the two apart by the words on the payment (wage, salary or payroll) or an amount close to your usual pay. ' + esc(C) + '’s own money never shows in Home.</span></p></div>' +
       resort +
       '<div class="field field--row"><button type="submit" class="btn btn--primary">Save</button>' +
@@ -188,11 +190,33 @@
   function categoriesHTML(s) {
     const used = (name) => ['transactions', 'paperwork', 'bills'].reduce((n, c) => n + (s[c] || []).filter((x) => String(x.category || '').toLowerCase() === name.toLowerCase()).length, 0);
     const list = ['out', 'in'].flatMap((k) => F.custom(s, k).map((name) => ({ k, name, n: used(name) })));
-    return '<section class="panel" id="categories"><header class="panel__head"><h2>' + icon('tag') + 'Your categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-category>' + icon('plus') + 'New category</button></header>' +
+    return '<section class="panel" id="categories"><header class="panel__head"><h2>' + icon('tag') + 'Money categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-category>' + icon('plus') + 'New money category</button></header>' +
       (list.length ? '<ul class="rows rows--tight">' + list.map((x) => '<li class="row-item"><span class="row-item__icon">' + icon('tag') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' +
         esc((x.k === 'in' ? 'Money in' : 'Spending') + ' · ' + (x.n ? plural(x.n, 'thing') + ' in it' : 'nothing in it yet')) + '</em></span><span class="row-item__act">' +
         (x.n ? '' : '<button type="button" class="btn btn--sm btn--ghost" data-delete-category="' + esc(x.k + '|' + x.name) + '">Remove</button>') + '</span></li>').join('') + '</ul>'
-        : '<div class="panel__body"><p class="muted">Make categories of your own, like Gym or Pets, here or in the Sorting hub (“create a Gym category for PureGym payments”). They work with budgets too.</p></div>') + '</section>';
+        : '<div class="panel__body"><p class="muted">Make money categories of your own, like Gym or Pets, here or in the Sorting hub (“create a Gym category for PureGym payments”). They work with budgets too.</p></div>') + '</section>';
+  }
+
+  /* The pages you made yourself (Wedding, Visa, Klarna…): each one can be shown in the menu or hidden from it. Hidden ones
+     (Klarna and PayPal are, to start with) are all still here, still searchable, and linked from Bills & debts. */
+  function categoryPagesHTML(s) {
+    const S = GU.sections;
+    const list = s.sections || [];
+    const row = (x) => {
+      const hidden = S.isHidden(x);
+      const lender = S.isLenderRecord(x);
+      const n = s.sectionItems.filter((i) => i.sectionId === x.id).length;
+      return '<li class="row-item row-item--cat"><span class="row-item__icon">' + icon(x.icon || 'star') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' +
+        esc([x.part === 'work' ? 'Work' : 'Home', plural(n, 'item'), lender ? 'records from a lender' : '', x.byAssistant ? 'started by your assistant' : ''].filter(Boolean).join(' · ')) + '</em></span>' +
+        '<span class="row-item__act"><span class="seg seg--sm" role="radiogroup" aria-label="' + esc(x.name) + ' in the menu">' +
+        '<label><input type="radio" name="cat-menu-' + esc(x.id) + '" value="shown" data-cat-menu="' + esc(x.id) + '"' + (hidden ? '' : ' checked') + '><span>In the menu</span></label>' +
+        '<label><input type="radio" name="cat-menu-' + esc(x.id) + '" value="hidden" data-cat-menu="' + esc(x.id) + '"' + (hidden ? ' checked' : '') + '><span>Hidden</span></label></span>' +
+        '<button type="button" class="btn btn--sm btn--ghost" data-move-section="' + esc(x.id) + '">Rename or move</button><a class="btn btn--sm btn--ghost" href="#s-' + esc(x.id) + '">Open</a></span></li>';
+    };
+    return '<section class="panel" id="category-pages"><header class="panel__head"><h2>' + icon('star') + 'Your categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-section>' + icon('plus') + 'New category</button></header>' +
+      (list.length ? '<ul class="rows rows--tight">' + list.map(row).join('') + '</ul>' +
+        '<p class="panel__foot muted">Your own pages, like Wedding or Visa. Hiding one only takes it out of the menu: everything in it stays, and Search still finds it.</p>'
+        : '<div class="panel__body"><p class="muted">No categories yet. I’ll suggest one when something you send me doesn’t fit the menu.</p></div>') + '</section>';
   }
 
   function render(root) {
@@ -211,6 +235,8 @@
       '<div class="field"><button type="submit" class="btn btn--primary">Save</button></div></form></section>' +
 
       workHTML(s) +
+
+      (GU.refile && GU.refile.tidyHTML ? GU.refile.tidyHTML(s) : '') +
 
       '<section class="panel" id="assistant"><header class="panel__head"><h2>How your assistant reads things</h2><span data-mode class="muted"></span></header><form class="panel__body form-grid" data-form="brain">' +
       '<div class="field"><p class="tip">' + icon('info') + '<span>When you open this app inside the Claude app, I use Claude through your Claude account automatically. Anywhere else, you can add an Anthropic API key below. Without either, I read files offline on this device using text in PDFs, photo text recognition and keyword rules. That works for clear receipts and letters but is less accurate.</span></p></div>' +
@@ -241,9 +267,11 @@
 
       categoriesHTML(s) +
 
-      '<section class="panel"><header class="panel__head"><h2>Your categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-section>' + icon('plus') + 'New category</button></header>' +
-      ((s.sections || []).length ? '<ul class="rows rows--tight">' + s.sections.map((x) => '<li class="row-item"><span class="row-item__icon">' + icon(x.icon || 'star') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' + esc((x.part === 'work' ? 'Work · ' : 'Home · ') + plural(s.sectionItems.filter((i) => i.sectionId === x.id).length, 'item')) + (x.byAssistant ? ' · started by your assistant' : '') + '</em></span><span class="row-item__act"><button type="button" class="btn btn--sm btn--ghost" data-move-section="' + esc(x.id) + '">Rename or move</button><a class="btn btn--sm btn--ghost" href="#s-' + esc(x.id) + '">Open</a></span></li>').join('') + '</ul>'
-        : '<div class="panel__body"><p class="muted">No extra categories yet. I’ll suggest one when something you send me doesn’t fit the other tabs.</p></div>') + '</section>' +
+      categoryPagesHTML(s) +
+
+      '<section class="panel"><header class="panel__head"><h2>' + icon('info') + 'Help</h2></header><ul class="rows rows--tight"><li class="row-item"><span class="row-item__icon">' + icon('info') + '</span>' +
+      '<span class="row-item__text"><b>Where things go</b><em>Which page each kind of thing belongs on, in Home and in Work</em></span>' +
+      '<span class="row-item__act"><button type="button" class="btn btn--sm btn--ghost" data-where-help>Open the guide</button></span></li></ul></section>' +
 
       (GU.lock ? GU.lock.panel() : '') +
 
@@ -406,6 +434,17 @@
         toast('Everything erased');
         GU.view.go('today');
       }
+    });
+    root.addEventListener('change', (e) => {
+      const sw = e.target.closest('[data-cat-menu]');
+      if (!sw || !GU.sections || !GU.sections.setHidden) return;
+      const id = sw.dataset.catMenu;
+      const sec = (store.state.sections || []).find((x) => x.id === id);
+      if (!sec) return;
+      const was = GU.sections.isHidden(sec);
+      const hide = sw.value === 'hidden';
+      GU.sections.setHidden(id, hide);
+      toast(hide ? sec.name + ' is hidden from the menu' : sec.name + ' is in the menu', { action: 'Undo', onAction: () => GU.sections.setHidden(id, was) });
     });
     root.addEventListener('change', async (e) => {
       const imp = e.target.closest('[data-import]');

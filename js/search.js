@@ -18,7 +18,7 @@
     { id: 'doc', label: 'Documents', icon: 'folder' },
     { id: 'task', label: 'Tasks', icon: 'todo' },
     { id: 'hproject', label: 'Home projects', icon: 'star' },
-    { id: 'item', label: 'Section items', icon: 'star' },
+    { id: 'item', label: 'Your categories', icon: 'star' },
     { id: 'note', label: 'Work notes and projects', icon: 'note' },
     { id: 'plan', label: 'Plans', icon: 'trend' },
     { id: 'request', label: 'To buy', icon: 'bag' },

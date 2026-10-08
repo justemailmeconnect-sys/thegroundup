@@ -2,8 +2,9 @@
    what the business pays for (its own money), Bills, Tasks, Projects and Contracts & documents. To buy (what the
    business has asked you to get, and what it will cost) is js/tabs/requests.js. Get paid back (your own money) is
    in js/tabs/payback.js. The cost-idea rows, form and forecast here are for Home › Plans (your own things). Each page has its own folders and search, and notes
-   (a panel once there are some, a small '+ Note' button before). The Overview shows what needs attention, then a card
-   for each page in two groups (Money, Running it), then the one-off tidy-up from the Home/Work split (js/refile.js).
+   (a panel once there are some, a small '+ Note' button before). The Overview is short: what needs attention, then three
+   cards (Orders & claims, Jobs, Contracts & documents), each opening its menu item. The one-off tidy-up from the Home/Work
+   split (js/refile.js) is in Settings, with a line in Needs attention that opens it.
    The business's name comes from Settings, never from here. */
 (function () {
   'use strict';
@@ -12,11 +13,13 @@
   const { icon, pill, emptyState, formDialog, toast, menu, thumbHTML, viewFiles } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
+  /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
+  const at = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
 
   /* The internal area ids are kept from before, so folders and notes stay where they are. */
   const AREAS = [
     { id: 'invoices', get label() { return paysLabel(); }, icon: 'receipt', one: 'item' },
-    { id: 'bills', label: 'Bills', icon: 'bills', one: 'bill' },
+    { id: 'bills', label: 'Regular costs', icon: 'bills', one: 'cost' },
     { id: 'tasks', label: 'Tasks', icon: 'todo', one: 'task' },
     { id: 'projects', label: 'Projects', icon: 'star', one: 'project' },
     { id: 'contracts', label: 'Contracts & documents', icon: 'file', one: 'document' },
@@ -232,8 +235,8 @@
       else if (n >= 0 && n <= 60) add(n <= 30 ? 'warn' : 'info', 'contracts', d2.title + ' ends ' + relDays(d2.expiryDate), 'Check the notice period and decide whether to renew', { c: 'documents', id: d2.id });
     }
 
-    // The one-off re-sort's questions: one line, which opens the tidy-up block on the Overview.
-    if (asks) add('info', 'overview', plural(asks, 'thing') + ' to check from the Home/Work split', 'One tap each, in the tidy-up below', null, { tidy: true });
+    // The one-off re-sort's questions: one line, which opens the Home/Work tidy-up in Settings.
+    if (asks) add('info', 'overview', plural(asks, 'thing') + ' to check from the Home/Work split', 'One tap each, in Settings › Home/Work tidy-up', null, { tidy: true });
 
     // Things you've been asked to get and haven't ordered (Work › To buy, js/tabs/requests.js).
     try {
@@ -514,12 +517,7 @@
   }
 
   /* ---------- the overview ---------- */
-  /* The cards, in two groups: the money, then running the place. To buy's card comes from js/tabs/requests.js. */
-  const CARD_GROUPS = [
-    { title: 'Money', cards: ['requests', 'back', 'invoices', 'bills'] },
-    { title: 'Running it', cards: ['tasks', 'projects', 'contracts'] },
-  ];
-  const ICON_OF = { back: 'coin' };
+  /* Three cards, each opening its menu item: Orders & claims, Jobs, and Contracts & documents. */
   const SHOW_CHECKS = 5; // how many lines of 'Needs attention' show before '+ n more'
   /* One card: its figure and ONE line, amber when it needs action. o: {tab, ico, label, big, unit, line, warn, cls}. */
   function cardBtn(o) {
@@ -527,11 +525,28 @@
       '<b class="' + (o.cls || '') + '">' + esc(o.big) + '</b><em>' + esc(o.unit) + '</em>' +
       (o.line ? '<span class="wk-card__line">' + esc(o.line) + '</span>' : '') + '</button>';
   }
-  function areaCard(s, a) {
-    if (a === 'requests') return GU.requests && GU.requests.cardHTML ? GU.requests.cardHTML(s) : '';
-    const f = figures(s, a);
-    return cardBtn({ tab: TAB_OF[a], ico: ICON_OF[a] || (AREAS.find((x) => x.id === a) || {}).icon, label: labelOf(a), big: f.big, unit: f.unit, line: f.line || f.lines[0],
-      warn: f.warn && !f.bad, cls: f.bad ? 'is-crit' : f.warn ? 'is-warn' : f.good ? 'is-in' : '' });
+  /* Orders & claims: what the company owes you back, and how much of the ordering is still to do. */
+  function ordersCard(s) {
+    const f = figures(s, 'back');
+    const rq = GU.requests && GU.requests.totals ? GU.requests.totals(s) : null;
+    const d = dueBack(s);
+    const toOrder = rq ? rq.asked.length : 0;
+    const waiting = ktkTotals(s).waiting.length + (d && d.sent ? d.sent.length : 0);
+    const hot = (rq && rq.asked.some((r) => r.needBy && daysUntil(r.needBy) <= 3)) || !!f.warn;
+    return cardBtn({ tab: TAB_OF.back, ico: 'bag', label: 'Orders & claims', big: f.big, unit: 'due back from ' + co(),
+      line: toOrder + ' to order · ' + waiting + ' waiting for ' + co(), warn: hot, cls: f.good ? 'is-in' : hot ? 'is-warn' : '' });
+  }
+  /* Jobs: the open tasks, and the projects on the go. */
+  function jobsCard(s) {
+    const t = figures(s, 'tasks');
+    const p = figures(s, 'projects');
+    return cardBtn({ tab: TAB_OF.tasks, ico: 'todo', label: 'Jobs', big: t.big, unit: t.unit,
+      line: p.big + ' ' + p.unit + (t.bad ? ' · ' + t.lines[0] : ''), warn: false, cls: t.bad ? 'is-crit' : '' });
+  }
+  /* Contracts & documents: how many, and whether any end soon. */
+  function docsCard(s) {
+    const f = figures(s, 'contracts');
+    return cardBtn({ tab: TAB_OF.contracts, ico: 'file', label: 'Contracts & documents', big: f.big, unit: f.unit, line: f.line, warn: false, cls: f.bad ? 'is-crit' : '' });
   }
 
   /* The Overview's header over its checks. Late or due soon ones are 'to do', as in the Work door and the switch's
@@ -548,13 +563,6 @@
     const crit = list.filter((x) => x.level === 'crit').length;
     const notes = (s.workNotes || []).slice().sort((a, b) => (b.updated || b.created || '').localeCompare(a.updated || a.created || '')).slice(0, 6);
     const c = co();
-    // The one-off tidy-up from the Home/Work split: its questions, then what the re-sort changed, in one closed block.
-    let tidy = '';
-    try {
-      tidy = GU.refile && GU.refile.tidyHTML ? GU.refile.tidyHTML(s) : '';
-    } catch (e) {
-      tidy = '';
-    }
     const checkLi = (x, i) => '<li class="is-' + x.level + (x.acts ? ' has-acts' : '') + '"><button type="button" data-check="' + i + '"><span class="dot dot--' + x.level + '">' + icon(x.level === 'info' ? 'info' : 'alert') + '</span>' +
       '<span><b>' + esc(x.title) + '</b><em>' + esc((x.area === 'overview' ? '' : labelOf(x.area) + ' · ') + x.detail) + '</em></span>' + icon('chevron') + '</button>' +
       (x.acts ? '<div class="wk-check__acts">' + x.acts.map((a, k) => actBtn(a.attr, a.label, a.icon !== undefined ? a.icon : k ? 'coin' : 'briefcase', k ? '' : 'btn--soft')).join('') + '</div>' : '') + '</li>';
@@ -562,7 +570,7 @@
     const more = lis.slice(SHOW_CHECKS);
     const wages = wm() && wm().wageSource ? wm().wageSource(s) : null;
     return '<form class="capture wk-tell" data-tell>' +
-      '<label class="capture__field">' + icon('briefcase') + '<input type="text" name="note" id="wk-tell" autocomplete="off" placeholder="' + esc('Tell me anything for ' + c + ', e.g. Paid £18 for printer paper') + '" aria-label="' + esc('Tell me anything for ' + c) + '"></label>' +
+      '<label class="capture__field">' + icon('briefcase') + '<input type="text" name="note" id="wk-tell" autocomplete="off" placeholder="' + esc('Add anything for ' + c + ', e.g. Paid £18 for printer paper') + '" aria-label="' + esc('Add anything for ' + c) + '"></label>' +
       '<div class="capture__btns"><button type="submit" class="btn btn--soft">Add</button>' +
       '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button></div></form>' +
       '<section class="panel wk-check"><header class="panel__head"><h2>' + icon(list.length ? 'alert' : 'check') + 'Needs attention</h2>' +
@@ -571,11 +579,10 @@
         (more.length ? '<details class="wk-check__more"' + (ui.moreChecks ? ' open' : '') + '><summary><span class="wk-check__more-open">+ ' + more.length + ' more</span><span class="wk-check__more-close">Show fewer</span>' + icon('chevron') + '</summary>' +
           '<ul class="wk-check__list">' + more.join('') + '</ul></details>' : '')
         : '<div class="panel__body"><p class="wk-allgood">' + icon('check') + '<span>Everything at work is managed. Nothing is late, overdue or about to end.</span></p></div>') + '</section>' +
-      CARD_GROUPS.map((g) => '<section class="wk-cardgroup" aria-label="' + esc(g.title) + '"><h2 class="wk-sub">' + esc(g.title) + '</h2><div class="wk-cards">' + g.cards.map((a) => areaCard(s, a)).join('') + '</div></section>').join('') +
-      tidy +
-      '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header>' +
-      (notes.length ? '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, true)).join('') + '</ul>' : '<div class="panel__body"><p class="muted">Jot down anything for work: meeting notes, ideas, who to call.</p></div>') + '</section>' +
-      '<p class="wk-footnote">' + icon('info') + '<span>' + esc('Your wages' + (wm() && wm().employer(s).set ? ' from ' + c : '') + ' are your own money, so they’re in Home › Income' + (wages ? ' as ' + (wages.name || 'your pay') : '') + '.') +
+      '<div class="wk-cards wk-cards--three">' + ordersCard(s) + jobsCard(s) + docsCard(s) + '</div>' +
+      (notes.length ? '<section class="panel"><header class="panel__head"><h2>' + icon('note') + 'Notes</h2><button type="button" class="btn btn--sm" data-new-note>' + icon('plus') + 'New note</button></header>' +
+        '<ul class="wk-notes">' + notes.map((n) => noteHTML(s, n, true)).join('') + '</ul></section>' : '') +
+      '<p class="wk-footnote">' + icon('info') + '<span>' + esc('Your wages' + (wm() && wm().employer(s).set ? ' from ' + c : '') + ' are your own money, so they’re in ' + at('incomings', 'Home › Income') + (wages ? ' as ' + (wages.name || 'your pay') : '') + '.') +
       ' <a class="link" href="#incomings">Open Income</a></span></p>' +
       '<div class="dropcover" hidden><div>' + icon('upload') + '<b>' + esc('Drop to file it under Work') + '</b></div></div>';
   }
@@ -735,14 +742,14 @@
     const contact = e && e.contact ? String(e.contact).trim() : '';
     if (area === 'invoices') return 'Orders, invoices and receipts ' + c + ' pays for, on ' + c + '’s card or account' + (contact ? ' or settled by ' + contact : '') + '. None of this is your money, so it never shows in Home.';
     if (area === 'bills') return 'Regular costs for ' + c + '. Say who pays each one: if it comes out of your account, each payment joins Get paid back by itself.';
-    if (area === 'tasks') return 'Things to do for ' + c + '. They stay out of Home › To-do.';
+    if (area === 'tasks') return 'Things to do for ' + c + '. They stay out of ' + at('todos', 'Home › To-do') + '.';
     if (area === 'projects') return 'Jobs and pieces of work: on the go, coming up, ideas and done.';
-    if (area === 'contracts') return C + '’s contracts, leases, licences, insurance, supplier terms and registrations, with reminders before they end. Your own payslips and P60s stay in Home › Documents.';
+    if (area === 'contracts') return C + '’s contracts, leases, licences, insurance, supplier terms and registrations, with reminders before they end. Your own payslips and P60s stay in ' + at('documents', 'Home › Documents') + '.';
     return '';
   }
   const DROP = {
     invoices: () => ['Drop invoices or receipts ' + co() + ' pays for', 'Photos and PDFs. I’ll read each one and file it as ' + co() + '’s money.'],
-    bills: () => ['Drop work bills here', 'Photos and PDFs. I’ll read each one and file it under Work › Bills.'],
+    bills: () => ['Drop regular work costs here', 'Photos and PDFs. I’ll read each one and file it under ' + at('work-bills', 'Work › Regular costs') + '.'],
     contracts: () => ['Drop contracts or documents for ' + co(), 'Photos and PDFs. I’ll read each one and file it under Work.'],
   };
 
@@ -789,7 +796,7 @@
         '<button type="button" class="btn btn--primary" data-add="invoices">' + icon('plus') + esc('Something ' + c + ' is paying') + '</button>';
     }
     if (area === 'projects') return renameBtn + note + '<button type="button" class="btn btn--primary" data-add="projects">' + icon('plus') + 'New project</button>';
-    if (area === 'bills') return renameBtn + '<button type="button" class="btn" data-move-home="bills">' + icon('home') + 'Move a bill from Home</button>' + note + '<button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New bill</button>';
+    if (area === 'bills') return renameBtn + '<button type="button" class="btn" data-move-home="bills">' + icon('home') + 'Move a bill from Home</button>' + note + '<button type="button" class="btn btn--primary" data-add="bills">' + icon('plus') + 'New regular cost</button>';
     return renameBtn + '<button type="button" class="btn" data-move-home="contracts">' + icon('home') + 'Move a document from Home</button>' + note + '<button type="button" class="btn btn--primary" data-add="contracts">' + icon('plus') + 'New contract or document</button>';
   }
 
@@ -924,7 +931,7 @@
       if (x.ref) return GU.view.open(x.ref);
       return go(x.area);
     }
-    if (b('[data-add-menu]')) return menu(b('[data-add-menu]'), parts().addMenu('work'));
+    if (b('[data-add-menu]')) return menu(b('[data-add-menu]'), parts().addMenu('work', b('[data-add-menu]')));
     if ((el = b('[data-add]'))) return add(el.dataset.add, el.dataset.kind);
     if ((el = b('[data-move-home]'))) return moveFromHome(el.dataset.moveHome);
     if (b('[data-import-orders]')) return importOrders();
@@ -1229,7 +1236,7 @@
       if (ctx === 'home') delete x.workFolder;
       x.updated = today();
     });
-    toast(ctx === 'home' ? 'Moved ' + r.name + ' to Home › Home projects' : 'Moved ' + r.name + ' to Work › ' + labelOf('projects'), { action: 'Undo', onAction: () => store.upsert('projects', before) });
+    toast(ctx === 'home' ? 'Moved ' + r.name + ' to ' + at('home-projects', 'Home › Home projects') : 'Moved ' + r.name + ' to ' + at('work-projects', 'Work › ' + labelOf('projects')), { action: 'Undo', onAction: () => store.upsert('projects', before) });
   }
   /* Marks a project In progress or Done, with Undo. */
   function setProjectStatus(id, status) {
@@ -1484,7 +1491,7 @@
       else items.push({ icon: 'home', label: 'Move to Home', hint: 'It’s mine, not for work', onClick: () => moveProject(id, 'home') });
     }
     if (idea) {
-      if (GU.costs.isOpen(r)) items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Adds it to Work › To buy', onClick: () => toWork(id) });
+      if (GU.costs.isOpen(r)) items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Adds it to ' + at('work-requests', 'Work › To buy'), onClick: () => toWork(id) });
     } else if (c !== 'projects') items.push({ icon: 'home', label: 'Move to Home', hint: 'It’s mine, not for work', onClick: () => takeOut(c, id) });
     items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(c, id, nameOf(c, r)) });
     menu(anchor, items);

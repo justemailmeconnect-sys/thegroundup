@@ -22,11 +22,15 @@
   };
 
   const view = {
-    /* Standard page heading for a tab. The eyebrow starts with the page's part: 'Home · Money ahead'. */
+    /* Standard page heading for a tab. The eyebrow starts with the page's part: 'Home · Money ahead'. A page inside a
+       container (Bank in Money, Get paid back in Orders & claims) names the container instead, so the strip above and
+       the heading read as one page: 'Home · Money'. */
     head(o) {
       const p = o.part || pagePart(current);
       const label = isPart(p) ? PARTS[p].label : '';
       let eyebrow = o.eyebrow || '';
+      const box = GU.containers && o.part !== false ? GU.containers.parentOf(current) : '';
+      if (box) eyebrow = GU.containers.containerLabel(box);
       if (label && o.part !== false && !new RegExp('^' + label + '\\b', 'i').test(eyebrow)) eyebrow = eyebrow ? label + ' · ' + eyebrow : label;
       return '<header class="page-head"><div class="page-head__text">' +
         (eyebrow ? '<p class="eyebrow">' + esc(eyebrow) + '</p>' : '') +
@@ -50,10 +54,12 @@
       const tab = GU.tabs[map[ref.c]];
       if (tab && tab.edit) tab.edit(ref.id, ref.c);
     },
-    /* The + Add menu for the part you're in. */
+    /* The Add menu for the part you're in. */
     quickAdd(anchor) {
-      GU.ui.menu(anchor, parts.addMenu(parts.get()));
+      GU.ui.menu(anchor, parts.addMenu(parts.get(), anchor));
     },
+    /* The red and amber counts for each page, as the menu last worked them out (the sub-tab strips show them too). */
+    badges: {},
   };
   GU.view = view;
 
@@ -81,9 +87,10 @@
       '<a class="partbar__brand" href="#' + start + '" aria-label="The Ground Up, overview"><span>G</span></a>' +
       switchHTML('bar') +
       (GU.search ? GU.search.barHTML() : '') + (GU.lock ? GU.lock.barHTML() : '') +
+      '<button type="button" class="partbar__tool partbar__claude" data-chat-toggle aria-pressed="false" aria-label="Ask Claude">' + icon('spark') + '</button>' +
       '<button type="button" class="partbar__add" data-quick-add aria-label="Add something">' + icon('plus') + '</button>' +
       '</header>' +
-      '<nav class="rail" aria-label="Sections">' +
+      '<nav class="rail" aria-label="Menu">' +
       '<a class="rail__brand" href="#' + start + '" aria-label="The Ground Up, overview"><span>G</span></a>' +
       switchHTML('rail') +
       '<div class="rail__items"></div></nav>' +
@@ -122,12 +129,11 @@
     document.querySelectorAll('.rail__brand, .partbar__brand').forEach((a) => a.setAttribute('href', '#' + PARTS[part].start));
   }
 
-  /* ---------- the rail: + Add, Ask Claude, the part's pages, its sections, Settings ---------- */
+  /* ---------- the rail: Add, Search, Claude, the part's pages, its categories, Settings ---------- */
   let railKey = '';
   function buildRail(part) {
-    const custom = GU.sections.sync().filter((id) => parts.partOf(id) === part);
+    const custom = GU.sections.menuIds(part);
     const groups = parts.groups(part);
-    const titles = PARTS[part].titles || [];
     const label = (id) => {
       const t = GU.tabs[id];
       return t ? t.short || t.label : id;
@@ -141,20 +147,15 @@
       const t = GU.tabs[id];
       return '<a class="rail__item' + (t.custom ? ' rail__item--custom' : '') + '" href="#' + id + '" data-tab="' + id + '"><span class="rail__ico">' + icon(t.icon) + '<b class="rail__badge" hidden></b></span><span class="rail__label">' + esc(label(id)) + '</span></a>';
     };
-    // A thin line between groups; on a tall screen it also names the group ('Money ahead').
-    const sep = (title) => '<span class="rail__sep' + (title ? ' rail__sep--titled' : '') + '" aria-hidden="true">' + (title ? '<em>' + esc(title) + '</em>' : '') + '</span>';
-    const all = PARTS[part].groups;
+    // A thin line before the categories you made yourself; the pages above it are one list.
+    const sep = '<span class="rail__sep" aria-hidden="true"></span>';
     const chatOpen = document.documentElement.classList.contains('chat-open');
     host.innerHTML =
       '<button type="button" class="rail__item rail__add" data-quick-add aria-label="Add something"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">Add</span></button>' +
       (GU.search ? GU.search.railHTML() : '') + (GU.lock ? GU.lock.railHTML() : '') +
       '<button type="button" class="rail__item rail__claude" data-chat-toggle aria-pressed="' + chatOpen + '" aria-label="Ask Claude (Ctrl or Cmd + K)"><span class="rail__ico">' + icon('spark') + '</span><span class="rail__label">Claude</span></button>' +
-      groups.map((g, i) => {
-        // The heading of the group in the full menu (groups with no pages yet are left out).
-        const at = all.findIndex((full) => full.includes(g[0]));
-        return (i ? sep(titles[at]) : '') + g.map(item).join('');
-      }).join('') +
-      (custom.length ? sep(part === 'work' ? 'Categories' : 'Your categories') + custom.map(item).join('') : '') +
+      groups.map((g, i) => (i ? sep : '') + g.map(item).join('')).join('') +
+      (custom.length ? sep + custom.map(item).join('') : '') +
       '<div class="rail__foot"><a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>' +
       '<button type="button" class="rail__item rail__newcat" data-new-category aria-label="New category"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">New category</span></button></div>';
   }
@@ -191,14 +192,22 @@
     }
     // The Sorting hub took over from the Inbox: its count is the same thing.
     if (counts.hub == null && counts.inbox != null) counts.hub = counts.inbox;
+    view.badges = counts;
     renderSwitch(part, counts);
+    // A container's count is its pages' counts added up (the counts are worked out per page).
+    const countOf = (id) => {
+      const C = GU.containers;
+      if (C && C.has(id)) return C.subs(id).reduce((n, sub) => n + (counts[sub] || 0), 0);
+      return counts[id] || 0;
+    };
+    const lit = GU.containers ? GU.containers.railId(tabId) : tabId;
     document.querySelectorAll('.rail__item[data-tab]').forEach((a) => {
       const id = a.getAttribute('data-tab');
-      if (id === tabId) a.setAttribute('aria-current', 'page');
+      if (id === lit) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
       const badge = a.querySelector('.rail__badge');
       if (!badge) return;
-      const n = counts[id] || 0;
+      const n = countOf(id);
       badge.hidden = !n;
       badge.textContent = n > 9 ? '9+' : n;
       const tab = GU.tabs[id];
@@ -246,19 +255,36 @@
       }
       return 'work-requests';
     }
+    // A menu item that holds several pages (Money, Bills & debts…): open the page you used last in it. The address
+    // bar then names that page, so links, toasts and 'Open' buttons all keep using the page ids.
+    if (GU.containers && GU.containers.has(id) && GU.tabs[id]) {
+      const sub = GU.containers.defaultSub(id);
+      if (sub && GU.tabs[sub]) {
+        try {
+          history.replaceState(null, '', '#' + sub);
+        } catch (e) {
+          /* the address bar just stays as it is */
+        }
+        return sub;
+      }
+    }
     if (GU.tabs[id]) return id;
     const start = PARTS[parts.partOf(id) === 'work' ? 'work' : part].start;
     return GU.tabs[start] ? start : 'today';
   }
 
   /* Scrolls the menu itself (not the page) so the current page's item is in view: sideways on a phone, up or down
-     when the screen is too short for the whole list. Done by hand: scrollIntoView also moves where Tab starts. */
+     when the screen is too short for the whole list. It only moves when the item isn't fully showing, so the six
+     main items stay where they are. Done by hand: scrollIntoView also moves where Tab starts. */
   function revealInRail(item) {
     const host = item && item.closest('.rail__items');
     if (!host) return;
     const h = host.getBoundingClientRect();
     const r = item.getBoundingClientRect();
-    if (host.scrollWidth > host.clientWidth + 1) host.scrollLeft += r.left + r.width / 2 - (h.left + h.width / 2);
+    if (host.scrollWidth > host.clientWidth + 1) {
+      if (r.left < h.left) host.scrollLeft += r.left - h.left - 8;
+      else if (r.right > h.right) host.scrollLeft += r.right - h.right + 8;
+    }
     if (host.scrollHeight > host.clientHeight + 1) {
       // Settings is pinned at the bottom of the list: items must clear it, not just the edge.
       const foot = host.querySelector('.rail__foot');
@@ -294,7 +320,12 @@
     const fresh = document.createElement('div');
     fresh.className = 'view__inner view--' + tabId;
     host.replaceChildren(fresh);
-    tab.render(fresh);
+    // A page inside Money, Bills & debts… is drawn by its container: the strip of pages, then the page itself.
+    const box = GU.containers ? GU.containers.parentOf(tabId) : '';
+    if (box && GU.tabs[box]) {
+      fresh.classList.add('view--in-' + box);
+      GU.tabs[box].render(fresh, tabId);
+    } else tab.render(fresh);
     GU.ui.hydrate(fresh);
     if (keep) {
       const el = document.getElementById(keep.id);

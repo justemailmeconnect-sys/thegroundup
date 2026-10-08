@@ -8,6 +8,8 @@
   const { icon, pill, emptyState, chips, formDialog, toast, thumbHTML, viewFiles } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
+  /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
+  const at = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
 
   const KINDS = [
     { value: 'receipt', label: 'Receipt' },
@@ -50,7 +52,7 @@
   /* 'Filed in Work › Get paid back' (lead 'Filed in' or 'Moved to'), with Open unless you're already on that page. */
   function workToast(rec, lead, linked) {
     const pg = workPage(rec);
-    const msg = lead + ' Work › ' + pg.label + (linked ? '. Linked to your ' + accountName(store.state, linked.account) + ' payment on ' + fmtDate(linked.date, { short: true }) : '');
+    const msg = lead + ' ' + at(pg.tab, 'Work › ' + pg.label) + (linked ? '. Linked to your ' + accountName(store.state, linked.account) + ' payment on ' + fmtDate(linked.date, { short: true }) : '');
     toast(msg, location.hash === '#' + pg.tab ? {} : { action: 'Open', onAction: () => GU.view.go(pg.tab) });
   }
 
@@ -155,7 +157,7 @@
     const lead = 'Receipts for ' + co() + ' are in ';
     // On one page: 'are in Work › Get paid back (9).' On both: 'are in Work (10): Get paid back (9) · … pays (1)'.
     const text = back && pays ? esc(lead + 'Work (' + (back + pays) + '): ') + link('work-back', 'Get paid back', back) + ' · ' + link('work-ktk', paysLabel(), pays)
-      : esc(lead) + (back ? link('work-back', 'Work › Get paid back', back) : link('work-ktk', 'Work › ' + paysLabel(), pays)) + '.';
+      : esc(lead) + (back ? link('work-back', at('work-back', 'Work › Get paid back'), back) : link('work-ktk', at('work-ktk', 'Work › ' + paysLabel()), pays)) + '.';
     return '<p class="note-line note-line--signpost">' + icon('briefcase') + '<span>' + text + '</span></p>';
   }
 
@@ -540,7 +542,7 @@
         const page = isWork(rec) ? workPage(rec).tab : 'receipts';
         if (page !== pageWas) {
           if (isWork(rec)) workToast(rec, 'Moved to', linked);
-          else toast('Moved to Home › Receipts', location.hash === '#receipts' ? {} : { action: 'Open', onAction: () => GU.view.go('receipts') });
+          else toast('Moved to ' + at('receipts', 'Home › Receipts'), location.hash === '#receipts' ? {} : { action: 'Open', onAction: () => GU.view.go('receipts') });
         } else if (linked) toast('Linked to your ' + accountName(store.state, linked.account) + ' payment on ' + fmtDate(linked.date, { short: true }));
       },
       onDelete: () => {
@@ -774,8 +776,8 @@
     const c = co();
     const MODES = [
       { value: 'home', label: 'Home', icon: 'home', where: 'Receipts', tab: 'receipts' },
-      { value: 'back', label: 'Work, I paid (get it back)', icon: 'coin', where: 'Work › Get paid back', tab: 'work-back' },
-      { value: 'ktk', label: 'Work, ' + c + '’s card', icon: 'briefcase', where: 'Work › ' + paysLabel(), tab: 'work-ktk' },
+      { value: 'back', label: 'Work, I paid (get it back)', icon: 'coin', where: at('work-back', 'Work › Get paid back'), tab: 'work-back' },
+      { value: 'ktk', label: 'Work, ' + c + '’s card', icon: 'briefcase', where: at('work-ktk', 'Work › ' + paysLabel()), tab: 'work-ktk' },
     ];
     const inWork = !preset.context && !!(parts() && parts().get() === 'work');
     const ui2 = { from: GU.util.addMonths(t, -36), mode: preset.context === 'work' || inWork ? (preset.payer === 'me' ? 'back' : 'ktk') : 'home' };

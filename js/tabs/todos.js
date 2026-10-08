@@ -8,6 +8,8 @@
   const { esc, uid, today, addDays, daysUntil, fmtDate, relDays, plural } = GU.util;
   const { icon, pill, emptyState, selectOptions, formDialog, toast, confirmBox } = GU.ui;
   const store = GU.store;
+  /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
+  const at = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
 
   let view = 'today';
   let showDone = false;
@@ -65,7 +67,7 @@
     const names = work.map((x) => x.title).filter(Boolean);
     const shown = names.slice(0, 2).join(', ') + (names.length > 2 ? ' and ' + (names.length - 2) + ' more' : '');
     return '<p class="note-line note-line--signpost">' + icon('briefcase') + '<span>' + esc(plural(work.length, 'work task') + (shown ? ' (' + shown + ')' : '') + (work.length === 1 ? ' is' : ' are') + ' in ') +
-      '<a class="link" href="#' + workTasksTab() + '">Work › Tasks</a>.</span></p>';
+      '<a class="link" href="#' + workTasksTab() + '">' + esc(at('work-tasks', 'Work › Tasks')) + '</a>.</span></p>';
   }
 
   function render(root) {
@@ -96,7 +98,7 @@
 
     root.innerHTML = GU.view.head({
       eyebrow: 'Life',
-      title: 'To-do lists',
+      title: 'Tasks',
       text: 'Type a task the way you’d say it, like “Renew car tax on Friday”, and I’ll set the date for you.',
     }) +
       signpostHTML(workOpen) +
@@ -243,7 +245,7 @@
         save(rec);
         const when = rec.due ? ' for ' + relDays(rec.due) : '';
         // Added from Home but for work: say where it went, since it won't show on this page.
-        if (rec.context === 'work' && GU.parts && GU.parts.get() !== 'work') toast('Added ' + rec.title + when + ' to Work › Tasks', { action: 'Open', onAction: goWork });
+        if (rec.context === 'work' && GU.parts && GU.parts.get() !== 'work') toast('Added ' + rec.title + when + ' to ' + at('work-tasks', 'Work › Tasks'), { action: 'Open', onAction: goWork });
         else toast('Added ' + rec.title + when);
         if (opts.onSaved) opts.onSaved(rec);
       },
@@ -263,8 +265,8 @@
         save(Object.assign({}, t, v, { doneAt: v.done ? t.doneAt || today() : '' }));
         if (v.context === was) return;
         const undo = () => store.upsert('tasks', before);
-        if (v.context === 'work') toast('Moved to Work › Tasks', { action: 'Undo', onAction: undo });
-        else toast('Moved to Home › To-do', { action: 'Undo', onAction: undo });
+        if (v.context === 'work') toast('Moved to ' + at('work-tasks', 'Work › Tasks'), { action: 'Undo', onAction: undo });
+        else toast('Moved to ' + at('todos', 'Home › To-do'), { action: 'Undo', onAction: undo });
       },
       onDelete: () => {
         store.remove('tasks', id);
@@ -296,5 +298,5 @@
     });
   }
 
-  GU.tabs.todos = { label: 'To-do lists', short: 'To-do', icon: 'todo', part: 'home', render, create, edit, complete };
+  GU.tabs.todos = { label: 'Tasks', short: 'Tasks', icon: 'todo', part: 'home', render, create, edit, complete };
 })();

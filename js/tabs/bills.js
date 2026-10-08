@@ -9,6 +9,8 @@
   const { icon, pill, emptyState, formDialog, toast, menu } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
+  /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
+  const at = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
 
   const METHODS = ['Direct debit', 'Standing order', 'Card (automatic)', 'Pay manually'];
   const isAuto = (m) => m !== 'Pay manually';
@@ -114,7 +116,7 @@
     const names = work.map((b) => b.name).filter(Boolean);
     const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ' and ' + (names.length - 3) + ' more' : '');
     return '<p class="note-line note-line--signpost">' + icon('briefcase') + '<span>' + esc(plural(work.length, 'work bill') + (shown ? ' (' + shown + ')' : '') + (work.length === 1 ? ' is' : ' are') + ' in ') +
-      '<a class="link" href="#' + workBillsTab() + '">Work › Bills</a>.</span></p>';
+      '<a class="link" href="#' + workBillsTab() + '">' + esc(at('work-bills', 'Work › Regular costs')) + '</a>.</span></p>';
   }
 
   function render(root) {
@@ -304,7 +306,7 @@
       onSubmit: (v) => {
         if (needsPayer(v)) return false;
         const { rec, claims } = save(v, null);
-        if (rec.context === 'work') partToast('Added ' + rec.name + ' to Work › Bills' + claimNote(claims), workBillsTab());
+        if (rec.context === 'work') partToast('Added ' + rec.name + ' to ' + at('work-bills', 'Work › Regular costs') + claimNote(claims), workBillsTab());
         else toast('Added ' + rec.name);
         if (opts.onSaved) opts.onSaved(rec);
       },
@@ -325,8 +327,8 @@
       onSubmit: (v) => {
         if (needsPayer(v)) return false;
         const { rec, claims } = save(v, b);
-        if (rec.context === 'work' && !work) partToast('Moved ' + rec.name + ' to Work › Bills' + claimNote(claims), workBillsTab());
-        else if (rec.context !== 'work' && work) partToast('Moved ' + rec.name + ' to Home › Bills', 'bills');
+        if (rec.context === 'work' && !work) partToast('Moved ' + rec.name + ' to ' + at('work-bills', 'Work › Regular costs') + claimNote(claims), workBillsTab());
+        else if (rec.context !== 'work' && work) partToast('Moved ' + rec.name + ' to ' + at('bills', 'Home › Bills'), 'bills');
         else if (claims.length) toast(claimNote(claims).slice(2));
       },
       onDelete: () => {

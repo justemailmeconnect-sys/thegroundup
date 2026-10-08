@@ -9,6 +9,8 @@
   const { esc, today, addDays, toDays, daysUntil, fmtDate, money, plural, sum, round2, debounce } = GU.util;
   const { icon, pill, emptyState, toast, menu, thumbHTML, viewFiles } = GU.ui;
   const store = GU.store;
+  /* Where a page is in the menu, for hints and labels: 'Work › Orders & claims › Get paid back'. */
+  const pageAt = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
   const P = 'paperwork';
 
   // Things you've unticked in Not sent yet (everything new starts ticked), whether Paid back is open,
@@ -314,7 +316,7 @@
       '<aside class="stack">' + bankHTML(s, e, pr) + '</aside></div>' +
       '<p class="tip pb-how">' + icon('info') + '<span><b>How it works.</b> ' + esc('1. Add what you paid for: snap the receipt, or pick the payment from your bank. 2. Send to ' + e.label + ': one zip with every receipt and a summary they can print. 3. When ' + e.label + ' pays you back, import your statement and I’ll tick it off. Nothing here counts as your own spending or income.') + '</span></p>';
 
-    GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'work', area: 'back', payer: 'me', name: 'Work › Get paid back' } }));
+    GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'work', area: 'back', payer: 'me', name: pageAt('work-back', 'Work › Get paid back') } }));
     const det = root.querySelector('#pb-paid');
     if (det) det.addEventListener('toggle', () => (ui.paidOpen = det.open));
     // The page is drawn again after every change, so which 'From your bank' lists are open is kept here.

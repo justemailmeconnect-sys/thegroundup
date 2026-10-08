@@ -32,7 +32,7 @@
     transaction_in: 'Bank',
     bank_statement: 'Bank',
     order_history: 'Receipts',
-    section: 'Your sections',
+    section: 'Your categories',
     unsure: 'Sorting hub',
   };
   const PAPER = ['receipt', 'invoice_to_pay', 'invoice_owed_to_me', 'warranty'];
@@ -79,7 +79,7 @@
   const DEST_LABEL = {
     receipt: 'Receipt', invoice_to_pay: 'Invoice to pay', invoice_owed_to_me: 'Invoice someone owes you', warranty: 'Warranty',
     bill: 'Regular bill', debt: 'Debt', document: 'Important document', task: 'Task', transaction_out: 'Money out',
-    transaction_in: 'Money in', bank_statement: 'Bank statement', order_history: 'Online order list', section: 'New or custom section', unsure: 'Not sure yet',
+    transaction_in: 'Money in', bank_statement: 'Bank statement', order_history: 'Online order list', section: 'New or custom category', unsure: 'Not sure yet',
   };
 
   /* ---------- loading helpers ---------- */
@@ -682,7 +682,7 @@
       const existing = (store.state.sections || []).find((x) => x.name.toLowerCase() === topic.x.name.toLowerCase());
       Object.assign(r, { destination: 'section', confidence: 0.55 + Math.min(0.25, topic.n / 10), why: 'It mentions things to do with ' + topic.x.name, section_id: existing ? existing.id : null, new_section_name: existing ? null : topic.x.name,
         title: input.files[0] ? input.files[0].name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') : raw.split('\n')[0].slice(0, 60),
-        summary: 'This looks like it belongs with ' + topic.x.name + (existing ? '.' : '. I can start a new ' + topic.x.name + ' section for it.') });
+        summary: 'This looks like it belongs with ' + topic.x.name + (existing ? '.' : '. I can start a new ' + topic.x.name + ' category for it.') });
     } else if (input.files.some(isImg) && !raw.trim()) {
       Object.assign(r, { destination: 'receipt', confidence: 0.4, why: 'I couldn’t read the photo', title: 'Photo ' + fmtDate(today(), { short: true }),
         summary: 'A photo I couldn’t read. Is it a receipt? Check the details before filing.' });
@@ -700,7 +700,7 @@
         const name = topic ? topic.name : folder.replace(/\b[a-z]/g, (c) => c.toUpperCase());
         Object.assign(r, { destination: 'section', section_id: null, new_section_name: name, confidence: topic ? 0.8 : 0.65, why: 'It was in your “' + folder + '” folder',
           title: r.title && r.destination !== 'unsure' ? r.title : (input.files[0] ? input.files[0].name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') : r.title),
-          summary: 'It was in your “' + folder + '” folder, so I’ll keep it in a ' + name + ' section.' });
+          summary: 'It was in your “' + folder + '” folder, so I’ll keep it in a ' + name + ' category.' });
       }
     }
     if (r.destination !== 'task' && /\b(reply|respond|book|renew|send|submit|call us|contact us|attend|bring)\b/.test(t) && (r.due_date || r.expiry_date) && r.destination !== 'invoice_to_pay') {
@@ -783,8 +783,12 @@
   /* The page each thing is filed on: {tab, label}, e.g. 'Work › Get paid back' or 'Home › Documents › Passport'.
      Work receipts and invoices go by whose money paid: yours to Get paid back, the business's to its own page. */
   const tabOr = (id, fallback) => (GU.tabs && GU.tabs[id] ? id : fallback);
-  const homePage = (id, fallback) => 'Home › ' + ((GU.tabs && GU.tabs[id] && GU.tabs[id].short) || fallback);
+  // Where a page is in the menu: 'Home › Money › Bank', 'Work › Orders & claims › Get paid back'.
+  const pathTo = (id) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[id] ? GU.parts.pathOf(id) : '');
+  const homePage = (id, fallback) => pathTo(id) || 'Home › ' + ((GU.tabs && GU.tabs[id] && GU.tabs[id].short) || fallback);
   function workPage(area, fallback) {
+    const tab = GU.work && GU.work.TAB_OF ? GU.work.TAB_OF[area] : '';
+    if (tab && pathTo(tab)) return pathTo(tab);
     let name = '';
     try {
       name = GU.work && GU.work.labelOf ? GU.work.labelOf(area) : '';
@@ -833,7 +837,7 @@
       const name = String(r.new_section_name || '').trim();
       const same = name && (s.sections || []).find((x) => x.name.toLowerCase() === name.toLowerCase());
       if (same) return { tab: 's-' + same.id, label: partName(same.part) + ' › ' + same.name };
-      return { tab: null, label: partName(newSectionPart(r)) + ' › ' + (name ? name + ' (new section)' : 'A new section'), fresh: true };
+      return { tab: null, label: partName(newSectionPart(r)) + ' › ' + (name ? name + ' (new category)' : 'A new category'), fresh: true };
     }
     if (PAPER.includes(d)) {
       if (!work) return { tab: 'receipts', label: withCategory(homePage('receipts', 'Receipts') + (d === 'invoice_owed_to_me' ? ' › Owed to you' : ''), r) };
