@@ -92,7 +92,7 @@
 
   function rowsHTML(list) {
     if (!list.length) {
-      return '<tr><td colspan="5">' + emptyState({ icon: 'search', title: store.state.transactions.length ? 'No transactions match' : 'No transactions yet',
+      return '<tr><td colspan="6">' + emptyState({ icon: 'search', title: store.state.transactions.length ? 'No transactions match' : 'No transactions yet',
         text: store.state.transactions.length ? 'Try clearing the search or filters.' : 'Import a CSV statement from your bank, or add a payment by hand.' }) + '</td></tr>';
     }
     const s = store.state;
@@ -104,7 +104,8 @@
         '<td class="wrap"><b class="cell-title">' + esc(t.description) + '</b>' + (t.notes ? '<small class="cell-sub">' + esc(t.notes) + '</small>' : '') + '</td>' +
         '<td>' + (work ? '<span class="tx-pills">' + cat + work + '</span>' : cat) + '</td>' +
         '<td class="hide-sm muted">' + esc(accountName(t.account)) + '</td>' +
-        '<td class="num ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</td></tr>';
+        '<td class="num ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</td>' +
+        '<td class="tbl__more">' + GU.organise.moreBtn('transactions', t.id, t.description) + '</td></tr>';
     }).join('');
   }
 
@@ -168,7 +169,7 @@
       GU.recurring.reassignBills(st);
     });
     toast((f.kind === 'merge' ? 'Merged. ' + plural(r.moved, 'transaction') + ' moved and ' + plural(r.duplicates, 'copy', 'copies') + ' removed.' : 'Moved ' + plural(r.moved, 'transaction') + '.'), {
-      timeout: 12000, action: 'Undo', onAction: () => store.commit((st) => Object.assign(st, before)),
+      timeout: 12000, action: 'Undo', exact: true, onAction: () => store.commit((st) => Object.assign(st, before)),
     });
   }
 
@@ -177,20 +178,20 @@
   function autoTidy() {
     const s = store.state;
     if (s.meta.accountsTidied || !GU.money.accountFixes(s).length) return;
-    const before = { transactions: s.transactions, accounts: s.accounts, bills: s.bills };
     const done = [];
-    store.commit((st) => {
+    // Not yours to undo from the history (it happens by itself), but its own Undo takes back exactly what it changed, record by record.
+    const cap = GU.history.capture(() => store.commit((st) => {
       st.transactions = st.transactions.map((t) => Object.assign({}, t));
       st.accounts = st.accounts.map((a) => Object.assign({}, a));
       st.bills = st.bills.map((b) => Object.assign({}, b));
       for (const x of GU.money.tidyAll(st)) done.push({ f: x.fix, r: x.result });
       GU.recurring.reassignBills(st);
       st.meta.accountsTidied = today();
-    });
+    }, { history: false }));
     const moved = sum(done, (x) => x.r.moved);
     const copies = sum(done, (x) => x.r.duplicates);
     toast('I tidied up your accounts: ' + plural(moved, 'transaction') + ' moved to the right account and ' + plural(copies, 'copy', 'copies') + ' removed, so nothing is counted twice.', {
-      timeout: 20000, action: 'Undo', onAction: () => store.commit((st) => Object.assign(st, before)),
+      timeout: 20000, action: 'Undo', onAction: () => GU.history.undoLoose(cap.step, 'Account tidy-up'),
     });
   }
 
@@ -300,7 +301,7 @@
       title: 'Bank transactions',
       text: 'Every payment in and out of your accounts, with each account’s balance worked out from your statements. I sort each line into a category.',
       actions: (s.transactions.length || s.accounts.length > 1 ? '<button type="button" class="btn" data-balances>' + icon('coin') + 'Update balances</button>' : '') +
-        '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button>' +
+        '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button>' + GU.organise.listButton('bank') +
         '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add transaction</button>',
     }) +
       GU.ui.dropbar('Drop bank statements here, or a whole folder of them', 'PDF statements from Monzo, Santander, HSBC and most banks, or CSV, Excel, .txt, Quicken and Money files.') +
@@ -313,7 +314,7 @@
       '<select id="tx-type" aria-label="Money in or out">' + selectOptions([{ value: 'in', label: 'Money in' }, { value: 'out', label: 'Money out' }], ui.type, 'In and out') + '</select>' +
       '</div>' +
       '<p class="summary-line" id="tx-summary"></p>' +
-      '<div class="panel"><div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="hide-sm">Account</th><th class="num">Amount</th></tr></thead>' +
+      '<div class="panel"><div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="hide-sm">Account</th><th class="num">Amount</th><th class="tbl__more" aria-label="More"></th></tr></thead>' +
       '<tbody id="tx-rows"></tbody></table></div></div>' +
       '<div class="more-row" id="tx-more"></div>';
 
@@ -1160,6 +1161,21 @@
     else pickStep();
   }
   const importCSV = importStatement;
+
+  /* The ⋯ menu's own actions on a bank line. */
+  GU.organise.extras.transactions = (t) => {
+    const items = [];
+    if (t.amount < 0 && t.category !== F.WORK_OUT && hasEmployer(store.state) && wm() && wm().claimFromTx) {
+      items.push({ icon: 'briefcase', label: 'Paid for ' + co(store.state) + ', get it back', hint: 'Adds it to Get paid back', onClick: () => wm().claimFromTx([t.id]) });
+    }
+    return items;
+  };
+  /* The transactions the Bank page is showing now (its search and filters), for 'Download list'. */
+  GU.organise.lists.bank = () => ({
+    name: 'Bank transactions',
+    head: ['Date', 'Description', 'Amount', 'Category', 'Account', 'Notes'],
+    rows: filtered().map((t) => [t.date, t.description || '', Number(t.amount), t.category || '', accountName(t.account), t.notes || '']),
+  });
 
   GU.tabs.transactions = { label: 'Bank transactions', short: 'Bank', icon: 'bank', part: 'home', render, create, edit, importCSV, importStatement, editAccount, showAccount, updateBalances, autoTidy, isWages, workPill };
 })();

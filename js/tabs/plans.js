@@ -5,10 +5,8 @@
   'use strict';
   const GU = window.GU;
   const { esc, today, fmtDate, money, plural, sum, daysUntil } = GU.util;
-  const { icon, pill, toast, menu, viewFiles } = GU.ui;
+  const { icon, pill, toast, viewFiles } = GU.ui;
   const store = GU.store;
-  /* Where a page is in the menu, for hints and labels: 'Work › Orders & claims › Get paid back'. */
-  const pageAt = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
   const C = 'costIdeas';
   const ui = { showDone: false };
 
@@ -36,10 +34,6 @@
       else delete i.doneDate;
     });
     toast(status === 'done' ? 'Marked done' : status === 'dropped' ? 'Dropped from the plan' : 'Back in the plan', { action: 'Undo', onAction: () => store.upsert(C, before) });
-  }
-  /* 'It's for work': adds the idea to Work › To buy (and takes it out of this plan). The row's own ⋯ menu does this too. */
-  function moveToWork(id) {
-    return GU.requests && GU.requests.addIdeas ? GU.requests.addIdeas([id]) : null;
   }
   function forecastSettings() {
     const w = work();
@@ -115,17 +109,16 @@
     root.addEventListener('click', onClick);
   }
 
+  /* The one ⋯ menu (js/organise.js); the rows normally come from GU.work, whose own handler opens it. */
   function moreMenu(anchor, id) {
     const i = store.find(C, id);
     if (!i) return;
-    const items = [{ icon: 'edit', label: 'Open and edit', onClick: () => editIdea(id) }];
+    const items = [];
     if (GU.costs.isOpen(i)) {
       items.push({ icon: 'check', label: 'Mark done', onClick: () => setStatus(id, 'done') });
       items.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => setStatus(id, 'dropped') });
     } else items.push({ icon: 'repeat', label: 'Back to the plan', onClick: () => setStatus(id, 'open') });
-    items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Adds it to ' + pageAt('work-requests', 'Work › To buy'), onClick: () => moveToWork(id) });
-    items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(C, id, i.name) });
-    menu(anchor, items);
+    GU.organise.itemMenu(anchor, C, id, items);
   }
 
   function onClick(e) {

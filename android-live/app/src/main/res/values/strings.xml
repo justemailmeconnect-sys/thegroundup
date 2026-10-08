@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Ground Up Live</string>
+    <string name="app_name">The Ground Up</string>
     <!-- The page this app opens. Change it here (and only here) if the dashboard ever moves. -->
     <string name="live_url" translatable="false">https://claude.ai/artifact/8KyV1JdsawnfRtW4kmZRD8</string>
     <string name="cannot_open">Couldn’t open The Ground Up. Install or enable a web browser (Chrome) and try again.</string>

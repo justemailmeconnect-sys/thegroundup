@@ -257,7 +257,7 @@
           merged.inbox = (next.inbox || []).concat((store.state.inbox || []).filter((i) => i.status === 'reading' && !ids.has(i.id)));
         } else merged[k] = next[k];
       }
-      store.replaceAll(merged);
+      store.replaceAll(merged); // never recorded for Undo: it's another device's change
     } finally {
       applying = false;
     }
@@ -374,7 +374,7 @@
     if (!Object.keys(done).length) return;
     store.commit((st) => {
       st.remoteFiles = Object.assign({}, st.remoteFiles || {}, done);
-    });
+    }, { history: false });
   }
   function queueUpload(id) {
     if (!assets || (store.state.remoteFiles || {})[id] || queue.includes(id)) return;
@@ -473,7 +473,7 @@
       const next = Object.assign({}, st.remoteFiles);
       delete next[id];
       st.remoteFiles = next;
-    }), 0);
+    }, { history: false }), 0);
   }
 
   /* ---------- starting up ---------- */
@@ -558,6 +558,7 @@
     possible, start, queueUpload, fetchFile, forget,
     status: () => status,
     active: () => ready && !!col,
+    applying: () => applying, // true while another device's changes are being applied here
     onStatus(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);

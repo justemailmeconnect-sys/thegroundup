@@ -577,7 +577,7 @@
         summary: keep && keep.summary ? keep.summary : Object.assign({}, out, { removedRules: undefined, changed: log.length }),
       };
       out.changed = log.length;
-    });
+    }, { history: false });
     qCache = null;
     if (!out) return { skipped: true };
     if (!opts.quiet && out.changed) {
@@ -625,7 +625,7 @@
       const W = wm();
       const hold = W ? (st.paperwork || []).filter((p) => p && W.isClaim(p)).map((p) => p.id) : [];
       st.meta[KEY] = { at: mm.at, undone: today(), hold };
-    });
+    }, { history: false });
     qCache = null;
     if (!opts.quiet) toast('Put back as it was before the Home and Work re-sort.' + (left ? ' ' + (left === 1 ? '1 thing you changed since was' : left + ' things you changed since were') + ' left as you set ' + (left === 1 ? 'it' : 'them') + '.' : ''));
     return n;

@@ -684,9 +684,11 @@
   function change(fn, msg, opts) {
     const log = [];
     let out;
+    // opts.history: false for what isn't yours to undo (the start-up matching); true/left out: it's one step in Undo history.
+    const hist = opts && opts.history === false ? { history: false } : null;
     store.commit((st) => {
       out = fn(st, tracker(log));
-    });
+    }, hist);
     const undo = () => store.commit((st) => {
       undoer(log)(st);
       if (opts && opts.afterUndo) opts.afterUndo(st);
@@ -694,6 +696,8 @@
     const res = { changed: log.length, out, undo };
     if (!log.length) return res;
     const text = typeof msg === 'function' ? msg(out) : msg;
+    // The message says what happened ('Moved to Get paid back'): it names the step in Undo history too.
+    if (text && !hist && GU.history && GU.history.label) GU.history.label(text);
     if (text && !(opts && opts.quiet)) toast(text, { action: 'Undo', onAction: undo });
     return res;
   }
@@ -1225,7 +1229,7 @@
       else if (o.repaid.length) parts.push(e.Label + ' paid you back ' + money(sum(o.repaid, (r) => r.tx.amount)) + ' for ' + plural(sum(o.repaid, (r) => r.list.length), 'item') + '.');
       if (o.linked && !(opts.quiet && !o.repaid.length)) parts.push('Linked ' + plural(o.linked, 'bank payment') + ' to Get paid back.');
       return opts.quiet && !o.repaid.length ? '' : parts.join(' ');
-    });
+    }, { history: opts.history === undefined ? !opts.quiet : opts.history ? true : false });
     return { linked: res.out ? res.out.linked : 0, repaid: res.out ? res.out.repaid.reduce((a, r) => a + r.list.length, 0) : 0, changed: res.changed, undo: res.undo };
   }
 

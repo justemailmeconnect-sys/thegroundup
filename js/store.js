@@ -81,15 +81,67 @@
     }
   }
 
-  function persist(state) {
+  /* ---------- serialising: one piece per top-level key ---------- */
+  /* The state is written as one JSON string per key, joined, which is exactly what JSON.stringify(state) gives. History
+     (js/history.js) compares each key's string with the last one, and only for keys that changed goes record by record,
+     so a change costs about the same as saving always did. A key holding a list of records with ids is also kept as one
+     string per record; a plain object (settings, meta) as one string per field. */
+  const isRec = (x) => !!x && typeof x === 'object' && !Array.isArray(x) && x.id != null;
+  function serialise(state) {
+    const snap = { keys: [], t: {}, str: {}, rs: {}, ids: {}, fn: {} };
+    for (const k of Object.keys(state)) {
+      const v = state[k];
+      if (v === undefined || typeof v === 'function') continue;
+      if (Array.isArray(v) && v.every(isRec)) {
+        const n = v.length;
+        const rs = new Array(n);
+        const ids = new Array(n);
+        for (let i = 0; i < n; i++) {
+          rs[i] = JSON.stringify(v[i]);
+          ids[i] = v[i].id;
+        }
+        snap.t[k] = 'arr';
+        snap.rs[k] = rs;
+        snap.ids[k] = ids;
+        snap.str[k] = '[' + rs.join(',') + ']';
+      } else if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const names = [];
+        const fs = [];
+        for (const f of Object.keys(v)) {
+          const s = JSON.stringify(v[f]);
+          if (s === undefined) continue;
+          names.push(f);
+          fs.push(s);
+        }
+        snap.t[k] = 'obj';
+        snap.fn[k] = names;
+        snap.rs[k] = fs;
+        let out = '{';
+        for (let i = 0; i < names.length; i++) out += (i ? ',' : '') + JSON.stringify(names[i]) + ':' + fs[i];
+        snap.str[k] = out + '}';
+      } else {
+        const s = JSON.stringify(v);
+        if (s === undefined) continue;
+        snap.t[k] = 'blob';
+        snap.str[k] = s;
+      }
+      snap.keys.push(k);
+    }
+    return snap;
+  }
+
+  function persist(snap) {
     try {
-      localStorage.setItem(KEY, JSON.stringify(state));
+      let out = '{';
+      for (let i = 0; i < snap.keys.length; i++) out += (i ? ',' : '') + JSON.stringify(snap.keys[i]) + ':' + snap.str[snap.keys[i]];
+      localStorage.setItem(KEY, out + '}');
       storageOK = true;
     } catch (e) {
       storageOK = false;
       if (GU.ui) GU.ui.toast("Couldn't save. Your browser storage may be full or blocked; export a backup from Settings.");
     }
   }
+  let lastSnap = null; // what was saved last, key by key (History compares against it)
 
   const store = {
     state: null,
@@ -100,18 +152,43 @@
       this.isFirstRun = !s;
       this.state = s || blank();
       GU.util.setCurrency(this.state.settings.currency);
+      lastSnap = serialise(this.state);
     },
-    /* All changes go through commit so they are saved and the screen redraws. */
-    commit(mutator) {
-      mutator(this.state);
+    /* All changes go through commit so they are saved and the screen redraws.
+       opts: {label, history}. label names the change in Undo ('Moved ‘Vet bill’ to Pets'); it's worked out from what
+       changed when left out. history: false marks a change that isn't yours (a sync from another device, the
+       background tidying, a status update), so Undo never records or undoes it. Several commits from one gesture
+       (within about 0.7 s) are one step. */
+    commit(mutator, opts) {
+      let failed = null;
+      try {
+        mutator(this.state);
+      } catch (e) {
+        failed = e; // nothing rolls back; what was changed is still saved and still undoable
+      }
       this.rev = (this.rev || 0) + 1; // lets slow sums (like the cost forecast) know when to work things out again
       GU.util.setCurrency(this.state.settings.currency);
-      persist(this.state);
+      const snap = serialise(this.state);
+      persist(snap);
+      const prev = lastSnap;
+      lastSnap = snap;
+      if (GU.history) {
+        try {
+          GU.history.record(prev, snap, opts || null);
+        } catch (e) {
+          console.error(e); // Undo must never get in the way of saving
+        }
+      }
       listeners.forEach((fn) => fn());
+      if (failed) throw failed;
     },
-    replaceAll(next) {
+    /* Swaps in a whole new state (a sync from another device, a restored backup, erasing everything). It is never
+       recorded for Undo. opts.reset: true also forgets the Undo history, for a restore or an erase, where the old
+       steps no longer mean anything. */
+    replaceAll(next, opts) {
       this.state = migrate(next);
-      this.commit(() => {});
+      this.commit(() => {}, { history: false });
+      if (opts && opts.reset && GU.history) GU.history.reset();
     },
     subscribe(fn) {
       listeners.add(fn);
@@ -137,7 +214,7 @@
       this.commit((s) => {
         s[collection] = s[collection].filter((x) => x.id !== id);
         entry = trash.put(s, collection, rec, label);
-      });
+      }, { label: 'Deleted ‘' + clip(trash.labelOf(collection, rec, label)) + '’' });
       trash.offerUndo(entry);
       return rec;
     },
@@ -145,19 +222,23 @@
 
   /* ---------- Recently deleted ---------- */
   const KEEP_DAYS = 30;
+  const clip = (t, n) => (String(t).length > (n || 48) ? String(t).slice(0, (n || 48) - 1).trim() + '…' : String(t));
   const KIND = { bills: 'Bill', debts: 'Debt', paperwork: 'Receipt or invoice', documents: 'Document', visas: 'Visa application', incomeSources: 'Income', tasks: 'Task',
-    transactions: 'Transaction', sectionItems: 'Item', sections: 'Category', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea', sortRules: 'Sorting rule', requests: 'Thing to get' };
+    transactions: 'Transaction', sectionItems: 'Item', sections: 'Category', accounts: 'Bank account', inbox: 'Inbox item', projects: 'Work project', workNotes: 'Work note', workFolders: 'Work folder', costIdeas: 'Cost idea', sortRules: 'Sorting rule', requests: 'Thing to get', todoLists: 'To-do list' };
   const trash = {
     KIND,
     /* Adds a deleted record (and anything deleted along with it, in `extra`) to the bin. Call inside a commit. */
+    labelOf(collection, record, label) {
+      return label || record.name || record.title || record.description || record.visaType || KIND[collection] || 'Item';
+    },
     put(s, collection, record, label, extra) {
-      const entry = { id: 'del-' + uid(), c: collection, at: new Date().toISOString(), label: label || record.name || record.title || record.description || record.visaType || KIND[collection] || 'Item', record, extra: extra || null };
+      const entry = { id: 'del-' + uid(), c: collection, at: new Date().toISOString(), label: trash.labelOf(collection, record, label), record, extra: extra || null };
       s.trash = [entry].concat(s.trash || []).slice(0, 200);
       return entry;
     },
     offerUndo(entry) {
       if (!entry || !GU.ui) return;
-      GU.ui.toast('Deleted ' + entry.label + '. It’s in Settings → Recently deleted for 30 days.', { timeout: 10000, action: 'Undo', onAction: () => trash.restore(entry.id) });
+      GU.ui.toast('Deleted ' + entry.label + '. It’s in Settings → Recently deleted for 30 days.', { timeout: 10000, action: 'Undo', exact: true, onAction: () => trash.restore(entry.id) });
     },
     /* Puts a deleted record back, with anything that went with it. */
     restore(id) {
@@ -173,21 +254,24 @@
         for (const c of ['sectionItems', 'transactions', 'tasks']) (x[c] || []).forEach((r) => put(c, r));
         if (x.ignoredBill) s.settings.ignoredBills = (s.settings.ignoredBills || []).filter((k) => k !== x.ignoredBill);
         s.trash = (s.trash || []).filter((e) => e.id !== id);
-      });
+      }, { label: 'Restored ‘' + clip(entry.label) + '’' });
       if (GU.ui) GU.ui.toast('Restored ' + entry.label);
       return true;
     },
-    /* Gone for good after 30 days: only then are their files deleted. */
+    /* Gone for good after 30 days: only then are their files deleted. Files taken off a record by hand (an attachment
+       removed in a form) wait the same 30 days, so Undo can bring them back; then any nobody uses any more go too. */
     purge() {
       const cutoff = Date.now() - KEEP_DAYS * 864e5;
       const old = (store.state.trash || []).filter((e) => Date.parse(e.at) < cutoff);
-      if (!old.length) return;
-      store.commit((s) => (s.trash = (s.trash || []).filter((e) => Date.parse(e.at) >= cutoff)));
-      const live = JSON.stringify(store.state);
-      for (const e of old) {
-        const recs = [e.record].concat(Object.values(e.extra || {}).filter(Array.isArray).flat());
-        for (const r of recs) for (const f of (r && r.files) || []) if (!live.includes('"' + f.id + '"')) files.remove(f.id);
+      if (old.length) {
+        store.commit((s) => (s.trash = (s.trash || []).filter((e) => Date.parse(e.at) >= cutoff)), { history: false });
+        const live = files.referenced();
+        for (const e of old) {
+          const recs = [e.record].concat(Object.values(e.extra || {}).filter(Array.isArray).flat());
+          for (const r of recs) for (const f of (r && r.files) || []) if (!live.includes('"' + f.id + '"')) files.erase(f.id);
+        }
       }
+      return files.sweep(cutoff);
     },
   };
 
@@ -248,7 +332,20 @@
       if (rec || !GU.sync) return rec;
       return GU.sync.fetchFile(id);
     },
+    /* A file nobody uses any more (an attachment taken off a record). It isn't deleted yet: it's marked, and Recently
+       deleted's tidy-up (trash.purge) deletes it after 30 days if nothing uses it by then, so Undo can bring it back. */
     async remove(id) {
+      try {
+        const rec = await files.getLocal(id);
+        if (!rec) return;
+        rec.unref = new Date().toISOString();
+        await files.put(rec);
+      } catch (e) {
+        /* it just stays where it is */
+      }
+    },
+    /* Deletes a file for good (and its synced copy). */
+    async erase(id) {
       const u = urlCache.get(id);
       if (u) URL.revokeObjectURL(u);
       urlCache.delete(id);
@@ -259,6 +356,32 @@
       } catch (e) {
         /* already gone */
       }
+    },
+    /* Everything the records still point at, as text to search for an id in: the records, Recently deleted and all.
+       (The list of synced files is left out: it names every file, including the ones nobody uses.) */
+    referenced() {
+      return JSON.stringify(Object.assign({}, store.state, { remoteFiles: undefined }));
+    },
+    /* Deletes files marked unused for more than 30 days (cutoff, in ms) that still aren't used anywhere; a marked file
+       that's in use again (an Undo put it back) is unmarked. Returns how many were deleted. */
+    async sweep(cutoff) {
+      let n = 0;
+      try {
+        const live = files.referenced();
+        for (const r of await files.all()) {
+          if (!r || !r.unref) continue;
+          if (live.includes('"' + r.id + '"')) {
+            delete r.unref;
+            await files.put(r);
+          } else if (Date.parse(r.unref) < cutoff) {
+            await files.erase(r.id);
+            n++;
+          }
+        }
+      } catch (e) {
+        /* try again next time */
+      }
+      return n;
     },
     async all() {
       if (!files.db) return Array.from(files.memory.values());
@@ -355,7 +478,7 @@
       for (const f of data.files || []) {
         await files.put({ id: f.id, name: f.name, type: f.type, size: f.size, added: f.added, blob: dataURLToBlob(f.data) });
       }
-      store.replaceAll(data.state);
+      store.replaceAll(data.state, { reset: true });
     },
   };
 

@@ -94,6 +94,32 @@ The first time the site opens with Home and Work, it sorts what's already there,
 
 Every field it changes is logged. **Undo the re-sort** (in the same panel) puts everything back for 30 days. It never runs on the example data.
 
+## Undo, redo and the ⋯ menu
+
+**Undo and redo** work across the whole site. **Undo** and **Redo** buttons sit under **Add** in the menu (and in the top bar on a phone); **Ctrl+Z** (Cmd+Z), **Ctrl+Shift+Z** and **Ctrl+Y** do the same, except while you're typing in a box, where the browser's own text undo applies. Each button's tooltip names the step, and a message such as "Undone: Moved ‘Vet bill’ to Pets · Redo" confirms it.
+
+- **What counts as a step.** Every change you make (adding, editing, renaming, deleting, moving, ticking something done, marking something paid or sent, changing a category, reordering) is a step with a name. Changes made together by one action are one step.
+- **It never undoes someone else's change.** Undo works record by record on what's there now, so something you or another device changed elsewhere in the meantime stays as it is. If the very thing you're undoing has changed since, it is left alone and the message says so ("1 thing had changed since, so I left it"). What the site does by itself (syncing from your other devices, the start-up tidy and the Home/Work re-sort, status updates in the Sorting hub, example data) is never a step.
+- **Per device.** The last 100 steps are kept on this device (and through a reload of the same tab). **Settings › Recent changes** lists them, newest first, each with **Undo back to here**; undone steps follow, to **Redo up to here**.
+- **Undo buttons in messages** are part of the same history, so Ctrl+Z after one goes to the step before.
+- **Files.** Taking an attachment off a record doesn't delete the file straight away: it is kept for 30 days (like Recently deleted) so Undo can bring it back, then removed if nothing uses it.
+
+**One ⋯ menu on every row** (receipts, bills, instalments, debts, income, bank lines, documents, tasks, projects, the items in your categories, To buy, Get paid back, the business's page, regular costs, notes, plans) has the same actions in the same order:
+
+| | |
+| --- | --- |
+| **Open** | The row's form. |
+| **Rename** | One box, on the right field (name, title or description). |
+| **Move to…** | Where it can go: Home or Work (through the same Get paid back / who-pays rules as the forms), another to-do list, another category and group (or **New category…**, **New group…**), a Work folder (**New folder…**), a document type, a receipt kind, another money category or account. It's hidden for things that have nowhere to go (a debt, an income source). |
+| **Duplicate** | A copy called "… (copy)", sharing the files. Greyed out, with the reason, for things that would be counted twice (a claim that's been sent or paid, a bank line linked to one). |
+| **Download** | The record's files (several as one .zip), or a one-row spreadsheet when it has none. |
+| *this page's own actions* | Mark paid, Mark done, Paid by …, Update balance, the stage of a project… |
+| **Delete** | To Recently deleted, with Undo. |
+
+In **Settings › Your categories**, **Move up** and **Move down** change the order of your categories in the menu, and each has its own ⋯ menu (Open, Rename, Move to Home or Work, Duplicate, Download everything in it as a .zip, Delete). Deleting a to-do list now goes to Recently deleted with its tasks, and can be undone.
+
+**Download list (CSV)** in the heading of Receipts, Documents, Bills, Debts, Tasks, Home projects, Bank and Spending saves what the page is showing now (its filters and search) as a spreadsheet. Text a spreadsheet would run as a formula is kept as text, and document numbers are cut to their last four digits.
+
 ## Running it
 
 There's nothing to install or build.
@@ -210,7 +236,9 @@ In the Sorting hub, your own folder organisation is used: upload a folder such a
 index.html            page shell and script order
 css/styles.css        all styling (light and dark themes)
 js/util.js            dates, money, CSV parsing
-js/store.js           saving, file storage, backup and restore
+js/store.js           saving (one piece per top-level key), file storage, backup and restore
+js/history.js         Undo and redo: record-level steps, names, keyboard
+js/organise.js        the one ⋯ menu on every row, Move to…, Duplicate, Download, CSV lists
 js/sync.js            syncing records and files across your devices on claude.ai
 js/finance.js         categories, auto-categorising rules, recurring dates, totals (work money kept out)
 js/ui.js              icons, dialogs, forms, attachments, toasts, menus

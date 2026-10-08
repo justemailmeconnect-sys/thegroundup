@@ -60,6 +60,11 @@
     funnel: '<path d="M3.5 4.5h17l-6.5 8v6l-4 2v-8z"/>',
     tag: '<path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l8 8a1.5 1.5 0 0 1 0 2.1l-6.4 6.4a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.4"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+    copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V6A2 2 0 0 0 13.5 4H6A2 2 0 0 0 4 6v7.5A2 2 0 0 0 6 15.5h2.5"/>',
+    up: '<path d="m6 15 6-6 6 6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    move: '<path d="M4 12h13"/><path d="m12.5 6.5 5.5 5.5-5.5 5.5"/><path d="M20.5 5v14"/>',
     bag: '<path d="M5 8h14l-1 12.5H6z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>',
   };
   const ICONS = Object.keys(P);
@@ -105,9 +110,19 @@
       hush--;
     }
   }
+  /* opts: {action, onAction, timeout}. An 'Undo' action goes through Undo history (js/history.js): what the older code
+     does to put things back is kept out of the history, and the change it undoes is marked as undone, so Ctrl+Z
+     afterwards goes to the change before it. opts.exact: the Undo undoes exactly the one change just made, so the
+     history's own record of it is used (a deleted record goes back in the same place). opts.plain: leave it alone. */
   function toast(msg, opts) {
     opts = opts || {};
     if (hush) return () => {};
+    let onAction = opts.onAction;
+    if (opts.action === 'Undo' && onAction && !opts.plain && GU.history) {
+      const tag = GU.history.toastTag();
+      const legacy = onAction;
+      onAction = () => GU.history.undoFromToast(tag, legacy, { exact: !!opts.exact });
+    }
     let wrap = document.querySelector('.toasts');
     if (!wrap) {
       wrap = document.createElement('div');
@@ -120,7 +135,7 @@
     el.innerHTML = '<span>' + esc(msg) + '</span>' + (opts.action ? '<button type="button">' + esc(opts.action) + '</button>' : '');
     wrap.appendChild(el);
     const remove = () => el.remove();
-    if (opts.action) el.querySelector('button').addEventListener('click', () => { remove(); opts.onAction && opts.onAction(); });
+    if (opts.action) el.querySelector('button').addEventListener('click', () => { remove(); onAction && onAction(); });
     setTimeout(remove, opts.timeout || (opts.action ? 8000 : 3500));
     return remove;
   }
@@ -162,20 +177,29 @@
 
   /* ---------- popover menu ---------- */
   let openMenu = null;
-  function closeMenu() {
+  let menuAnchor = null;
+  function closeMenu(back) {
     if (openMenu) {
       openMenu.remove();
       openMenu = null;
+      if (back && menuAnchor && menuAnchor.isConnected && menuAnchor.focus) menuAnchor.focus({ preventScroll: true });
     }
   }
+  /* items: [{icon, label, hint, onClick, disabled, danger, checked}, {separator: true}, {heading: 'Home'}].
+     Arrow keys move through it, Home and End jump, Enter picks, Escape closes (back to the button you came from). */
   function menu(anchor, items) {
     closeMenu();
+    menuAnchor = anchor;
     const el = document.createElement('div');
     el.className = 'popover';
     el.setAttribute('role', 'menu');
-    el.innerHTML = items.map((it, i) =>
-      '<button type="button" role="menuitem" data-i="' + i + '">' + (it.icon ? icon(it.icon) : '') +
-      '<span><b>' + esc(it.label) + '</b>' + (it.hint ? '<small>' + esc(it.hint) + '</small>' : '') + '</span></button>').join('');
+    el.innerHTML = items.map((it, i) => {
+      if (it.separator) return '<div class="popover__sep" role="separator"></div>';
+      if (it.heading) return '<div class="popover__head" role="presentation">' + esc(it.heading) + '</div>';
+      return '<button type="button" role="menuitem" data-i="' + i + '"' + (it.disabled ? ' disabled aria-disabled="true"' : '') + (it.checked ? ' aria-current="true"' : '') +
+        (it.danger ? ' class="is-danger"' : '') + '>' + (it.icon ? icon(it.icon) : '') +
+        '<span><b>' + esc(it.label) + '</b>' + (it.hint ? '<small>' + esc(it.hint) + '</small>' : '') + '</span>' + (it.checked ? icon('check', 'popover__check') : '') + '</button>';
+    }).join('');
     document.body.appendChild(el);
     const r = anchor.getBoundingClientRect();
     const w = el.offsetWidth;
@@ -198,21 +222,38 @@
     el.style.top = top + 'px';
     el.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-i]');
-      if (!b) return;
+      if (!b || b.disabled) return;
       closeMenu();
       items[+b.dataset.i].onClick();
     });
+    el.addEventListener('keydown', (e) => {
+      const live = Array.from(el.querySelectorAll('button[data-i]:not(:disabled)'));
+      if (!live.length) return;
+      const at = live.indexOf(document.activeElement);
+      let to = null;
+      if (e.key === 'ArrowDown') to = live[(at + 1) % live.length];
+      else if (e.key === 'ArrowUp') to = live[(at <= 0 ? live.length : at) - 1];
+      else if (e.key === 'Home') to = live[0];
+      else if (e.key === 'End') to = live[live.length - 1];
+      else if (e.key === 'Tab') {
+        e.preventDefault();
+        return closeMenu(true);
+      } else return;
+      e.preventDefault();
+      if (to) to.focus();
+    });
     openMenu = el;
     setTimeout(() => {
-      const first = el.querySelector('button');
+      const first = el.querySelector('button[data-i]:not(:disabled)');
       if (first) first.focus();
     }, 0);
+    return el;
   }
   document.addEventListener('pointerdown', (e) => {
     if (openMenu && !openMenu.contains(e.target)) closeMenu();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeMenu();
+    if (e.key === 'Escape' && openMenu) closeMenu(true);
   });
 
   /* ---------- dialogs ---------- */

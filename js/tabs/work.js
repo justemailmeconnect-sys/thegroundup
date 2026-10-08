@@ -1424,10 +1424,17 @@
       fields: [{ name: 'name', label: 'Name', required: true }],
       values: { name: r[field] || '' },
       submitLabel: 'Rename',
-      onSubmit: (v) => store.commit((s) => {
-        const x = s[c].find((y) => y.id === id);
-        if (x) x[field] = v.name.trim();
-      }),
+      onSubmit: (v) => {
+        const was = String(r[field] || '');
+        const name = v.name.trim();
+        if (!name || name === was) return;
+        GU.history.seal();
+        store.commit((s) => {
+          const x = s[c].find((y) => y.id === id);
+          if (x) x[field] = name;
+        }, { label: 'Renamed ' + (c === 'workFolders' ? 'the folder ' : '') + '‘' + was + '’ to ‘' + name + '’' });
+        GU.history.offerUndo('Renamed to ‘' + name + '’');
+      },
     });
   }
   function renameArea(area) {
@@ -1446,78 +1453,27 @@
     });
   }
 
-  /* Open, rename, move to a folder, say who pays, move to Home, or delete. */
+  /* The one ⋯ menu (js/organise.js): Open, Rename, Move to… (Home or Work, who pays, a folder), Duplicate, Download,
+     then what's special to a row here (paid by the business, a project's stage, a plan's status), then Delete. */
   function moreMenu(anchor, c, id) {
-    const s = store.state;
     const r = store.find(c, id);
     if (!r) return;
     const W = wm();
-    const C = co(true);
-    if (c === 'workNotes') {
-      return menu(anchor, [
-        { icon: 'edit', label: 'Open', onClick: () => editNote(id) },
-        { icon: 'edit', label: 'Rename', onClick: () => rename(c, id) },
-        { icon: 'folder', label: 'Move to…', hint: 'Another folder or page', onClick: () => moveNote(anchor, id) },
-        { icon: 'trash', label: 'Delete', onClick: () => store.remove('workNotes', id, r.title || 'Note') },
-      ]);
-    }
-    const area = AREA_OF[c];
-    const idea = c === 'costIdeas';
-    const items = [
-      { icon: 'edit', label: 'Open and edit', onClick: () => GU.view.open({ c, id }) },
-      { icon: 'edit', label: 'Rename', onClick: () => rename(c, id) },
-    ];
-    const homeProject = c === 'projects' && parts().isHomeProject(r);
-    // A home project has no work folders.
-    if (!idea && !homeProject) items.push({ icon: 'folder', label: 'Move to folder…', hint: folderOf(s, r, area) ? 'Now in ' + ((s.workFolders || []).find((f) => f.id === r.workFolder) || {}).name : 'Not in a folder', onClick: () => moveMenu(anchor, c, id) });
-    const setPayer = (who) => W && W.setPayer && W.setPayer(c, id, who);
+    const extras = [];
     if (c === 'paperwork') {
-      const ln = laneOf(r);
-      if (ln !== 'back') items.push({ icon: 'coin', label: 'I paid this myself', hint: 'Moves it to Get paid back, to send to ' + co(), onClick: () => setPayer('me') });
-      if (ln !== 'ktk') items.push({ icon: 'briefcase', label: C + ' paid this, not me', hint: 'Keeps it as ' + co() + '’s money', onClick: () => setPayer('company') });
-      if (isWaiting(r)) items.push({ icon: 'check', label: 'Paid by ' + co(), onClick: () => W && W.markKtkPaid(id) });
-      else if (ln === 'ktk' && r.kind === 'invoice-in') items.push({ icon: 'repeat', label: 'Not paid yet', hint: 'Back to waiting for ' + co(), onClick: () => notPaidYet(id) });
-    } else if (c === 'bills') {
-      if (billPayer(r) === 'company') items.push({ icon: 'coin', label: 'Comes out of my account', hint: co(true) + ' pays me back', onClick: () => setPayer('me') });
-      else items.push({ icon: 'briefcase', label: C + ' pays it directly', hint: 'Not from your account', onClick: () => setPayer('company') });
-    } else if (idea) {
+      if (isWaiting(r)) extras.push({ icon: 'check', label: 'Paid by ' + co(), onClick: () => W && W.markKtkPaid(id) });
+      else if (laneOf(r) === 'ktk' && r.kind === 'invoice-in') extras.push({ icon: 'repeat', label: 'Not paid yet', hint: 'Back to waiting for ' + co(), onClick: () => notPaidYet(id) });
+    } else if (c === 'costIdeas') {
       if (GU.costs.isOpen(r)) {
-        items.push({ icon: 'check', label: 'Mark done', onClick: () => ideaStatus(id, 'done') });
-        items.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => ideaStatus(id, 'dropped') });
-      } else items.push({ icon: 'repeat', label: 'Back to the plan', onClick: () => ideaStatus(id, 'open') });
+        extras.push({ icon: 'check', label: 'Mark done', onClick: () => ideaStatus(id, 'done') });
+        extras.push({ icon: 'x', label: 'Drop it', hint: 'Keeps it, but stops planning for it', onClick: () => ideaStatus(id, 'dropped') });
+      } else extras.push({ icon: 'repeat', label: 'Back to the plan', onClick: () => ideaStatus(id, 'open') });
     } else if (c === 'projects') {
-      for (const st of ['In progress', 'Done'].filter((x) => x !== r.status)) items.push({ icon: st === 'Done' ? 'check' : 'clock', label: 'Mark ' + st.toLowerCase(), onClick: () => setProjectStatus(id, st) });
-      if (homeProject) items.push({ icon: 'briefcase', label: 'Move to Work', hint: 'It’s for work, not a home project', onClick: () => moveProject(id, 'work') });
-      else items.push({ icon: 'home', label: 'Move to Home', hint: 'It’s mine, not for work', onClick: () => moveProject(id, 'home') });
+      for (const st of ['In progress', 'Done'].filter((x) => x !== r.status)) extras.push({ icon: st === 'Done' ? 'check' : 'clock', label: 'Mark ' + st.toLowerCase(), onClick: () => setProjectStatus(id, st) });
+    } else if (c === 'tasks') {
+      extras.push({ icon: 'check', label: r.done ? 'Mark not done' : 'Mark done', onClick: () => GU.tabs.todos.complete(id, !r.done) });
     }
-    if (idea) {
-      if (GU.costs.isOpen(r)) items.push({ icon: 'briefcase', label: 'It’s for work', hint: 'Adds it to ' + at('work-requests', 'Work › To buy'), onClick: () => toWork(id) });
-    } else if (c !== 'projects') items.push({ icon: 'home', label: 'Move to Home', hint: 'It’s mine, not for work', onClick: () => takeOut(c, id) });
-    items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(c, id, nameOf(c, r)) });
-    menu(anchor, items);
-  }
-  function moveMenu(anchor, c, id) {
-    const s = store.state;
-    const area = AREA_OF[c];
-    const set = (folder) => store.commit((st) => {
-      const r = st[c].find((x) => x.id === id);
-      if (r) r.workFolder = folder;
-    });
-    menu(anchor, [{ icon: 'x', label: 'No folder', onClick: () => set('') }]
-      .concat(foldersOf(s, area).map((f) => ({ icon: 'folder', label: f.name, onClick: () => set(f.id) })))
-      .concat([{ icon: 'plus', label: 'New folder…', onClick: () => newFolder(area, (f) => set(f.id)) }]));
-  }
-  function moveNote(anchor, id) {
-    const s = store.state;
-    const opts = [{ area: 'general', folder: '', label: 'Overview' }, { area: 'requests', folder: '', label: labelOf('requests') }];
-    for (const a of AREAS) {
-      opts.push({ area: a.id, folder: '', label: labelOf(a.id) });
-      for (const f of foldersOf(s, a.id)) opts.push({ area: a.id, folder: f.id, label: labelOf(a.id) + ' › ' + f.name });
-    }
-    menu(anchor, opts.map((o) => ({ icon: o.folder ? 'folder' : 'list', label: o.label, onClick: () => store.commit((st) => {
-      const n = st.workNotes.find((x) => x.id === id);
-      if (n) Object.assign(n, { area: o.area, folder: o.folder, updated: today() });
-    }) })));
+    GU.organise.itemMenu(anchor, c, id, extras);
   }
   /* An invoice marked paid by the business by mistake: back to waiting. */
   function notPaidYet(id) {
@@ -1549,12 +1505,6 @@
     });
     toast('Moved to Home', { action: 'Undo', onAction: () => store.upsert(c, before) });
   }
-  /* The other way, for one of your own ideas: it's for work after all, so it goes on Work › To buy (and leaves the plan). */
-  function toWork(id) {
-    if (GU.requests && GU.requests.addIdeas) return GU.requests.addIdeas([id]);
-    return null;
-  }
-
   /* Opens a project, note or idea (from anywhere, e.g. Home's timeline). */
   function edit(id, c) {
     if (c === 'workNotes') return editNote(id);
@@ -1577,6 +1527,7 @@
     projectLanes, groupsHTML, editProject, moveProject, setProjectStatus,
     isWorkBill: (b) => parts().isWorkBill(b), isWorkTask: (s, t) => parts().isWorkTask(s, t),
     forecastHTML, editIdea, ideaStatus, forecastSettings, rowHTML, rowClick, newFolder, show, sendToCo, moveFromHome, takeOut, card: cardBtn, editNote, notesOf,
+    foldersOf, folderOf, AREA_OF, COLL, nameOf,
   };
   GU.tabs.work = { label: 'Work overview', short: 'Overview', icon: 'briefcase', part: 'work', render: (r) => render(r, 'overview'), edit, show, editProject, editNote, editIdea, newFolder };
   // Each area is its own page in the Work part. Get paid back ('work-back') is js/tabs/payback.js.

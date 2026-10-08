@@ -33,7 +33,7 @@
     const names = work.map((d) => d.title).filter(Boolean);
     const shown = names.slice(0, 2).join(', ') + (names.length > 2 ? ' and ' + (names.length - 2) + ' more' : '');
     return '<p class="note-line note-line--signpost">' + icon('briefcase') + '<span>' + esc(plural(work.length, 'work document') + (shown ? ' (' + shown + ')' : '') + (work.length === 1 ? ' is' : ' are') + ' in ') +
-      '<a class="link" href="#' + workDocsTab() + '">' + esc(WORK_PAGE) + '</a>.</span></p>';
+      '<a class="link" href="#' + workDocsTab() + '">' + esc(WORK_PAGE()) + '</a>.</span></p>';
   }
 
   function expiryPill(d) {
@@ -54,7 +54,7 @@
       '<div class="doc-row__main"><button type="button" class="doc-row__title" data-edit="' + esc(d.id) + '"><b>' + esc(d.title) + '</b></button>' +
       '<em>' + esc([d.holder, d.location ? 'Kept: ' + d.location : '', d.folder ? 'Folder: ' + d.folder : ''].filter(Boolean).join(' · ')) + (ref ? (d.holder || d.location || d.folder ? ' · ' : '') + ref : '') + '</em>' +
       '<span class="doc-row__chips">' + (grouped ? '' : pill(d.type || 'Other', 'muted')) + (grouped && !d.expiryDate ? '' : expiryPill(d)) + '</span></div>' +
-      '<span class="doc-row__end"><span class="doc-row__btns">' + GU.ui.dlButton(d.files, d.title) + '<button type="button" class="icon-btn" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.title) + '">' + icon('edit') + '</button></span></span></li>';
+      '<span class="doc-row__end"><span class="doc-row__btns">' + GU.ui.dlButton(d.files, d.title) + GU.organise.moreBtn('documents', d.id, d.title) + '</span></span></li>';
   }
 
   function render(root) {
@@ -75,7 +75,7 @@
       eyebrow: 'Paperwork',
       title: 'Important documents',
       text: 'Passports, licences, certificates, contracts and policies. Keep a scan of each, note where the original is, and I’ll warn you ' + warn + ' days before anything expires.',
-      actions: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add document</button>',
+      actions: GU.organise.listButton('documents') + '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add document</button>',
     }) +
       signpostHTML(work) +
       GU.ui.dropbar('Drop documents here, or a whole folder of them', 'Scans, photos and PDFs. I’ll read each one for its type, number and expiry date. Subfolders like Passports or Insurance set the type.') +
@@ -208,5 +208,16 @@
     });
   }
 
+  /* The documents the page is showing now (its type and search), for 'Download list'. */
+  GU.organise.lists.documents = () => {
+    const q = ui.q.toLowerCase();
+    const docs = store.state.documents.filter((d) => !isWork(d)).sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+      .filter((d) => (ui.type === 'all' || d.type === ui.type) && (!q || [d.title, d.holder, d.type, d.location, d.notes].join(' ').toLowerCase().includes(q)));
+    return {
+      name: 'Documents',
+      head: ['Document', 'Type', 'Whose', 'Reference (last 4 only)', 'Kept', 'Issued', 'Expires', 'Notes', 'Files'],
+      rows: docs.map((d) => [d.title || '', d.type || 'Other', d.holder || '', d.reference ? mask(d.reference) : '', d.location || '', d.issueDate || '', d.expiryDate || '', d.notes || '', (d.files || []).length]),
+    };
+  };
   GU.tabs.documents = { label: 'Important documents', short: 'Documents', icon: 'folder', part: 'home', render, create, edit, TYPES };
 })();

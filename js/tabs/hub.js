@@ -9,6 +9,9 @@
   const { esc, uid, today, money, fmtDate, plural } = GU.util;
   const { icon, pill, emptyState, toast, thumbHTML, viewFiles, formDialog, menu } = GU.ui;
   const store = GU.store;
+  /* Changes to the Sorting hub's own queue and its cards (an item waiting, where it will go) aren't something to undo: filing it, or
+     removing it, is. */
+  const cardChange = (fn) => store.commit(fn, { history: false });
   /* Where a page is in the menu, for hints and labels: 'Work › Orders & claims › Get paid back'. */
   const pageAt = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
   const S = () => GU.sorter;
@@ -94,7 +97,7 @@
         }
       }
       const item = { id: 'in-' + uid(), created: today(), note, files: [], status: 'reading', scope, ctx };
-      store.commit((s) => s.inbox.push(item));
+      cardChange((s) => s.inbox.push(item));
       pump();
       return { waiting: 1, id: item.id };
     }
@@ -120,7 +123,7 @@
     const flush = () => {
       const items = chunk;
       chunk = [];
-      if (items.length) store.commit((s) => s.inbox.push(...items));
+      if (items.length) cardChange((s) => s.inbox.push(...items));
       pump();
     };
     for (const w of work) {
@@ -251,7 +254,7 @@
           item.status = result ? 'ready' : 'error';
           item.result = result || null;
           item.error = error;
-        });
+        }, { history: false }); // a status update, not something you did
         batch.seen++;
         const quiet = batch.seen > 1 || store.state.inbox.some((i) => i.status === 'reading');
         if (settle(item, quiet)) batch.filed++;
@@ -278,7 +281,7 @@
     if (!r) return false;
     if (asksPayer(r)) {
       const who = GU.brain.payerFor(r);
-      if (who) store.commit(() => Object.assign(r, { payer: who, why: r.why || 'Your bank shows you paid it' }));
+      if (who) store.commit(() => Object.assign(r, { payer: who, why: r.why || 'Your bank shows you paid it' }), { history: false });
     }
     const ask = asksPayer(r);
     const dup = S().dupOf(item);
@@ -557,7 +560,7 @@
   }
   /* The Home / Work chip on a card: moves the item to the other part before it's filed. */
   function flipPart(item) {
-    store.commit(() => {
+    cardChange(() => {
       if (!item.result) return;
       if (item.result.context === 'work') toHome(item);
       else item.result.context = 'work';
@@ -568,7 +571,7 @@
   function setSuggestion(id, result) {
     const it = store.state.inbox.find((x) => x.id === id);
     if (!it) return;
-    store.commit(() => {
+    cardChange(() => {
       it.result = result;
       it.status = 'ready';
       it.error = '';
@@ -582,7 +585,7 @@
     if (!items.length) return;
     const first = items[0];
     const set = (patch, after) => {
-      store.commit(() => {
+      cardChange(() => {
         for (const item of items) {
           const base = item.result || Object.assign(GU.brain.blank(), { title: item.note || (item.files[0] && item.files[0].name) || 'Item', context: 'home' });
           item.result = Object.assign(base, { section_id: null, new_section_name: null, list_id: null, new_list_name: null, folder_id: null, new_category: null, section_part: null }, patch,
@@ -599,7 +602,7 @@
       if (after) after();
     };
     const toPlace = (place, extra) => {
-      store.commit(() => {
+      cardChange(() => {
         for (const item of items) {
           const base = item.result || Object.assign(GU.brain.blank(), { title: item.note || (item.files[0] && item.files[0].name) || 'Item' });
           item.result = Object.assign(S().applyPlace(base, place, extra || {}), { rule: null, why: 'You chose this place', summary: base.summary || '' });
@@ -685,7 +688,7 @@
     if (conn && conn.tools >= 4) return runAgent(hint, item);
     const h = S().hintOverrides(hint, item.result);
     if (item.result && h.changed) {
-      store.commit(() => {
+      cardChange(() => {
         item.result = Object.assign(h.r, { rule: null });
         item.hint = hint;
       });
@@ -695,7 +698,7 @@
       return showReply({ offline: true, q: hint, text: 'Moved it to ' + GU.brain.where(h.r) + '.' + (store.find('inbox', item.id) ? ' Check it and press File it.' : '') });
     }
     // Nothing here knew what that meant: read it again with your words as a note.
-    store.commit(() => {
+    cardChange(() => {
       item.hint = hint;
       item.status = 'reading';
     });
@@ -1313,7 +1316,7 @@
         if ((it.files || []).length) opts.push({ icon: 'download', label: it.files.length > 1 ? 'Download all ' + it.files.length : 'Download', onClick: () => GU.ui.downloadFiles(it.files.map((f) => f.id), (r && r.title) || 'Files') });
         if (r && EITHER.includes(r.destination)) opts.push({ icon: r.context === 'work' ? 'home' : 'briefcase', label: r.context === 'work' ? 'Move to Home' : 'Move to Work', onClick: () => flipPart(it) });
         if ((it.files || []).length || it.note) opts.push({ icon: 'repeat', label: 'Read it again', onClick: () => {
-          store.commit(() => {
+          cardChange(() => {
             it.status = 'reading';
             it.result = null;
           });
@@ -1327,14 +1330,14 @@
         try {
           const res = S().addRule(o.match, o.place, { payer: o.payer });
           logChange({ label: 'Added a rule: ' + res.label.replace(/^Always/, 'always'), where: S().placeById(o.place).label, by: 'you', undo: res.undo });
-          store.commit(() => (hit.item.ruleOffer = null));
+          cardChange(() => (hit.item.ruleOffer = null));
           toast(res.label + '. It’s used from now on.');
         } catch (err) {
           toast(err.message);
         }
         return;
       }
-      if ((hit = find('data-rule-skip')) && hit.item) return store.commit(() => (hit.item.ruleOffer = null));
+      if ((hit = find('data-rule-skip')) && hit.item) return cardChange(() => (hit.item.ruleOffer = null));
       if ((hit = find('data-open-dup')) && hit.item) {
         const d = S().dupOf(hit.item);
         if (d) {
@@ -1343,7 +1346,7 @@
         }
         return;
       }
-      if ((hit = find('data-file-anyway')) && hit.item) return store.commit(() => (hit.item.dupOk = true));
+      if ((hit = find('data-file-anyway')) && hit.item) return cardChange(() => (hit.item.dupOk = true));
       if ((hit = find('data-dup-attach')) && hit.item) return attachToDup(hit.item);
       if ((hit = find('data-discard')) && hit.item) return discard(hit.item.id);
       if ((hit = find('data-view')) && hit.item) return viewFiles(hit.item.files, 0, hit.item.note || 'Files');
@@ -1392,7 +1395,7 @@
         entries.push(GU.trash.put(st, 'inbox', Object.assign({}, item, { status: item.status === 'reading' ? 'reading' : 'ready' }),
           (item.result && item.result.title) || (item.files && item.files[0] && item.files[0].name) || item.note || 'Sorting hub item'));
       });
-    });
+    }, { history: false });
     if (!old.length) return;
     GU.ui.toast('Cleared ' + plural(old.length, 'item') + ' from the Sorting hub. They’re in Settings › Recently deleted for 30 days.', {
       timeout: 12000,
@@ -1401,7 +1404,7 @@
         GU.ui.quietly(() => entries.forEach((e) => GU.trash.restore(e.id)));
         store.commit((st) => {
           st.meta.hubFreshV1 = Object.assign({}, st.meta.hubFreshV1, { undone: true });
-        });
+        }, { history: false });
       },
     });
   }

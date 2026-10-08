@@ -36,11 +36,41 @@
   const isLenderRecord = (sec) => !!sec && lenderWords(store.state).has(firstWord(sec.name));
   /* Whether the menu leaves it out: what you chose, or by default when it's a lender's records. */
   const isHidden = (sec) => !!sec && (typeof sec.hidden === 'boolean' ? sec.hidden : isLenderRecord(sec));
-  /* The pages of the categories shown in a part's menu. */
-  const menuIds = (part) => sync().filter((id) => {
-    const sec = (store.state.sections || []).find((x) => 's-' + x.id === id);
-    return sec && partOf(sec) === part && !isHidden(sec);
-  });
+  /* ---------- the order they're in ---------- */
+  /* Your categories in the order you put them (section.order), or the order they were made in. */
+  function ordered(list) {
+    const all = (list || store.state.sections || []).map((sec, i) => ({ sec, i }));
+    const key = (x) => (typeof x.sec.order === 'number' ? x.sec.order : x.i);
+    return all.sort((a, b) => key(a) - key(b) || a.i - b.i).map((x) => x.sec);
+  }
+  /* Moves a category up or down among the others in the same part (and the same menu or hidden group), as one step in
+     Undo. The first move gives every category its number, so the order you see is the order that's kept. */
+  function move(id, dir) {
+    const sec = (store.state.sections || []).find((x) => x.id === id);
+    if (!sec) return false;
+    const sibs = ordered().filter((x) => partOf(x) === partOf(sec) && isHidden(x) === isHidden(sec));
+    const at = sibs.findIndex((x) => x.id === id);
+    const other = sibs[at + (dir < 0 ? -1 : 1)];
+    if (!other) return false;
+    GU.history.seal();
+    store.commit((st) => {
+      const order = ordered(st.sections);
+      order.forEach((x, i) => {
+        if (x.order !== i) x.order = i;
+      });
+      const a = st.sections.find((x) => x.id === id);
+      const b = st.sections.find((x) => x.id === other.id);
+      const t = a.order;
+      a.order = b.order;
+      b.order = t;
+    }, { label: 'Moved the category ‘' + sec.name + '’ ' + (dir < 0 ? 'up' : 'down') + ' in the menu' });
+    return true;
+  }
+  /* The pages of the categories shown in a part's menu, in order. */
+  const menuIds = (part) => {
+    sync();
+    return ordered().filter((sec) => partOf(sec) === part && !isHidden(sec)).map((sec) => 's-' + sec.id);
+  };
   /* The categories that are a lender's records, for the line at the bottom of Debts. */
   const lenderRecords = () => (store.state.sections || []).filter((x) => isLenderRecord(x));
   function setHidden(id, hidden) {
@@ -65,7 +95,7 @@
       '<em>' + esc([it.party, it.date && fmtDate(it.date, { short: true }), it.reference].filter(Boolean).join(' · ')) + '</em>' +
       (it.notes ? '<span class="doc-row__note">' + esc(it.notes.length > 140 ? it.notes.slice(0, 140) + '…' : it.notes) + '</span>' : '') +
       (due ? '<span class="doc-row__chips">' + due + '</span>' : '') + '</button>' +
-      '<span class="doc-row__end">' + (it.amount != null ? '<b>' + esc(money(it.amount)) + '</b>' : '') + GU.ui.dlButton(it.files, it.title) + '</span></li>';
+      '<span class="doc-row__end">' + (it.amount != null ? '<b>' + esc(money(it.amount)) + '</b>' : '') + '<span class="doc-row__btns">' + GU.ui.dlButton(it.files, it.title) + GU.organise.moreBtn('sectionItems', it.id, it.title) + '</span></span></li>';
   }
 
   /* Items grouped by the subfolder they came from (ungrouped first). */
@@ -125,21 +155,7 @@
         }
         if (e.target.closest('[data-add]')) return createItem(sec.id);
         if (e.target.closest('[data-rename]')) return rename(sec.id);
-        if (e.target.closest('[data-delete-section]')) {
-          const n = all.length;
-          const ok = await confirmBox({ title: 'Delete ' + esc(live.name) + '?', message: (n ? 'This deletes the category and the ' + n + ' thing' + (n === 1 ? '' : 's') + ' filed in it, including attached files.' : 'The category is empty.') + ' You can undo it, and it stays in Settings → Recently deleted for 30 days.', confirmLabel: 'Delete category', danger: true });
-          if (!ok) return;
-          let entry = null;
-          store.commit((st) => {
-            const items = st.sectionItems.filter((x) => x.sectionId === sec.id);
-            st.sections = st.sections.filter((x) => x.id !== sec.id);
-            st.sectionItems = st.sectionItems.filter((x) => x.sectionId !== sec.id);
-            entry = GU.trash.put(st, 'sections', live, live.name + ' category', { sectionItems: items });
-          });
-          GU.trash.offerUndo(entry);
-          GU.view.go(startOf(partOf(live)));
-          return;
-        }
+        if (e.target.closest('[data-delete-section]')) return deleteSection(sec.id);
         const v = e.target.closest('[data-view]');
         if (v) {
           const it = store.find('sectionItems', v.dataset.view);
@@ -152,6 +168,26 @@
       });
     }
     return { label: sec.name, short: sec.name, icon: sec.icon || iconFor(sec.name), part: partOf(sec), render, edit: editItem, custom: true, tabId };
+  }
+
+  /* Deletes a category and what's filed in it into Recently deleted (one step, with Undo), after asking. */
+  async function deleteSection(id) {
+    const live = (store.state.sections || []).find((x) => x.id === id);
+    if (!live) return false;
+    const n = store.state.sectionItems.filter((x) => x.sectionId === id).length;
+    const ok = await confirmBox({ title: 'Delete ' + esc(live.name) + '?', message: (n ? 'This deletes the category and the ' + n + ' thing' + (n === 1 ? '' : 's') + ' filed in it, including attached files.' : 'The category is empty.') + ' You can undo it, and it stays in Settings → Recently deleted for 30 days.', confirmLabel: 'Delete category', danger: true });
+    if (!ok) return false;
+    GU.history.seal();
+    let entry = null;
+    store.commit((st) => {
+      const items = st.sectionItems.filter((x) => x.sectionId === id);
+      st.sections = st.sections.filter((x) => x.id !== id);
+      st.sectionItems = st.sectionItems.filter((x) => x.sectionId !== id);
+      entry = GU.trash.put(st, 'sections', live, live.name + ' category', { sectionItems: items });
+    }, { label: 'Deleted the category ‘' + live.name + '’' });
+    GU.trash.offerUndo(entry);
+    if (location.hash === '#s-' + id) GU.view.go(startOf(partOf(live)));
+    return true;
   }
 
   function fields() {
@@ -229,15 +265,19 @@
       values: { name: sec.name, part: was },
       onSubmit: (v) => {
         const before = Object.assign({}, sec);
+        const label = v.part !== was ? 'Moved the category ‘' + sec.name + '’ to ' + (v.part === 'work' ? 'Work' : 'Home') + (v.name !== sec.name ? ' and renamed it ‘' + v.name + '’' : '')
+          : v.name !== sec.name ? 'Renamed the category ‘' + sec.name + '’ to ‘' + v.name + '’' : '';
+        GU.history.seal();
         store.commit((st) => {
           const x = st.sections.find((y) => y.id === id);
           if (!x) return;
           x.name = v.name;
           x.icon = iconFor(v.name);
           x.part = v.part === 'work' ? 'work' : 'home';
-        });
+        }, label ? { label } : null);
         // The page you're on follows the section into its new part.
-        if (v.part !== was) toast('Moved ' + v.name + ' to ' + (v.part === 'work' ? 'Work' : 'Home'), { action: 'Undo', onAction: () => store.upsert('sections', before) });
+        if (v.part !== was) toast('Moved ' + v.name + ' to ' + (v.part === 'work' ? 'Work' : 'Home'), { action: 'Undo', exact: true, onAction: () => store.upsert('sections', before) });
+        else if (label) GU.history.offerUndo('Renamed to ‘' + v.name + '’');
       },
     });
   }
@@ -272,5 +312,5 @@
     return ids;
   }
 
-  GU.sections = { iconFor, sync, createItem, editItem, newSection, rename, partOf, isHidden, isLenderRecord, menuIds, lenderRecords, setHidden };
+  GU.sections = { iconFor, sync, createItem, editItem, newSection, rename, partOf, isHidden, isLenderRecord, menuIds, lenderRecords, setHidden, ordered, move, deleteSection };
 })();

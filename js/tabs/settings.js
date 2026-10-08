@@ -25,8 +25,10 @@
     return '<header class="panel__head"><h2>' + icon('repeat') + 'Sync across your devices</h2>' + GU.ui.pill(on ? (sy.mode === 'saving' ? 'Saving…' : 'On') : sy.mode === 'connecting' ? 'Connecting…' : sy.mode === 'error' ? 'Problem' : 'Off', tone) + '</header>' +
       '<div class="panel__body stack"><p>' + esc(sy.message) + (on && when && sy.mode === 'on' ? ' Last saved at ' + esc(when) + '.' : '') + '</p>' +
       (on ? '<p class="muted">Open this same dashboard link on your phone, tablet or another computer while signed in to claude.ai, and everything is there. Changes show up on your other devices within a few seconds. Your records are kept in your own private space: even if you share the link, nobody else can read them.</p>' +
+        '<div class="stack"><b>Use it on your phone</b><ul class="muted" style="margin:0;padding-left:18px"><li>Install <b>The Ground Up</b> (the small online app): it opens this dashboard, signed in, with everything synced.</li><li>Or open The Ground Up from your artifacts in the <b>Claude app</b>.</li><li>Or open this dashboard in Chrome and choose <b>Add to Home screen</b>.</li></ul>' +
+        '<div><button type="button" class="btn btn--sm" data-sync-now>' + icon('repeat') + 'Sync now</button></div></div>' +
         '<p class="muted">' + esc(plural(up, 'file') + ' synced' + (sy.files.waiting ? ', ' + sy.files.waiting + ' uploading' : '') + (local ? '. ' + plural(local, 'file') + ' (Word, Excel or iPhone HEIC photos) can only be opened on the device that added them' : '') + '.') + ' Anyone you give edit access to this dashboard could open synced files, so keep the link to yourself.</p>'
-        : '<p class="muted">Sync works when you open this dashboard from claude.ai while signed in. Anywhere else, move your data with Export backup and Restore below.</p>') +
+        : '<p class="muted">Sync works when you open this dashboard from claude.ai while signed in. This copy keeps its own data and isn\u2019t connected to your online dashboard. To see the same things on every device, open the online version (from claude.ai, the Claude app, or the online <b>The Ground Up</b> app on your phone). To move what you have here across, use Export backup below, then Restore in the online version.</p>') +
       '</div>';
   }
   GU.sync.onStatus(() => {
@@ -66,7 +68,7 @@
           r = GU.money.mergeAccounts(st, fromId, v.into);
           GU.recurring.reassignBills(st);
         });
-        toast('Merged. ' + plural(r.moved, 'transaction') + ' moved and ' + plural(r.duplicates, 'duplicate') + ' removed.', { timeout: 12000, action: 'Undo', onAction: () => store.commit((st) => Object.assign(st, before)) });
+        toast('Merged. ' + plural(r.moved, 'transaction') + ' moved and ' + plural(r.duplicates, 'duplicate') + ' removed.', { timeout: 12000, action: 'Undo', exact: true, onAction: () => store.commit((st) => Object.assign(st, before)) });
       },
     });
   }
@@ -186,6 +188,22 @@
         : '<div class="panel__body"><p class="muted">Anything you delete shows up here for 30 days, so you can put it back.</p></div>') + '</section>';
   }
 
+  /* Recent changes: what Undo would take back, newest first, each with 'Undo back to here'. Undone ones follow, to redo. */
+  function recentHTML() {
+    const h = GU.history.list();
+    const t = (ms) => {
+      const mins = Math.round((Date.now() - ms) / 60000);
+      return mins < 1 ? 'just now' : mins < 60 ? mins + (mins === 1 ? ' minute ago' : ' minutes ago') : mins < 1440 ? plural(Math.round(mins / 60), 'hour') + ' ago' : plural(Math.round(mins / 1440), 'day') + ' ago';
+    };
+    const row = (e, undone) => '<li class="row-item row-item--hist' + (undone ? ' is-undone' : '') + '"><span class="row-item__text"><b>' + esc(e.label) + '</b><em>' + esc(t(e.at) + (undone ? ' · undone' : '')) + '</em></span>' +
+      '<span class="row-item__act"><button type="button" class="btn btn--sm btn--soft" ' + (undone ? 'data-history-forward="' : 'data-history-back="') + esc(e.id) + '">' + icon(undone ? 'redo' : 'undo') + (undone ? 'Redo up to here' : 'Undo back to here') + '</button></span></li>';
+    const empty = !h.undo.length && !h.redo.length;
+    return '<section class="panel" id="recent-changes"><header class="panel__head"><h2>' + icon('undo') + 'Recent changes</h2><span class="muted">' + esc('on this device · Ctrl+Z undoes the latest') + '</span></header>' +
+      (empty ? '<div class="panel__body"><p class="muted">Changes you make show up here, so you can undo them. Changes from your other devices are never undone from here.</p></div>'
+        : '<ul class="rows rows--tight">' + h.redo.slice(0, 20).reverse().map((e) => row(e, true)).join('') + h.undo.slice(0, 30).map((e) => row(e, false)).join('') + '</ul>' +
+          (h.undo.length > 30 ? '<p class="panel__foot muted">' + esc('Showing the latest 30 of ' + h.undo.length + '.') + '</p>' : '')) + '</section>';
+  }
+
   /* Your own categories (made in the Sorting hub or here): each can go once nothing is in it. */
   function categoriesHTML(s) {
     const used = (name) => ['transactions', 'paperwork', 'bills'].reduce((n, c) => n + (s[c] || []).filter((x) => String(x.category || '').toLowerCase() === name.toLowerCase()).length, 0);
@@ -201,17 +219,25 @@
      (Klarna and PayPal are, to start with) are all still here, still searchable, and linked from Bills & debts. */
   function categoryPagesHTML(s) {
     const S = GU.sections;
-    const list = s.sections || [];
+    const list = S.ordered(s.sections || []);
+    // Up and down move a category among the ones in its own part and in or out of the menu, so each press changes the menu.
+    const sibs = (x) => list.filter((y) => S.partOf(y) === S.partOf(x) && S.isHidden(y) === S.isHidden(x));
     const row = (x) => {
       const hidden = S.isHidden(x);
       const lender = S.isLenderRecord(x);
+      const group = sibs(x);
+      const first = group[0] === x;
+      const last = group[group.length - 1] === x;
       const n = s.sectionItems.filter((i) => i.sectionId === x.id).length;
       return '<li class="row-item row-item--cat"><span class="row-item__icon">' + icon(x.icon || 'star') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' +
         esc([x.part === 'work' ? 'Work' : 'Home', plural(n, 'item'), lender ? 'records from a lender' : '', x.byAssistant ? 'started by your assistant' : ''].filter(Boolean).join(' · ')) + '</em></span>' +
         '<span class="row-item__act"><span class="seg seg--sm" role="radiogroup" aria-label="' + esc(x.name) + ' in the menu">' +
         '<label><input type="radio" name="cat-menu-' + esc(x.id) + '" value="shown" data-cat-menu="' + esc(x.id) + '"' + (hidden ? '' : ' checked') + '><span>In the menu</span></label>' +
         '<label><input type="radio" name="cat-menu-' + esc(x.id) + '" value="hidden" data-cat-menu="' + esc(x.id) + '"' + (hidden ? ' checked' : '') + '><span>Hidden</span></label></span>' +
-        '<button type="button" class="btn btn--sm btn--ghost" data-move-section="' + esc(x.id) + '">Rename or move</button><a class="btn btn--sm btn--ghost" href="#s-' + esc(x.id) + '">Open</a></span></li>';
+        '<span class="row-item__order"><button type="button" class="icon-btn icon-btn--sm" data-section-up="' + esc(x.id) + '" aria-label="Move ' + esc(x.name) + ' up in the menu" data-tip="Move up"' + (first ? ' disabled' : '') + '>' + icon('up') + '</button>' +
+        '<button type="button" class="icon-btn icon-btn--sm" data-section-down="' + esc(x.id) + '" aria-label="Move ' + esc(x.name) + ' down in the menu" data-tip="Move down"' + (last ? ' disabled' : '') + '>' + icon('down') + '</button></span>' +
+        '<button type="button" class="btn btn--sm btn--ghost" data-move-section="' + esc(x.id) + '">Rename or move</button><a class="btn btn--sm btn--ghost" href="#s-' + esc(x.id) + '">Open</a>' +
+        '<button type="button" class="icon-btn organise-more" data-section-menu="' + esc(x.id) + '" aria-haspopup="menu" aria-label="More for ' + esc(x.name) + '" data-tip="More">' + icon('more') + '</button></span></li>';
     };
     return '<section class="panel" id="category-pages"><header class="panel__head"><h2>' + icon('star') + 'Your categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-section>' + icon('plus') + 'New category</button></header>' +
       (list.length ? '<ul class="rows rows--tight">' + list.map(row).join('') + '</ul>' +
@@ -225,6 +251,7 @@
     root.innerHTML = GU.view.head({ eyebrow: 'You', title: 'Settings', text: 'How your assistant works for you.' + (GU.sync.active() ? ' Your data syncs across your devices.' : ' Everything here is saved in this browser only.') }) +
       '<div class="settings">' +
       '<section class="panel" data-sync>' + syncHTML() + '</section>' +
+      recentHTML() +
       trashHTML(s) +
 
       '<section class="panel"><header class="panel__head"><h2>About you</h2></header><form class="panel__body form-grid" data-form="about">' +
@@ -329,6 +356,15 @@
 
     root.addEventListener('click', async (e) => {
       const b = (sel) => e.target.closest(sel);
+      if (b('[data-sync-now]')) {
+        try {
+          await GU.sync.flush();
+          toast('Synced');
+        } catch (err) {
+          toast('Couldn\u2019t sync just now. Your changes are safe here and I\u2019ll try again.');
+        }
+        return;
+      }
       if (b('[data-test]')) {
         const out = root.querySelector('[data-test-out]');
         const key = root.querySelector('#set-key').value.trim();
@@ -402,6 +438,16 @@
       if (b('[data-new-section]')) return GU.sections.newSection();
       const mv = b('[data-move-section]');
       if (mv && GU.sections.rename) return GU.sections.rename(mv.dataset.moveSection);
+      const up = b('[data-section-up]');
+      if (up) return GU.sections.move(up.dataset.sectionUp, -1);
+      const down = b('[data-section-down]');
+      if (down) return GU.sections.move(down.dataset.sectionDown, 1);
+      const sm = b('[data-section-menu]');
+      if (sm) return GU.organise.containerMenu(sm, 'sections', sm.dataset.sectionMenu);
+      const hs = b('[data-history-back]');
+      if (hs) return GU.history.undoTo(hs.dataset.historyBack);
+      const hr = b('[data-history-forward]');
+      if (hr) return GU.history.redoTo(hr.dataset.historyForward);
       if (b('[data-undo-refile]')) {
         if (!GU.refile || !GU.refile.canUndo()) return;
         const ok = await confirmBox({ title: 'Undo the Home/Work re-sort?', message: 'Everything it changed goes back as it was, including your answers to its questions. It won’t run again by itself.', confirmLabel: 'Undo the re-sort', danger: true });
@@ -429,7 +475,7 @@
         const ok = await confirmBox({ title: 'Erase everything?', message: 'This deletes everything saved in this browser: your transactions, bills, documents, receipts, tasks, uploaded files and any older records the site still keeps for you. Export a backup first if you might want them back.', confirmLabel: 'Erase everything', danger: true });
         if (!ok) return;
         await GU.files.clear();
-        store.replaceAll(store.blank());
+        store.replaceAll(store.blank(), { reset: true });
         if (GU.assistant) GU.assistant.clear();
         toast('Everything erased');
         GU.view.go('today');

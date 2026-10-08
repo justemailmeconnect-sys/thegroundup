@@ -229,14 +229,14 @@
     const found = find(store.state);
     if (!found.length) {
       if (!opts.quiet) GU.ui.toast('No new regular payments in your statements. Every bill I can see is already on your list.');
-      store.commit((st) => (st.meta.billsScanned = today()));
+      store.commit((st) => (st.meta.billsScanned = today()), opts.quiet ? { history: false } : null);
       return [];
     }
     let ids = [];
     store.commit((st) => {
       ids = addAsBills(st, found);
       st.meta.billsScanned = today();
-    });
+    }, opts.quiet ? { history: false } : null);
     // Work bills live in Work › Bills, so say where each went.
     const work = found.filter(isWorkFind).length;
     const home = found.length - work;

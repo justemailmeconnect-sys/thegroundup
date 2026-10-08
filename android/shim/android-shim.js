@@ -10,6 +10,7 @@
    - Sharing. navigator.share / navigator.canShare use the Android share sheet (text, links and files).
    - The Back button: closes an open dialog, menu or chat panel (like Escape) before it leaves the page.
    - The phone's status and navigation bar colours follow the page (light, dark, Home or Work).
+   - A one-time-per-launch notice that this is the offline copy (own data, no sync) with a button to the online dashboard.
    There is no window.claude here and nothing fakes it. */
 (function () {
   'use strict';
@@ -308,6 +309,38 @@
   try {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', scheduleBars);
   } catch (e) { /* older WebView */ }
+  /* The offline copy keeps its own data. Say so once each time the app starts, with a way to the online dashboard
+     (which syncs across every device signed in to claude.ai). "Don't remind me" turns it off for good. */
+  var LIVE_URL = 'https://claude.ai/artifact/8KyV1JdsawnfRtW4kmZRD8';
+  function offlineNotice() {
+    try {
+      if (localStorage.getItem('groundup.offlineNoticeOff') === '1') return;
+      if (sessionStorage.getItem('groundup.offlineNoticeShown') === '1') return;
+      sessionStorage.setItem('groundup.offlineNoticeShown', '1');
+    } catch (e) { return; }
+    var box = document.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'About this app');
+    box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:84px;z-index:2147483000;max-width:460px;margin:0 auto;padding:14px 16px;border-radius:14px;background:#1a1c21;color:#fff;font:14px/1.4 system-ui,-apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.35)';
+    var btn = 'font:inherit;font-weight:600;border:0;border-radius:10px;padding:9px 12px;cursor:pointer;';
+    box.innerHTML = '<b style="display:block;margin-bottom:4px;font-size:15px">This is the offline copy</b>' +
+      'It keeps its own data on this phone and doesn’t sync with the online dashboard. To see the same things on every device, use the online version.' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
+      '<button type="button" data-gu-live style="' + btn + 'background:#fff;color:#1a1c21">Open the online version</button>' +
+      '<button type="button" data-gu-keep style="' + btn + 'background:#34373f;color:#fff">Keep using this copy</button>' +
+      '<button type="button" data-gu-never style="' + btn + 'background:transparent;color:#c9cbd1;text-decoration:underline">Don’t remind me</button></div>';
+    box.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute) return;
+      if (t.hasAttribute('data-gu-live')) { try { window.location.assign(LIVE_URL); } catch (x) { /* stay here */ } }
+      else if (t.hasAttribute('data-gu-never')) { try { localStorage.setItem('groundup.offlineNoticeOff', '1'); } catch (x) { /* ignore */ } }
+      else if (!t.hasAttribute('data-gu-keep')) return;
+      box.remove();
+    });
+    document.body.appendChild(box);
+  }
+  window.__guOfflineNotice = offlineNotice;
+  window.addEventListener('load', function () { setTimeout(offlineNotice, 1800); });
   document.addEventListener('DOMContentLoaded', function () {
     try {
       new MutationObserver(scheduleBars).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-part', 'class'] });

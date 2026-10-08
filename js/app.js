@@ -78,6 +78,29 @@
     return '<div class="partswitch partswitch--' + where + '" role="group" aria-label="Home or Work">' + btn('home', 'home') + btn('work', 'briefcase') + '</div>';
   }
 
+  /* Undo and Redo: two small buttons next to Add in the rail (computer) and in the top bar (phone). What each would
+     do is in its tooltip; they're greyed out when there's nothing to undo or redo. */
+  function historyHTML(where) {
+    const btn = (kind) => '<button type="button" class="' + (where === 'bar' ? 'partbar__tool partbar__hbtn' : 'rail__hbtn') + '" data-history="' + kind + '" aria-label="' + (kind === 'undo' ? 'Undo' : 'Redo') + '" disabled>' +
+      icon(kind) + '</button>';
+    return '<div class="' + (where === 'bar' ? 'partbar__history' : 'rail__history') + '" role="group" aria-label="Undo and redo">' + btn('undo') + btn('redo') + '</div>';
+  }
+  function syncHistory() {
+    const h = GU.history;
+    if (!h) return;
+    const st = h.status();
+    document.querySelectorAll('[data-history]').forEach((b) => {
+      const undo = b.getAttribute('data-history') === 'undo';
+      const on = undo ? st.canUndo : st.canRedo;
+      const label = undo ? st.undoLabel : st.redoLabel;
+      b.disabled = !on;
+      const mod = /Mac|iPhone|iPad/.test(navigator.platform || '') ? 'Cmd' : 'Ctrl';
+      const tip = on ? (undo ? 'Undo: ' : 'Redo: ') + label + '  (' + mod + (undo ? '+Z' : '+Shift+Z') + ')' : undo ? 'Nothing to undo' : 'Nothing to redo';
+      b.setAttribute('data-tip', tip);
+      b.setAttribute('aria-label', on ? (undo ? 'Undo ' : 'Redo ') + label : undo ? 'Undo (nothing to undo)' : 'Redo (nothing to redo)');
+    });
+  }
+
   function shell() {
     const app = document.getElementById('app');
     const start = PARTS[parts.get()].start;
@@ -88,6 +111,7 @@
       switchHTML('bar') +
       (GU.search ? GU.search.barHTML() : '') + (GU.lock ? GU.lock.barHTML() : '') +
       '<button type="button" class="partbar__tool partbar__claude" data-chat-toggle aria-pressed="false" aria-label="Ask Claude">' + icon('spark') + '</button>' +
+      historyHTML('bar') +
       '<button type="button" class="partbar__add" data-quick-add aria-label="Add something">' + icon('plus') + '</button>' +
       '</header>' +
       '<nav class="rail" aria-label="Menu">' +
@@ -97,6 +121,11 @@
       '<main class="main" id="main"><div class="banner-slot"></div><div class="view" id="view"></div></main>' +
       '</div>';
     app.addEventListener('click', (e) => {
+      const hist = e.target.closest('[data-history]');
+      if (hist) {
+        if (hist.disabled) return;
+        return hist.getAttribute('data-history') === 'undo' ? GU.history.undo() : GU.history.redo();
+      }
       const add = e.target.closest('[data-quick-add]');
       if (add) return view.quickAdd(add);
       if (e.target.closest('[data-new-category]')) return GU.sections.newSection({ part: parts.get() });
@@ -152,6 +181,7 @@
     const chatOpen = document.documentElement.classList.contains('chat-open');
     host.innerHTML =
       '<button type="button" class="rail__item rail__add" data-quick-add aria-label="Add something"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">Add</span></button>' +
+      historyHTML('rail') +
       (GU.search ? GU.search.railHTML() : '') + (GU.lock ? GU.lock.railHTML() : '') +
       '<button type="button" class="rail__item rail__claude" data-chat-toggle aria-pressed="' + chatOpen + '" aria-label="Ask Claude (Ctrl or Cmd + K)"><span class="rail__ico">' + icon('spark') + '</span><span class="rail__label">Claude</span></button>' +
       groups.map((g, i) => (i ? sep : '') + g.map(item).join('')).join('') +
@@ -184,6 +214,7 @@
 
   function renderRail(tabId, part) {
     buildRail(part);
+    syncHistory();
     let counts = {};
     try {
       counts = GU.agenda.badges(store.state) || {};
@@ -366,7 +397,7 @@
       } catch (e) {
         console.error(e);
       }
-    });
+    }, { history: false });
   }
   /* Once the data is in: the one-off Home/Work re-sort, then matching work payments to your bank, then bills. */
   function settle() {
@@ -398,6 +429,7 @@
     if (fresh && !sync) await GU.sample.load();
     if (!sync) rollForward();
     shell();
+    if (GU.history) GU.history.onChange(syncHistory);
     store.subscribe(render);
     window.addEventListener('hashchange', render);
     render();

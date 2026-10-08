@@ -8,7 +8,7 @@
   'use strict';
   const GU = window.GU;
   const { esc, uid, today, addDays, daysUntil, fmtDate, relDays, money, plural, sum, round2, isISO } = GU.util;
-  const { icon, pill, formDialog, openDialog, toast, menu } = GU.ui;
+  const { icon, pill, formDialog, openDialog, toast } = GU.ui;
   const store = GU.store;
   /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
   const at = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
@@ -962,11 +962,12 @@
     }
   }
 
+  /* The one ⋯ menu (js/organise.js), with what's special to something you've been asked to get. */
   function moreMenu(anchor, id) {
     const r = find(id);
     if (!r) return;
     const st = stateOf(r);
-    const items = [{ icon: 'edit', label: 'Edit', onClick: () => edit(id) }];
+    const items = [];
     const where = payerOf(r) === 'company' ? 'Adds the receipt for ' + co() : 'Adds the receipt to Get paid back';
     if (isOpen(r) && !lineTotal(r)) items.push({ icon: 'plus', label: 'Add price', onClick: () => openPrice(id) });
     if (st === 'asked') items.push({ icon: 'send', label: 'Mark ordered', hint: 'You’ve placed the order', onClick: () => markOrdered(id) });
@@ -976,8 +977,7 @@
     if (st === 'bought' && !paperOf(r)) items.push({ icon: 'receipt', label: 'Add the receipt', hint: where, onClick: () => markBought(id) });
     if (st === 'asked' || st === 'ordered') items.push({ icon: 'x', label: 'Not needed', hint: 'Keeps it, out of the way', onClick: () => notNeeded(id) });
     if (st === 'dropped') items.push({ icon: 'undo', label: 'Put back in To order', onClick: () => backToOrder(id) });
-    items.push({ icon: 'trash', label: 'Delete', hint: 'You can undo it', onClick: () => remove(id) });
-    menu(anchor, items);
+    GU.organise.itemMenu(anchor, 'requests', id, items);
   }
 
   function onClick(e) {

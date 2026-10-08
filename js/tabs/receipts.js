@@ -99,8 +99,23 @@
       '<em>' + esc([p.party, fmtDate(p.date, { short: true }), p.reference, p.folder ? 'Folder: ' + p.folder : ''].filter(Boolean).join(' · ')) + '</em>' +
       '<span class="doc-row__chips">' + pill(KIND_SHORT[p.kind] || 'Item', 'kind-' + p.kind) + statusPill(p) + (GU.returns ? GU.returns.pill(p) : '') + '</span></button>' +
       '<span class="doc-row__end">' + (p.amount != null ? '<b class="' + (p.kind === 'invoice-out' ? 'is-in' : '') + '">' + esc(money(p.amount)) + '</b>' : '') +
-      (p.kind === 'invoice-out' && p.status !== 'paid' && (p.payments || []).length ? '<small class="muted">' + esc(money(F.outstanding(p)) + ' still to come') + '</small>' : '') + '<span class="doc-row__btns">' + GU.ui.dlButton(p.files, p.title) + act + '</span></span></li>';
+      (p.kind === 'invoice-out' && p.status !== 'paid' && (p.payments || []).length ? '<small class="muted">' + esc(money(F.outstanding(p)) + ' still to come') + '</small>' : '') + '<span class="doc-row__btns">' + GU.ui.dlButton(p.files, p.title) + act + GU.organise.moreBtn('paperwork', p.id, p.title) + '</span></span></li>';
   }
+  /* What the page is showing now, in the order it shows it. */
+  function visible(s) {
+    const list = s.paperwork.filter((p) => !isWork(p)).filter(matches);
+    if (ui.filter === 'to-pay' || ui.filter === 'owed') return list.sort((a, b) => (a.dueDate || '9').localeCompare(b.dueDate || '9'));
+    if (ui.filter === 'warranty') return list.sort((a, b) => (a.warrantyUntil || '').localeCompare(b.warrantyUntil || ''));
+    return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }
+  GU.organise.lists.receipts = () => ({
+    name: 'Receipts',
+    head: ['Date', 'What', 'From', 'Kind', 'Amount', 'Status', 'Due', 'Warranty until', 'Reference', 'Category', 'Files'],
+    rows: visible(store.state).map((p) => [p.date || '', p.title || '', p.party || '', KIND_SHORT[p.kind] || p.kind || '', p.amount != null && p.amount !== '' ? Number(p.amount) : '',
+      isInvoice(p) ? (p.status === 'paid' ? 'Paid' : 'Not paid') : '', p.dueDate || '', p.warrantyUntil || '', p.reference || '', p.category || '', (p.files || []).length]),
+  });
+  GU.organise.extras.paperwork = (p) => (isInvoice(p) && p.status !== 'paid' && !isWork(p)
+    ? [{ icon: 'check', label: p.kind === 'invoice-out' ? 'Got paid' : 'Mark paid', onClick: () => markPaid(p.id) }] : []);
 
   /* Since 6 April: the UK tax year, which is what you'd report invoice income against. */
   function taxYearStart(t) {
@@ -238,18 +253,13 @@
         '</div>';
     };
 
-    const sorted = () => {
-      const list = all.filter(matches);
-      if (ui.filter === 'to-pay' || ui.filter === 'owed') return list.sort((a, b) => (a.dueDate || '9').localeCompare(b.dueDate || '9'));
-      if (ui.filter === 'warranty') return list.sort((a, b) => (a.warrantyUntil || '').localeCompare(b.warrantyUntil || ''));
-      return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    };
+    const sorted = () => visible(s);
 
     root.innerHTML = GU.view.head({
       eyebrow: 'Paperwork',
       title: 'Receipts',
       text: 'Every receipt, invoice and warranty, by month. Upload one and your assistant fills in the details.',
-      actions: '<button type="button" class="btn" data-import-orders>' + icon('download') + 'Import Amazon orders</button><button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
+      actions: '<button type="button" class="btn" data-import-orders>' + icon('download') + 'Import Amazon orders</button>' + GU.organise.listButton('receipts') + '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
     }) +
       workLineHTML(s) +
       GU.ui.dropbar('Drop receipts, invoices or warranties here, or a whole folder', 'Photos and PDFs both work. Subfolders like Warranties or Paid are used.') +

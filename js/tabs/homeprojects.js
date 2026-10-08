@@ -220,7 +220,7 @@
       eyebrow: 'Projects',
       title: 'Home projects',
       text: esc('Projects your dad has asked you to do, and your own. Say what it is, when it’s due and what it should cost, and tick it off when it’s done.'),
-      actions: (T.all.length ? '<button type="button" class="btn" data-download>' + icon('download') + 'Download CSV</button>' : '') +
+      actions: (T.all.length ? '<button type="button" class="btn" data-download>' + icon('download') + 'Download list (CSV)</button>' : '') +
         '<button type="button" class="btn btn--primary" data-new>' + icon('plus') + 'New project</button>',
     }) + '<div class="stack hp">' + (T.all.length ? tallyHTML(T) : '') + quick + body + '</div>';
 

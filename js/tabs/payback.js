@@ -7,7 +7,7 @@
   'use strict';
   const GU = window.GU;
   const { esc, today, addDays, toDays, daysUntil, fmtDate, money, plural, sum, round2, debounce } = GU.util;
-  const { icon, pill, emptyState, toast, menu, thumbHTML, viewFiles } = GU.ui;
+  const { icon, pill, emptyState, toast, thumbHTML, viewFiles } = GU.ui;
   const store = GU.store;
   /* Where a page is in the menu, for hints and labels: 'Work › Orders & claims › Get paid back'. */
   const pageAt = (tab, fallback) => (GU.parts && GU.parts.pathOf && GU.tabs && GU.tabs[tab] ? GU.parts.pathOf(tab) : fallback);
@@ -63,7 +63,6 @@
     }
     return set;
   }
-  const paysLabel = (s) => (GU.parts && GU.parts.paysLabel ? GU.parts.paysLabel(s) : 'Company pays');
   const isTransfer = (t) => (GU.finance.isTransfer ? GU.finance.isTransfer(t) : t.category === 'Transfers');
 
   /* Not sent yet, minus anything you've unticked. Invoices you haven't paid yet aren't owed to you yet. */
@@ -443,7 +442,7 @@
         const cur = rec && store.find(P, rec.id);
         if (!cur) return;
         if (cur.context === 'work' && !cur.payer) W().setPayer(P, cur.id, 'me');
-        else if (cur.context === 'work' && cur.payer === 'me' && !cur.purchaseTx) W().reconcile({ quiet: true });
+        else if (cur.context === 'work' && cur.payer === 'me' && !cur.purchaseTx) W().reconcile({ quiet: true, history: true });
       },
     });
   }
@@ -461,15 +460,15 @@
     return true;
   }
 
+  /* The one ⋯ menu (js/organise.js): Open, Rename, Move to… (Home, or who paid), Duplicate, Download, then what's
+     special to a claim here, then Delete. */
   function moreMenu(anchor, id) {
-    const s = store.state;
     const wm = W();
     const p = store.find(P, id);
     if (!p) return;
-    const e = wm.employer(s);
     const st = wm.stage(p);
     const unpaid = p.kind === 'invoice-in' && p.status !== 'paid';
-    const items = [{ icon: 'edit', label: 'Edit', onClick: () => GU.view.open({ c: P, id }) }];
+    const items = [];
     items.push({ icon: 'camera', label: (p.files || []).length ? 'Add another file' : 'Add the receipt', hint: 'A photo or PDF', onClick: () => addFile(id) });
     if (p.purchaseTx) items.push({ icon: 'x', label: 'Not this bank payment', hint: 'Unlink it', onClick: () => wm.unlinkPurchase(id) });
     else if (st !== 'paid-back') items.push({ icon: 'search', label: 'Find the payment', hint: 'In your bank statements', onClick: () => findPaymentDialog(id) });
@@ -482,10 +481,7 @@
       items.push({ icon: 'left', label: 'Take out of this pack', hint: 'Back to Not sent yet', onClick: () => wm.unsend([id]) });
     }
     if (st === 'paid-back' || (p.repayments || []).length) items.push({ icon: 'repeat', label: 'Not paid back yet', hint: 'Back to waiting', onClick: () => wm.unrepay([id]) });
-    if (st !== 'paid-back') items.push({ icon: 'briefcase', label: e.Label + ' paid this, not me', hint: 'Moves it to ' + paysLabel(s), onClick: () => wm.setPayer(P, id, 'company') });
-    items.push({ icon: 'home', label: 'Not for work', hint: 'Moves it to Home', onClick: () => wm.moveToHome(P, id) });
-    items.push({ icon: 'trash', label: 'Delete', onClick: () => store.remove(P, id, name(p)) });
-    menu(anchor, items);
+    GU.organise.itemMenu(anchor, P, id, items);
   }
 
   /* ---------- sending ---------- */

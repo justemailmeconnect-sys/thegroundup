@@ -146,7 +146,7 @@
       '<span class="debt__chev" aria-hidden="true">' + icon('chevron') + '</span></button>' +
       '<div class="debt__actions">' +
       (s.finished ? '<button type="button" class="btn btn--sm" data-close="' + esc(d.id) + '">' + icon('check') + 'Mark paid off</button>' : '<button type="button" class="btn btn--sm" data-balance="' + esc(d.id) + '">Update balance</button>') +
-      '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(d.id) + '" aria-label="Edit ' + esc(d.name) + '">' + icon('edit') + '</button></div></div>' +
+      GU.organise.moreBtn('debts', d.id, d.name) + '</div></div>' +
       '<div class="debt__body"' + (isOpenNow ? '' : ' hidden') + '>' + extra.join('') + '</div>' +
       '</article>';
   }
@@ -185,7 +185,7 @@
       eyebrow: 'Bills & debts',
       title: 'Debts',
       text: 'Everything you owe in one place, with what’s left to pay and when you’ll be clear.',
-      actions: '<button type="button" class="btn" data-schedule>' + icon('list') + 'Add a payment schedule</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>',
+      actions: '<button type="button" class="btn" data-schedule>' + icon('list') + 'Add a payment schedule</button>' + GU.organise.listButton('debts') + '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>',
     }) +
       GU.ui.dropbar('Drop credit card statements, loan agreements or Klarna screenshots here', 'I’ll read the balance, monthly payment and interest rate, and add it to the right debt.') +
       '<div class="ledger">' +
@@ -205,7 +205,7 @@
       (active.length ? active.map(debtCard).join('')
         : '<section class="panel">' + emptyState({ icon: 'card', title: 'No debts added yet', text: spotted.length ? 'Start with the payments I found above, or add a card, loan or finance agreement yourself.' : 'Add a credit card, loan, Klarna, car finance or money you owe someone. Your bank statements fill in the payments.', action: '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a debt</button>' }) + '</section>') +
       (closed.length ? '<details class="panel panel--details"><summary class="panel__head"><h2>Paid off</h2><span class="muted">' + closed.length + '</span></summary><ul class="rows">' + closed.map((d) =>
-        '<li class="spot"><span class="row-item__icon">' + icon('check') + '</span><span class="spot__text"><b>' + esc(d.name) + '</b><em>' + esc(['Closed ' + (d.closedDate ? fmtDate(d.closedDate, { short: true }) : ''), d.lender].filter(Boolean).join(' · ')) + '</em></span><span class="spot__act"><button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(d.id) + '">' + icon('edit') + 'Edit</button></span></li>').join('') + '</ul></details>' : '') +
+        '<li class="spot"><span class="row-item__icon">' + icon('check') + '</span><span class="spot__text"><b>' + esc(d.name) + '</b><em>' + esc(['Closed ' + (d.closedDate ? fmtDate(d.closedDate, { short: true }) : ''), d.lender].filter(Boolean).join(' · ')) + '</em></span><span class="spot__act"><button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(d.id) + '">' + icon('edit') + 'Edit</button>' + GU.organise.moreBtn('debts', d.id, d.name) + '</span></li>').join('') + '</ul></details>' : '') +
       '</div><aside class="stack">' +
       overdraftsPanel(s, ods) +
       '<details class="panel panel--details debt__how"' + (howOpen ? ' open' : '') + '><summary class="panel__head"><h2>' + icon('info') + 'How these figures are worked out</h2></summary><div class="panel__body tip"><p>I match payments by the lender’s name on your bank statement (for example KLARNA, PAYPAL PAYIN3 or Flex on Monzo). Left to pay is the balance you gave me, less what you’ve paid since, plus interest if you gave me the rate. Update the balance now and then from a real statement to keep it exact.</p></div></details>' +
@@ -518,5 +518,27 @@
     }) };
   }
 
+  /* The ⋯ menu's own actions: update the balance, mark paid off (or open again). */
+  GU.organise.extras.debts = (d) => (d.closed
+    ? [{ icon: 'repeat', label: 'Open it again', hint: 'It’s not paid off after all', onClick: () => store.commit((st) => Object.assign(st.debts.find((x) => x.id === d.id), { closed: false, closedDate: undefined }), { label: 'Reopened ‘' + d.name + '’' }) }]
+    : [{ icon: 'coin', label: 'Update balance', onClick: () => updateBalance(d.id) },
+      { icon: 'check', label: 'Mark paid off', onClick: () => {
+        store.commit((st) => Object.assign(st.debts.find((x) => x.id === d.id), { closed: true, closedDate: today() }), { label: 'Marked ‘' + d.name + '’ paid off' });
+        GU.history.offerUndo(d.name + ' marked as paid off');
+      } }]);
+  /* The debts on the page, for 'Download list'. */
+  GU.organise.lists.debts = () => {
+    const D2 = GU.debts;
+    const s = store.state;
+    return {
+      name: 'Debts',
+      head: ['Debt', 'Lender', 'Type', 'Left to pay', 'Monthly payment', 'APR %', 'Clear by', 'Status', 'Files'],
+      rows: (s.debts || []).slice().sort((a, b) => (a.closed ? 1 : 0) - (b.closed ? 1 : 0) || String(a.name).localeCompare(String(b.name))).map((d) => {
+        const sm = D2.summary(s, d);
+        return [d.name || '', d.lender || '', d.type || '', sm.balanceKnown ? Number(sm.estBalance) : '', d.monthlyPayment != null && d.monthlyPayment !== '' ? Number(d.monthlyPayment) : (sm.payment ? Number(sm.payment) : ''), d.apr != null && d.apr !== '' ? Number(d.apr) : '',
+          clearLabel(sm) || '', d.closed ? 'Paid off' : 'Open', (d.files || []).length];
+      }),
+    };
+  };
   GU.tabs.debts = { label: 'Debts', short: 'Debts', icon: 'card', part: 'home', render, create, edit, updateBalance, fromInbox, accountsCard, balanceLine, staleNote, scheduleDialog };
 })();

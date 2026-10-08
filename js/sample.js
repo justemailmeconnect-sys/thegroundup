@@ -326,7 +326,7 @@
       // The examples are already sorted into Home and Work, so the one-off re-sort has nothing to do. Cleared
       // with the examples, so it can still sort your own records later.
       if (!s.meta.refileV1) s.meta.refileV1 = { at: t, skipped: true, demo: true };
-    });
+    }, { history: false });
   }
 
   // 'visas' stays here so old examples that were loaded before the Visas page went can still be cleared.
@@ -348,8 +348,8 @@
       }
       if (st.settings.employer && st.settings.employer.demo) st.settings.employer = null;
       if (st.meta.refileV1 && st.meta.refileV1.demo) delete st.meta.refileV1;
-    });
-    files.forEach((id) => GU.files.remove(id));
+    }, { history: false });
+    files.forEach((id) => GU.files.erase(id));
     if (silent) return;
     GU.ui.toast('Examples cleared. Everything you added yourself is still here.');
     // The one-off Home/Work re-sort waits while there are examples; with only your own records left, it can run.

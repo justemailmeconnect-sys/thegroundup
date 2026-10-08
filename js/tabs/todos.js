@@ -58,7 +58,8 @@
       '<input type="checkbox" class="tick" data-toggle="' + esc(t.id) + '"' + (t.done ? ' checked' : '') + ' aria-label="Mark ' + esc(t.title) + ' as done">' +
       '<button type="button" class="task__main" data-edit="' + esc(t.id) + '"><b>' + esc(t.title) + '</b>' +
       (t.notes ? '<em>' + esc(t.notes.length > 90 ? t.notes.slice(0, 90) + '…' : t.notes) + '</em>' : '') + '</button>' +
-      '<span class="task__meta">' + (t.priority === 'high' ? pill('High', 'crit', 'flag') : '') + (showList ? pill(listName(t.listId), 'muted') : '') + (t.done ? '' : due) + '</span></li>';
+      '<span class="task__meta">' + (t.priority === 'high' ? pill('High', 'crit', 'flag') : '') + (showList ? pill(listName(t.listId), 'muted') : '') + (t.done ? '' : due) + '</span>' +
+      GU.organise.moreBtn('tasks', t.id, t.title) + '</li>';
   }
 
   /* One line pointing to Work › Tasks, so work tasks don't look lost. */
@@ -100,6 +101,7 @@
       eyebrow: 'Life',
       title: 'Tasks',
       text: 'Type a task the way you’d say it, like “Renew car tax on Friday”, and I’ll set the date for you.',
+      actions: GU.organise.listButton('tasks'),
     }) +
       signpostHTML(workOpen) +
       '<div class="split">' +
@@ -155,22 +157,34 @@
       if (e.target.closest('[data-rename-list]')) return renameList(view);
       if (e.target.closest('[data-delete-list]')) {
         const n = mine.filter((x) => x.listId === view).length;
-        const ok = await confirmBox({ title: 'Delete ' + esc(listName(view)) + '?', message: n ? 'This also deletes its ' + plural(n, 'task') + '.' : 'The list is empty.', confirmLabel: 'Delete list', danger: true });
+        const ok = await confirmBox({ title: 'Delete ' + esc(listName(view)) + '?', message: (n ? 'This also deletes its ' + plural(n, 'task') + '.' : 'The list is empty.') + ' You can undo it, and it stays in Settings → Recently deleted for 30 days.', confirmLabel: 'Delete list', danger: true });
         if (!ok) return;
         const id = view;
         view = 'today';
-        store.commit((st) => {
-          // Work tasks filed in this list aren't shown here, so they move to the Work list instead of going too.
-          const keep = st.tasks.filter((x) => x.listId === id && GU.parts && GU.parts.isWorkTask(st, x));
-          if (keep.length) {
-            const wl = ensureWorkList(st);
-            keep.forEach((x) => (x.listId = wl));
-          }
-          st.todoLists = st.todoLists.filter((l) => l.id !== id);
-          st.tasks = st.tasks.filter((x) => x.listId !== id);
-        });
+        deleteList(id);
       }
     });
+  }
+
+  /* Deletes a list into Recently deleted with the tasks in it (one step, with Undo). Work tasks filed in it aren't shown
+     here, so they move to the Work list instead of going too. */
+  function deleteList(id) {
+    const list = store.state.todoLists.find((l) => l.id === id);
+    if (!list) return;
+    GU.history.seal();
+    let entry = null;
+    store.commit((st) => {
+      const keep = st.tasks.filter((x) => x.listId === id && GU.parts && GU.parts.isWorkTask(st, x));
+      if (keep.length) {
+        const wl = ensureWorkList(st);
+        keep.forEach((x) => (x.listId = wl));
+      }
+      const gone = st.tasks.filter((x) => x.listId === id);
+      st.todoLists = st.todoLists.filter((l) => l.id !== id);
+      st.tasks = st.tasks.filter((x) => x.listId !== id);
+      entry = GU.trash.put(st, 'todoLists', list, list.name + ' list' + (gone.length ? ' and its ' + plural(gone.length, 'task') : ''), { tasks: gone });
+    }, { label: 'Deleted the list ‘' + list.name + '’' });
+    GU.trash.offerUndo(entry);
   }
 
   function complete(id, done) {
@@ -182,7 +196,7 @@
       x.done = val;
       x.doneAt = val ? today() : '';
     });
-    if (val) toast('Done: ' + t.title, { action: 'Undo', onAction: () => complete(id, false) });
+    if (val) toast('Done: ' + t.title, { action: 'Undo', exact: true, onAction: () => complete(id, false) });
   }
 
   /* The Work list, made if it isn't there yet. Inside a commit. */
@@ -265,8 +279,8 @@
         save(Object.assign({}, t, v, { doneAt: v.done ? t.doneAt || today() : '' }));
         if (v.context === was) return;
         const undo = () => store.upsert('tasks', before);
-        if (v.context === 'work') toast('Moved to ' + at('work-tasks', 'Work › Tasks'), { action: 'Undo', onAction: undo });
-        else toast('Moved to ' + at('todos', 'Home › To-do'), { action: 'Undo', onAction: undo });
+        if (v.context === 'work') toast('Moved to ' + at('work-tasks', 'Work › Tasks'), { action: 'Undo', exact: true, onAction: undo });
+        else toast('Moved to ' + at('todos', 'Home › To-do'), { action: 'Undo', exact: true, onAction: undo });
       },
       onDelete: () => {
         store.remove('tasks', id);
@@ -294,9 +308,30 @@
       title: 'Rename list',
       fields: [{ name: 'name', label: 'List name', required: true }],
       values: { name: l.name },
-      onSubmit: (v) => store.commit((s) => (s.todoLists.find((x) => x.id === id).name = v.name)),
+      onSubmit: (v) => {
+        if (v.name === l.name) return;
+        GU.history.seal();
+        store.commit((s) => (s.todoLists.find((x) => x.id === id).name = v.name), { label: 'Renamed the list ‘' + l.name + '’ to ‘' + v.name + '’' });
+        GU.history.offerUndo('Renamed the list to ‘' + v.name + '’');
+      },
     });
   }
 
+  /* The ⋯ menu's own action. */
+  GU.organise.extras.tasks = (t) => [{ icon: 'check', label: t.done ? 'Mark not done' : 'Mark done', onClick: () => complete(t.id, !t.done) }];
+  /* The tasks the page is showing now (this view's open tasks, then the completed ones listed under them), for 'Download list'. */
+  GU.organise.lists.tasks = () => {
+    const mine = homeTasks();
+    const lists = homeLists();
+    const isList = lists.some((l) => l.id === view);
+    const open = viewTasks().sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999') || prioRank[a.priority || 'normal'] - prioRank[b.priority || 'normal']);
+    const done = mine.filter((x) => x.done && (view === 'today' || view === 'upcoming' || view === 'all' || x.listId === view)).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || '')).slice(0, 30);
+    const name = isList ? listName(view) : view === 'today' ? 'Today' : view === 'upcoming' ? 'Upcoming' : 'All tasks';
+    return {
+      name: 'Tasks ' + name,
+      head: ['Task', 'List', 'Due', 'Priority', 'Done', 'Notes'],
+      rows: open.concat(done).map((t) => [t.title || '', listName(t.listId), t.due || '', t.priority || 'normal', t.done ? 'Yes' : 'No', t.notes || '']),
+    };
+  };
   GU.tabs.todos = { label: 'Tasks', short: 'Tasks', icon: 'todo', part: 'home', render, create, edit, complete };
 })();

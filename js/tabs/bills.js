@@ -6,7 +6,7 @@
   'use strict';
   const GU = window.GU;
   const { esc, uid, today, money, fmtDate, relDays, daysUntil, plural, sum } = GU.util;
-  const { icon, pill, emptyState, formDialog, toast, menu } = GU.ui;
+  const { icon, pill, emptyState, formDialog, toast } = GU.ui;
   const F = GU.finance;
   const store = GU.store;
   /* Where a page is in the menu, for toasts and signposts: 'Work › Orders & claims › Get paid back'. */
@@ -51,7 +51,7 @@
       '<span class="row-item__date">' + (b.active === false ? '' : '<b>' + esc(fmtDate(b.nextDue, { weekday: true })) + '</b><em>' + esc(relDays(b.nextDue)) + '</em>') + '</span>' +
       '<span class="row-item__status">' + status(b) + '</span>' +
       '<span class="row-item__amt">' + esc(money(b.amount)) + '</span>' +
-      '<span class="row-item__act">' + GU.ui.dlButton(b.files, b.name) + (canPay ? '<button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(b.id) + '">' + icon('check') + esc(companyPays(b) ? co(true) + ' paid' : 'Paid') + '</button>' : '') + '</span></li>';
+      '<span class="row-item__act">' + GU.ui.dlButton(b.files, b.name) + (canPay ? '<button type="button" class="btn btn--sm btn--soft" data-pay="' + esc(b.id) + '">' + icon('check') + esc(companyPays(b) ? co(true) + ' paid' : 'Paid') + '</button>' : '') + GU.organise.moreBtn('bills', b.id, b.name) + '</span></li>';
   }
 
   /* Bills found in your statements, waiting for you to say whether they're right. */
@@ -69,7 +69,7 @@
           '<button type="button" class="spot__text spot__btn" data-edit="' + esc(b.id) + '"><b>' + esc(b.name) + ' <span class="spot__amt">' + esc(money(b.amount)) + '</span></b><em>' + esc(meta) + '</em></button>' +
           '<span class="spot__act"><button type="button" class="btn btn--sm btn--soft" data-keep="' + esc(b.id) + '">' + icon('check') + 'Keep</button>' +
           '<button type="button" class="btn btn--sm btn--ghost" data-notbill="' + esc(b.id) + '">Not a bill</button>' +
-          '<button type="button" class="btn btn--sm btn--ghost" data-more="' + esc(b.id) + '" aria-label="More for ' + esc(b.name) + '">' + icon('more') + '</button></span></li>';
+          GU.organise.moreBtn('bills', b.id, b.name, 'review') + '</span></li>';
       }).join('') + '</ul></section>';
   }
 
@@ -98,7 +98,8 @@
         '<span class="inst__text"><b>' + esc(p.merchant) + '</b>' + (about ? '<em>' + esc(about) + '</em>' : '') + steps(p) + '</span>' +
         '<span class="inst__stage">' + pill(stage, p.stage && p.stage === p.of ? 'good' : 'info') + '<em>' + esc(rest) + '</em></span>' +
         '<span class="row-item__date"><b>' + esc(fmtDate(p.next.date, { weekday: true })) + '</b><em>' + esc(relDays(p.next.date)) + '</em></span>' +
-        '<span class="row-item__amt' + (n <= 3 ? ' is-soon' : '') + '">' + esc(money(p.next.amount)) + '</span></button></li>';
+        '<span class="row-item__amt' + (n <= 3 ? ' is-soon' : '') + '">' + esc(money(p.next.amount)) + '</span></button>' +
+        GU.organise.readOnlyBtn('instalment', p.debt.id + '|' + p.merchant, 'More for ' + p.merchant) + '</li>';
     };
     return '<section class="panel inst-panel"><header class="panel__head"><h2>' + icon('card') + 'Instalments</h2><span class="muted">' + esc(plural(plans.length, 'plan') + ' · ' + money(sum(plans, (p) => p.leftTotal)) + ' left to pay') + '</span></header>' +
       lenders.map((l) => {
@@ -150,7 +151,7 @@
       title: 'Bills',
       text: 'Your regular payments' + (plans.length ? ', plus your instalment plans (Klarna, PayPal, Amazon and the like) with the stage each one is at.' : '.'),
       actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +
-        '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
+        GU.organise.listButton('bills') + '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +
       signpostHTML(work) +
       GU.ui.dropbar('Drop bills and contracts here, or a whole folder', 'Each new company becomes a bill. Letters from a company you already have are added to its bill, not duplicated.') +
@@ -188,15 +189,6 @@
       if (keep) return store.commit((st) => (st.bills.find((b) => b.id === keep.dataset.keep).review = false));
       const nb = e.target.closest('[data-notbill]');
       if (nb) return notABill(nb.dataset.notbill);
-      const more = e.target.closest('[data-more]');
-      if (more) {
-        const id = more.dataset.more;
-        return menu(more, [
-          { icon: 'check', label: 'It was a one-off', hint: 'Keep it as a past payment, not a regular bill', onClick: () => endBill(id, 'once') },
-          { icon: 'x', label: 'I’ve cancelled it', hint: 'Move it to stopped bills', onClick: () => endBill(id, 'cancelled') },
-          { icon: 'edit', label: 'Change the details', hint: 'Name, amount, date or how often', onClick: () => edit(id) },
-        ]);
-      }
       const pay = e.target.closest('[data-pay]');
       if (pay) return markPaid(pay.dataset.pay);
       if (e.target.closest('[data-open-debt]')) return GU.view.go('debts');
@@ -215,7 +207,7 @@
       if (b.foundKey) st.settings.ignoredBills = (st.settings.ignoredBills || []).concat([b.foundKey]);
       entry = GU.trash.put(st, 'bills', b, b.name, b.foundKey ? { ignoredBill: b.foundKey } : null);
     });
-    toast('Removed ' + b.name + '. I won’t suggest it again.', { timeout: 10000, action: 'Undo', onAction: () => GU.trash.restore(entry.id) });
+    toast('Removed ' + b.name + '. I won’t suggest it again.', { timeout: 10000, action: 'Undo', exact: true, onAction: () => GU.trash.restore(entry.id) });
   }
   /* A one-off or a cancelled bill: kept under stopped bills so it isn't suggested again. */
   function endBill(id, why) {
@@ -442,6 +434,45 @@
       }),
     });
   }
+
+  /* The ⋯ menu's own actions: mark paid, and the two ways a bill can end. */
+  GU.organise.extras.bills = (b, ctx) => {
+    const items = [];
+    if (ctx === 'review') {
+      items.push({ icon: 'check', label: 'Keep it', hint: 'It is a regular bill', onClick: () => store.commit((st) => (st.bills.find((x) => x.id === b.id).review = false), { label: 'Kept ‘' + b.name + '’' }) });
+      items.push({ icon: 'check', label: 'It was a one-off', hint: 'Keep it as a past payment, not a regular bill', onClick: () => endBill(b.id, 'once') });
+      items.push({ icon: 'x', label: 'I’ve cancelled it', hint: 'Move it to stopped bills', onClick: () => endBill(b.id, 'cancelled') });
+      items.push({ icon: 'search', label: 'Not a bill', hint: 'Remove it and don’t suggest it again', onClick: () => notABill(b.id) });
+      return items;
+    }
+    if (b.active !== false && !b.autopay) items.push({ icon: 'check', label: companyPays(b) ? co(true) + ' paid' : 'Mark paid', onClick: () => markPaid(b.id) });
+    if (b.active !== false) items.push({ icon: 'x', label: 'I’ve cancelled it', hint: 'Move it to stopped bills', onClick: () => endBill(b.id, 'cancelled') });
+    return items;
+  };
+  /* An instalment row (from a debt's payment schedule): read only, so its menu can open the debt and download the row. */
+  GU.organise.readOnly.instalment = (key) => {
+    const [debtId, ...m] = key.split('|');
+    const merchant = m.join('|');
+    const plan = GU.debts.instalments(store.state).find((x) => x.debt.id === debtId && x.merchant === merchant);
+    if (!plan) return null;
+    return {
+      name: merchant + ' instalments', why: 'It comes from the payment schedule in Debts', openHint: 'Opens Debts',
+      open: () => GU.view.go('debts'),
+      head: ['Lender', 'What', 'Stage', 'Payments left', 'Next payment', 'Amount', 'Left to pay', 'Last payment'],
+      row: [plan.lender, plan.merchant, plan.stage ? 'Payment ' + plan.stage + ' of ' + plan.of : '', plan.left, plan.next.date, Number(plan.next.amount) || 0, Number(plan.leftTotal) || 0, plan.last || ''],
+    };
+  };
+  /* The bills on the page, for 'Download list'. */
+  GU.organise.lists.bills = () => {
+    const s = store.state;
+    const home = s.bills.filter((b) => !isWorkBill(b));
+    return {
+      name: 'Bills',
+      head: ['Bill', 'Paid to', 'Amount', 'How often', 'Next due', 'How it’s paid', 'Category', 'Status', 'Files'],
+      rows: home.sort((a, b) => (a.active === false) - (b.active === false) || (a.nextDue < b.nextDue ? -1 : 1)).map((b) => [b.name || '', b.payee || '', Number(b.amount) || 0, F.freqLabel(b.frequency), b.active === false ? '' : b.nextDue || '', b.method || '', b.category || '',
+        b.active === false ? (b.endedAs === 'once' ? 'One-off' : 'Stopped') : 'Active', (b.files || []).length]),
+    };
+  };
 
   GU.tabs.bills = { label: 'Bills', short: 'Bills', icon: 'bills', part: 'home', render, create, edit, markPaid, METHODS };
 })();

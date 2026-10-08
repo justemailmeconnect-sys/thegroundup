@@ -54,9 +54,9 @@
       .sort((a, b) => (dir === 'out' ? a.amount - b.amount : b.date.localeCompare(a.date))).slice(0, limit);
     if (!rows.length) return emptyState({ icon: dir === 'in' ? 'in' : 'out', title: dir === 'in' ? 'No money in for this period' : 'No spending in this period', text: 'Import a bank statement or add entries by hand.' });
     return '<ul class="rows rows--tight">' + rows.map((t) =>
-      '<li class="row-item"><button type="button" class="row-item__main" data-tx="' + esc(t.id) + '"><span class="row-item__text"><b>' + esc(t.description) + '</b><em>' +
+      '<li class="row-item row-item--more"><button type="button" class="row-item__main" data-tx="' + esc(t.id) + '"><span class="row-item__text"><b>' + esc(t.description) + '</b><em>' +
       esc(fmtDate(t.date, { short: true }) + ' · ' + (dir === 'in' && isWages(s, t) ? 'Wages from ' + co(s) : t.category || 'Needs a category')) + '</em></span></button>' +
-      '<span class="row-item__amt ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</span></li>').join('') + '</ul>';
+      '<span class="row-item__amt ' + (t.amount > 0 ? 'is-in' : '') + '">' + esc(money(t.amount, { sign: true })) + '</span>' + GU.organise.moreBtn('transactions', t.id, t.description) + '</li>').join('') + '</ul>';
   }
 
   function ledger(list, dir, extra) {
@@ -97,15 +97,15 @@
       '<div class="stack">' +
       '<section class="panel"><header class="panel__head"><h2>Coming in</h2><span class="muted">' + esc('next 2 months · ' + money(next30) + ' in the next 30 days') + '</span></header>' +
       (upcoming.length ? '<ul class="rows rows--tight">' + upcoming.map(({ d, x }) =>
-        '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__icon">' + icon('in') + '</span><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' + esc([x.from, F.freqLabel(x.frequency)].filter(Boolean).join(' · ')) + '</em></span></button>' +
-        '<span class="row-item__date"><b>' + esc(fmtDate(d, { weekday: true })) + '</b><em>' + esc(relDays(d)) + '</em></span><span class="row-item__amt is-in">' + esc(money(x.amount, { sign: true })) + '</span></li>').join('') + '</ul>'
+        '<li class="row-item row-item--more"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__icon">' + icon('in') + '</span><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' + esc([x.from, F.freqLabel(x.frequency)].filter(Boolean).join(' · ')) + '</em></span></button>' +
+        '<span class="row-item__date"><b>' + esc(fmtDate(d, { weekday: true })) + '</b><em>' + esc(relDays(d)) + '</em></span><span class="row-item__amt is-in">' + esc(money(x.amount, { sign: true })) + '</span>' + GU.organise.moreBtn('incomeSources', x.id, x.name) + '</li>').join('') + '</ul>'
         : '<div class="panel__body"><p class="muted">Add your salary, benefits or any income you get on a schedule and I’ll plan around it.</p></div>') + '</section>' +
       paidBackNote(s) +
       '<details class="panel panel--details" data-fold="regular"' + (foldOpen.regular ? ' open' : '') + '><summary class="panel__head"><h2>Regular income</h2><span class="muted">' + esc(plural(sources.length, 'source')) + '</span></summary>' +
       (sources.length ? '<ul class="rows rows--tight">' + sources.map((x) =>
-        '<li class="row-item"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' +
+        '<li class="row-item row-item--more"><button type="button" class="row-item__main" data-source="' + esc(x.id) + '"><span class="row-item__text"><b>' + esc(x.name) + (isWageSource(s, x) ? wagePill(s) : '') + '</b><em>' +
         esc([F.freqLabel(x.frequency), x.nextDate ? 'next ' + fmtDate(x.nextDate, { short: true }) : ''].filter(Boolean).join(' · ')) + '</em></span></button>' +
-        '<span class="row-item__amt is-in">' + esc(money(x.amount)) + '</span></li>').join('') + '</ul>'
+        '<span class="row-item__amt is-in">' + esc(money(x.amount)) + '</span>' + GU.organise.moreBtn('incomeSources', x.id, x.name) + '</li>').join('') + '</ul>'
         : '<div class="panel__body"><p class="muted">Nothing yet.</p></div>') + '</details>' +
       '<details class="panel panel--details" data-fold="past"' + (foldOpen.past ? ' open' : '') + '><summary class="panel__head"><h2>Past income</h2><span class="muted">from your statements</span></summary>' +
       '<div class="panel__body">' + (chartHTML(list, 'in') || '<p class="muted">Nothing to chart yet.</p>') + '</div>' +
@@ -203,7 +203,7 @@
       eyebrow: 'Money so far',
       title: 'Spending',
       text: 'Where your money goes, by category. Set a monthly budget for any category and I’ll warn you when you go over.',
-      actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button><button type="button" class="btn" data-budgets>' + icon('flag') + 'Set budgets</button><button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add spending</button>',
+      actions: '<button type="button" class="btn" data-import>' + icon('upload') + 'Import statements</button><button type="button" class="btn" data-budgets>' + icon('flag') + 'Set budgets</button>' + GU.organise.listButton('spending') + '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add spending</button>',
     }) +
       ledger(list, 'out', budgetTotal
         ? '<div><span>Budget left this month</span><b class="' + (budgetUsed > budgetTotal ? 'is-crit' : '') + '">' + esc(money(budgetTotal - budgetUsed)) + '</b><em>of ' + esc(money(budgetTotal, { whole: true })) + ' budgeted</em></div>'
@@ -278,6 +278,18 @@
       },
     });
   }
+
+  /* The same transactions Spending is showing (this period, your own spending), for 'Download list'. */
+  GU.organise.lists.spending = () => {
+    const s = store.state;
+    const acct = (id) => (s.accounts.find((a) => a.id === id) || {}).name || '';
+    return {
+      name: 'Spending ' + (PERIOD_WORDS[period.out] || ''),
+      head: ['Date', 'Description', 'Amount', 'Category', 'Account', 'Notes'],
+      rows: s.transactions.filter(F.periodFilter(period.out)).filter((t) => t.amount < 0 && F.counts(t)).sort((a, b) => b.date.localeCompare(a.date))
+        .map((t) => [t.date, t.description || '', Number(t.amount), t.category || '', acct(t.account), t.notes || '']),
+    };
+  };
 
   GU.tabs.incomings = { label: 'Income', short: 'Income', icon: 'in', part: 'home', render: renderIn, edit: editSource, createSource };
   GU.tabs.outgoings = { label: 'Spending', short: 'Spending', icon: 'out', part: 'home', render: renderOut, editBudgets };
