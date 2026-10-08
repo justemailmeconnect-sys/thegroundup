@@ -1,0 +1,115 @@
+/* looks.css: look-agnostic styles for the look switch (the rail button, the phone More button, the Settings cards, the
+   cross-fade). Loaded after styles.css and before the two look stylesheets, which may refine any of it. It only uses the base
+   tokens (--surface, --line, --ink, --accent...) so it reads well under either look; the two mini previews on the Settings
+   cards use fixed colours on purpose, so each shows ITS look whichever one is on. */
+
+/* ---------- the cross-fade (document.startViewTransition; js/looks.js falls back to fading #app) ---------- */
+:root.look-swapping::view-transition-old(root),
+:root.look-swapping::view-transition-new(root) { animation-duration: 0.22s; animation-timing-function: ease; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+/* ---------- the button: the rail's foot on a computer, the top bar's More button on a phone ---------- */
+/* On a short screen the foot of the menu (Look, Settings, New category) is pinned over the page list. Keep it above the list's items,
+   which a look may lift with a z-index of its own. (On a phone the foot is display: contents, so this does nothing there.) */
+.rail__foot { z-index: 2; }
+.rail__look .rail__ico .ico { width: 19px; height: 19px; }
+.rail__look:focus-visible { outline: 2px solid var(--rail-ink-active); outline-offset: 1px; }
+@media (min-width: 861px) {
+  /* A small chip (icon and "Look" side by side) rather than a full menu item: the foot of the menu already holds Settings and New category,
+     and the menu has to stay short enough to fit without scrolling. Its tap area is stretched to 44px with an invisible margin. */
+  .rail__foot .rail__look { position: relative; flex-direction: row; justify-content: center; align-items: center; gap: 5px; width: 72px; height: 32px; margin-top: -4px; padding: 0 6px; border-radius: 999px; }
+  .rail__foot .rail__look::after { content: ""; position: absolute; inset: -8px -2px -6px; }
+  .rail__foot .rail__look .rail__ico { width: 20px; height: 20px; border-radius: 50%; background: none; flex: none; }
+  .rail__foot .rail__look .rail__ico .ico { width: 17px; height: 17px; }
+  .rail__foot .rail__look .rail__label { display: block; width: auto; max-width: none; font-size: 10.5px; line-height: 1; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; white-space: nowrap; }
+  .rail__foot .rail__look:hover { background: var(--rail-hover); }
+  .rail__foot .rail__look:hover .rail__ico { background: none; }
+}
+.partbar__more { display: none; }
+@media (max-width: 860px) {
+  /* The phone's bottom bar is for pages; Look lives in the top bar's More menu (with Undo and Redo, which it replaced there). */
+  .rail__look { display: none; }
+  .partbar__more { display: grid; place-items: center; width: 44px; height: 44px; flex: none; padding: 0; }
+  /* Whatever a look does to the other tools in the bar, this one keeps a full 44px target (the Settings cards and rail button likewise). */
+  .partbar > button.partbar__more[data-look-toggle] { min-width: 44px; min-height: 44px; }
+}
+.popover button[data-look-menu-item] .ico { color: var(--accent-2); }
+
+/* ---------- Settings: the Look panel ---------- */
+.look-panel .panel__body { gap: 14px; }
+.look-panel__now { font-size: 13px; }
+.look-panel__hint { font-size: 13px; line-height: 1.5; margin: 0; }
+.look-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }
+@media (max-width: 400px) { .look-cards { grid-template-columns: minmax(0, 1fr); } }
+.look-card {
+  position: relative; display: grid; align-content: start; gap: 3px; min-width: 0; min-height: 44px; padding: 10px 10px 12px;
+  border: 1.5px solid var(--line-strong); border-radius: 14px; background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.look-card:hover { border-color: var(--accent-2); }
+/* The real radio covers the whole card, invisible but focusable, so a tap anywhere picks it and the arrow keys move between the two. */
+.look-card input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.look-card:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.look-card:has(input:focus-visible) { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.look-card input:focus-visible + .look-card__preview { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.look-card__name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font: 700 15px/1.25 var(--font-display); letter-spacing: -0.01em; }
+/* "In use" next to the picked card: the selection doesn't depend on colour alone. */
+.look-card input:checked ~ .look-card__name::after {
+  content: "In use"; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 600 11px/1.4 var(--font-body); letter-spacing: 0;
+}
+.look-card__tag { font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
+
+/* ---------- the mini previews: gradients and a few boxes, no images ---------- */
+.look-card__preview {
+  --lp-canvas: #ffffff; --lp-a: #eadbfb; --lp-b: #c9f0ef; --lp-glass: rgba(255, 255, 255, 0.78); --lp-glass-line: rgba(255, 255, 255, 0.95);
+  --lp-ink: #1c1830; --lp-ink-2: rgba(72, 67, 95, 0.4); --lp-rail: #150f1f; --lp-type: #6a2f9e;
+  position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; min-height: 84px; border-radius: 10px; overflow: hidden; isolation: isolate;
+  background: var(--lp-canvas); box-shadow: inset 0 0 0 1px rgba(40, 33, 60, 0.1);
+}
+.look-card__preview i, .look-card__preview b { position: absolute; display: block; font-style: normal; }
+.look-card__preview .lp-rail::before, .look-card__preview .lp-rail::after, .look-card__preview .lp-hero::before, .look-card__preview .lp-hero::after { content: ""; position: absolute; }
+/* the check on the picked card */
+.look-card input:checked + .look-card__preview::after {
+  content: ""; position: absolute; z-index: 3; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* Soft Glass: white canvas, lilac and aqua light, frosted floating rail and card, a gradient pill, rounded type */
+.look-card--glass .look-card__preview {
+  background: radial-gradient(70% 90% at 12% 0%, var(--lp-a), transparent 70%), radial-gradient(60% 80% at 100% 100%, var(--lp-b), transparent 70%), var(--lp-canvas);
+}
+.look-card--glass .lp-rail { left: 5%; top: 9%; bottom: 9%; width: 12%; border-radius: 999px; background: var(--lp-glass); box-shadow: inset 0 0 0 1px var(--lp-glass-line), 0 8px 16px -8px rgba(106, 47, 158, 0.5); }
+.look-card--glass .lp-rail::before { left: 50%; top: 10%; width: 62%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: linear-gradient(135deg, #9457d2, #6a2f9e); }
+.look-card--glass .lp-rail::after { left: 50%; top: 42%; width: 46%; height: 46%; transform: translateX(-50%); background: radial-gradient(circle closest-side, var(--lp-ink-2) 96%, transparent) 0 0 / 100% 33% repeat-y; }
+.look-card--glass .lp-hero { left: 23%; right: 6%; top: 11%; height: 48%; border-radius: 13px; background: var(--lp-glass); box-shadow: inset 0 0 0 1px var(--lp-glass-line), 0 14px 22px -14px rgba(106, 47, 158, 0.55); }
+.look-card--glass .lp-hero::before { left: 9%; top: 24%; width: 46%; height: 9px; border-radius: 5px; background: var(--lp-ink); opacity: 0.85; }
+.look-card--glass .lp-hero::after { left: 9%; top: 58%; width: 68%; height: 6px; border-radius: 4px; background: var(--lp-ink-2); }
+.look-card--glass .lp-btn { left: 23%; top: 67%; width: 31%; height: 19%; border-radius: 999px; background: linear-gradient(135deg, #9457d2, #6a2f9e); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 8px 12px -6px rgba(106, 47, 158, 0.65); }
+.look-card--glass .lp-chip { left: 58%; top: 67%; width: 20%; height: 19%; border-radius: 999px; background: var(--lp-glass); box-shadow: inset 0 0 0 1px rgba(11, 107, 120, 0.28); }
+.look-card--glass .lp-type { right: 8%; bottom: 8%; font: 800 16px/1 "Plus Jakarta Sans", var(--font-display); letter-spacing: -0.03em; color: var(--lp-type); }
+
+/* Bold Colour: white canvas, an ink rail with a colour tile, a plum-to-magenta block with a heavy figure, square-ish gradient buttons */
+.look-card--bold .lp-rail { left: 0; top: 0; bottom: 0; width: 17%; background: var(--lp-rail); }
+.look-card--bold .lp-rail::before { left: 50%; top: 12%; width: 58%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 30%; background: linear-gradient(135deg, #b81c8a, #8d24c4); }
+.look-card--bold .lp-rail::after { left: 50%; top: 42%; width: 46%; height: 46%; transform: translateX(-50%); background: radial-gradient(circle closest-side, rgba(255, 255, 255, 0.4) 96%, transparent) 0 0 / 100% 33% repeat-y; }
+.look-card--bold .lp-hero { left: 23%; right: 6%; top: 11%; height: 50%; border-radius: 9px; background: linear-gradient(135deg, #3a0d6b, #7a1d9e 55%, #c72a86); box-shadow: 0 10px 16px -10px rgba(122, 29, 158, 0.7); }
+.look-card--bold .lp-hero::before { content: "£1,240"; left: 9%; top: 26%; font: 800 15px/1 Sora, var(--font-display); letter-spacing: -0.03em; color: #fff; }
+.look-card--bold .lp-hero::after { right: 9%; bottom: 14%; width: 8px; height: 8px; border-radius: 50%; background: #ffd23f; }
+.look-card--bold .lp-btn { left: 23%; top: 68%; width: 31%; height: 19%; border-radius: 6px; background: linear-gradient(135deg, #b81c8a, #8d24c4); box-shadow: 0 7px 10px -6px rgba(141, 36, 196, 0.8); }
+.look-card--bold .lp-chip { left: 58%; top: 68%; width: 20%; height: 19%; border-radius: 6px; background: linear-gradient(135deg, #0b7f68, #08605e); }
+.look-card--bold .lp-type { right: 8%; bottom: 8%; font: 800 16px/1 Sora, var(--font-display); letter-spacing: -0.04em; color: var(--lp-ink); }
+
+/* In the dark, each preview shows that look's dark canvas (both the device setting and the Settings override) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .look-card__preview { --lp-canvas: #0f0c18; --lp-a: rgba(148, 87, 210, 0.42); --lp-b: rgba(134, 221, 227, 0.2); --lp-glass: rgba(255, 255, 255, 0.1); --lp-glass-line: rgba(255, 255, 255, 0.2); --lp-ink: #f1ecfb; --lp-ink-2: rgba(241, 236, 251, 0.38); --lp-type: #d4b8f6; --lp-rail: #0a090d; }
+  :root:not([data-theme="light"]) .look-card--bold .look-card__preview { --lp-canvas: #121115; }
+}
+:root[data-theme="dark"] .look-card__preview { --lp-canvas: #0f0c18; --lp-a: rgba(148, 87, 210, 0.42); --lp-b: rgba(134, 221, 227, 0.2); --lp-glass: rgba(255, 255, 255, 0.1); --lp-glass-line: rgba(255, 255, 255, 0.2); --lp-ink: #f1ecfb; --lp-ink-2: rgba(241, 236, 251, 0.38); --lp-type: #d4b8f6; --lp-rail: #0a090d; }
+:root[data-theme="dark"] .look-card--bold .look-card__preview { --lp-canvas: #121115; }
+
+/* A hidden radio or checkbox sits on top of its own label text, so a lifted or pressed (transformed) label never paints over it
+   and takes the click away from the input. The click still lands inside the label, so people see no difference. */
+label > input[type="radio"],
+label > input[type="checkbox"] { z-index: 1; }

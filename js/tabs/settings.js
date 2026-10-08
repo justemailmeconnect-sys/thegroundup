@@ -245,11 +245,27 @@
         : '<div class="panel__body"><p class="muted">No categories yet. I’ll suggest one when something you send me doesn’t fit the menu.</p></div>') + '</section>';
   }
 
+  /* The Look panel: two cards, one per look. The mini previews are drawn by css/looks.css (gradients and a few boxes). Picking a
+     card switches live (GU.look.set); the page redraws as the choice is saved, so this reads what's showing from GU.look.get(). */
+  function lookHTML() {
+    const L = GU.look;
+    if (!L) return '';
+    const now = L.get();
+    const card = (m) => '<label class="look-card look-card--' + esc(m.id) + '"><input type="radio" name="look" value="' + esc(m.id) + '"' + (m.id === now ? ' checked' : '') + '>' +
+      '<span class="look-card__preview" aria-hidden="true"><i class="lp-rail"></i><i class="lp-hero"></i><i class="lp-btn"></i><i class="lp-chip"></i><b class="lp-type">Aa</b></span>' +
+      '<span class="look-card__name">' + esc(m.label) + '</span><span class="look-card__tag">' + esc(m.tagline) + '</span></label>';
+    return '<section class="panel look-panel" id="look" aria-labelledby="look-title"><header class="panel__head"><h2 id="look-title">' + L.icon() + 'Look</h2>' +
+      '<span class="muted look-panel__now">Now: ' + esc(L.meta(now).label) + '</span></header>' +
+      '<div class="panel__body stack"><div class="look-cards" role="radiogroup" aria-label="Look">' + L.list().map(card).join('') + '</div>' +
+      '<p class="muted look-panel__hint">You can also switch from the rail (or the More menu on a phone) at any time. Light and dark are separate: they\u2019re under Appearance, in About you.</p></div></section>';
+  }
+
   function render(root) {
     const s = store.state;
     const st = s.settings;
     root.innerHTML = GU.view.head({ eyebrow: 'You', title: 'Settings', text: 'How your assistant works for you.' + (GU.sync.active() ? ' Your data syncs across your devices.' : ' Everything here is saved in this browser only.') }) +
       '<div class="settings">' +
+      lookHTML() +
       '<section class="panel" data-sync>' + syncHTML() + '</section>' +
       recentHTML() +
       trashHTML(s) +
@@ -480,6 +496,14 @@
         toast('Everything erased');
         GU.view.go('today');
       }
+    });
+    root.addEventListener('change', (e) => {
+      const pick = e.target.closest && e.target.closest('input[name=look]');
+      if (!pick || !GU.look) return;
+      GU.look.set(pick.value);
+      // Saving the choice redraws this page; the keyboard stays on the card that was picked.
+      const again = document.querySelector('.look-cards input[value="' + pick.value + '"]');
+      if (again && again !== pick) again.focus({ preventScroll: true });
     });
     root.addEventListener('change', (e) => {
       const sw = e.target.closest('[data-cat-menu]');

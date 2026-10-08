@@ -111,7 +111,8 @@
       switchHTML('bar') +
       (GU.search ? GU.search.barHTML() : '') + (GU.lock ? GU.lock.barHTML() : '') +
       '<button type="button" class="partbar__tool partbar__claude" data-chat-toggle aria-pressed="false" aria-label="Ask Claude">' + icon('spark') + '</button>' +
-      historyHTML('bar') +
+      // On a phone Undo, Redo and Switch look share one More button (js/looks.js); without the looks the two history buttons stay.
+      (GU.look ? GU.look.barHTML() : historyHTML('bar')) +
       '<button type="button" class="partbar__add" data-quick-add aria-label="Add something">' + icon('plus') + '</button>' +
       '</header>' +
       '<nav class="rail" aria-label="Menu">' +
@@ -126,6 +127,8 @@
         if (hist.disabled) return;
         return hist.getAttribute('data-history') === 'undo' ? GU.history.undo() : GU.history.redo();
       }
+      const lk = e.target.closest('[data-look-toggle]');
+      if (lk) return lk.getAttribute('data-look-toggle') === 'menu' ? GU.look.openMenu(lk) : GU.look.toggle();
       const add = e.target.closest('[data-quick-add]');
       if (add) return view.quickAdd(add);
       if (e.target.closest('[data-new-category]')) return GU.sections.newSection({ part: parts.get() });
@@ -186,7 +189,7 @@
       '<button type="button" class="rail__item rail__claude" data-chat-toggle aria-pressed="' + chatOpen + '" aria-label="Ask Claude (Ctrl or Cmd + K)"><span class="rail__ico">' + icon('spark') + '</span><span class="rail__label">Claude</span></button>' +
       groups.map((g, i) => (i ? sep : '') + g.map(item).join('')).join('') +
       (custom.length ? sep + custom.map(item).join('') : '') +
-      '<div class="rail__foot"><a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>' +
+      '<div class="rail__foot">' + (GU.look ? GU.look.railHTML() : '') + '<a class="rail__item rail__settings" href="#settings" data-tab="settings"><span class="rail__ico">' + icon('settings') + '</span><span class="rail__label">Settings</span></a>' +
       '<button type="button" class="rail__item rail__newcat" data-new-category aria-label="New category"><span class="rail__ico">' + icon('plus') + '</span><span class="rail__label">New category</span></button></div>';
   }
 
@@ -215,6 +218,7 @@
   function renderRail(tabId, part) {
     buildRail(part);
     syncHistory();
+    if (GU.look) GU.look.syncUI(); // the Look button says which look it would switch to
     let counts = {};
     try {
       counts = GU.agenda.badges(store.state) || {};
@@ -421,6 +425,7 @@
 
   async function start() {
     store.init();
+    if (GU.look) GU.look.init(); // settings.look, else the saved choice, else Soft Glass: before anything is drawn
     if (GU.lock) GU.lock.start(); // the privacy screen, if it's on, covers everything before anything is drawn
     await GU.files.open();
     const fresh = store.isFirstRun;
@@ -433,6 +438,7 @@
     store.subscribe(render);
     window.addEventListener('hashchange', render);
     render();
+    if (GU.looks) GU.looks.boot(); // the look's own behaviour starts once there is something on screen to dress
     if (sync) {
       GU.sync.start({ fresh }).then(async (r) => {
         const empty = !['transactions', 'bills', 'paperwork', 'documents', 'visas', 'tasks', 'debts'].some((k) => (store.state[k] || []).length);

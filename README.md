@@ -96,7 +96,7 @@ Every field it changes is logged. **Undo the re-sort** (in the same panel) puts 
 
 ## Undo, redo and the ⋯ menu
 
-**Undo and redo** work across the whole site. **Undo** and **Redo** buttons sit under **Add** in the menu (and in the top bar on a phone); **Ctrl+Z** (Cmd+Z), **Ctrl+Shift+Z** and **Ctrl+Y** do the same, except while you're typing in a box, where the browser's own text undo applies. Each button's tooltip names the step, and a message such as "Undone: Moved ‘Vet bill’ to Pets · Redo" confirms it.
+**Undo and redo** work across the whole site. **Undo** and **Redo** buttons sit under **Add** in the menu (on a phone they're in the **More** menu, the three dots in the top bar, next to **Switch look**); **Ctrl+Z** (Cmd+Z), **Ctrl+Shift+Z** and **Ctrl+Y** do the same, except while you're typing in a box, where the browser's own text undo applies. Each button's tooltip names the step, and a message such as "Undone: Moved ‘Vet bill’ to Pets · Redo" confirms it.
 
 - **What counts as a step.** Every change you make (adding, editing, renaming, deleting, moving, ticking something done, marking something paid or sent, changing a category, reordering) is a step with a name. Changes made together by one action are one step.
 - **It never undoes someone else's change.** Undo works record by record on what's there now, so something you or another device changed elsewhere in the meantime stays as it is. If the very thing you're undoing has changed since, it is left alone and the message says so ("1 thing had changed since, so I left it"). What the site does by itself (syncing from your other devices, the start-up tidy and the Home/Work re-sort, status updates in the Sorting hub, example data) is never a step.
@@ -119,6 +119,34 @@ Every field it changes is logged. **Undo the re-sort** (in the same panel) puts 
 In **Settings › Your categories**, **Move up** and **Move down** change the order of your categories in the menu, and each has its own ⋯ menu (Open, Rename, Move to Home or Work, Duplicate, Download everything in it as a .zip, Delete). Deleting a to-do list now goes to Recently deleted with its tasks, and can be undone.
 
 **Download list (CSV)** in the heading of Receipts, Documents, Bills, Debts, Tasks, Home projects, Bank and Spending saves what the page is showing now (its filters and search) as a spreadsheet. Text a spreadsheet would run as a formula is kept as text, and document numbers are cut to their last four digits.
+
+## Looks
+
+The site has two looks, and you can switch between them whenever you like. Nothing else changes: the same pages, the same data, the same words. Only how it looks and moves.
+
+- **Soft Glass** is airy and frosted: a white canvas washed with lilac and aqua light, glass-like cards, a floating menu, soft shadows, rounded type and gentle, springy movement.
+- **Bold Colour** is rich and confident: ink-dark menu, big blocks of plum, magenta and teal, heavy figures for your money, and quick, snappy movement.
+
+Soft Glass is what you get to start with. **Light and dark are separate**: either look works in light and in dark, and **Settings › About you › Appearance** still sets that on its own.
+
+**How to switch**
+
+- **On a computer:** the **Look** button in the menu, just above Settings. One click switches; it says which look it would switch to.
+- **On a phone:** the **More** button (three dots) in the top bar, then **Switch look**. It shows the name of the look it will switch to. Undo and Redo are in the same menu.
+- **In Settings:** the **Look** panel at the top has a card for each look, with a small preview. Pick one.
+
+The change fades over about a fifth of a second (or happens at once if your device asks for less motion). Your choice is saved in your settings, so it syncs to your other devices on claude.ai and is picked up there straight away, and it is also kept in the browser so the right look is on from the first moment the page appears. It isn't an Undo step. The colour of your phone's status bar (and the Android app's status and navigation bars) follows the look.
+
+**How it's built.** Each look is one stylesheet that sits on top of `css/styles.css` (`css/look-glass.css`, `css/look-bold.css`), plus an optional script that adds its movement (`js/look-glass.js`, `js/look-bold.js`). Only one stylesheet is switched on at a time, so each one is complete on its own and needs no prefix. `css/looks.css` holds the look-agnostic styles for the switch itself (the buttons and the Settings cards). `js/looks.js` has the registry (`GU.looks`) and the switch (`GU.look`: `get()`, `set(id)`, `toggle()`, `onChange(fn)`, `list()`). The look is `<html data-look="glass|bold">`. A look can set `--look-bar` on `:root` to choose the browser's and the Android app's bar colour for each colour scheme (the page colour is used when it doesn't).
+
+**To add a third look**
+
+1. Add it to `meta` in `js/looks.js` (id, label, one-line tagline). The switch, the Settings cards and the More menu pick it up from there; the buttons then cycle through the looks in that order.
+2. Write `css/look-<id>.css` as a complete override layer on `css/styles.css`, working in light and dark (`prefers-color-scheme` and `:root[data-theme]`), with pure white `--bg` in light. Add `<link rel="stylesheet" href="css/look-<id>.css" data-look-css="<id>">` to `index.html` after the other two.
+3. If it has movement or injected elements, write `js/look-<id>.js` that calls `GU.looks.register('<id>', { enable() {…}, disable() {…} })` and add its `<script>` before `js/app.js`. `enable()` runs after the first draw and whenever the person switches to it; `disable()` must remove everything `enable()` added (elements, classes, listeners, observers, timers), so switching away and back leaves the page exactly as a fresh load.
+4. Give the Settings card a preview: copy the `.look-card--glass` rules in `css/looks.css` as `.look-card--<id>` (a few boxes and gradients, no images).
+5. In `index.html`, the one-line script in `<head>` that reads `localStorage` before first paint only knows `glass` and `bold`: add the new id there so its first paint is right.
+6. Run `tests/looks/switch.js` and check the new look at 320, 390, 768 and 1300 px, light and dark.
 
 ## Running it
 
@@ -236,6 +264,9 @@ In the Sorting hub, your own folder organisation is used: upload a folder such a
 ```
 index.html            page shell and script order
 css/styles.css        all styling (light and dark themes)
+css/looks.css         the look switch: its buttons, the Settings cards, the cross-fade
+css/look-glass.css    the Soft Glass look (a layer over styles.css; one of the two look stylesheets is on at a time)
+css/look-bold.css     the Bold Colour look
 js/util.js            dates, money, CSV parsing
 js/store.js           saving (one piece per top-level key), file storage, backup and restore
 js/history.js         Undo and redo: record-level steps, names, keyboard
@@ -258,6 +289,9 @@ js/refile.js          the one-off Home/Work re-sort, its questions and its undo
 js/assistant.js       Ask Claude
 js/sample.js          example data
 js/app.js             the Home | Work switch, the menu for each part, routing and redraws
+js/looks.js           the two looks: the registry they plug into and the switch between them (GU.look)
+js/look-glass.js      what Soft Glass adds on top of its stylesheet: page entrance, gliding pill, pops
+js/look-bold.js       what Bold Colour adds on top of its stylesheet
 js/tabs/containers.js the menu items that hold several pages (Money, Bills & debts, Paperwork, To-do, Orders & claims, Jobs) and their strip of tabs
 js/tabs/*.js          one file per page
 ```
