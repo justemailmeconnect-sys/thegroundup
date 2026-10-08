@@ -163,7 +163,8 @@
     const t = today();
     const from = opts.from || t;
     const to = opts.to || monthEnd(t);
-    const accts = GU.money.accounts(state).filter((x) => x.info);
+    // A credit card is money you owe (its payments are in the plan already), not money you have.
+    const accts = GU.money.accounts(state).filter((x) => x.info && x.account.type !== 'credit');
     const start = round2(sum(accts, (x) => x.info.balance));
     const per = {};
     for (const x of accts) per[x.account.id] = { id: x.account.id, name: x.account.name, start: x.info.balance, end: x.info.balance, low: x.info.balance, lowDate: from, limit: x.info.overdraftLimit || 0, asOf: x.info.asOf };

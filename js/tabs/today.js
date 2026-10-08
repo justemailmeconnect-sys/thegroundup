@@ -155,8 +155,10 @@
         (owedCard(s) + backCard(s) ? '<div class="now-cards">' + owedCard(s) + backCard(s) + '</div>' : '') + '</section>';
     }
     const known = list.filter((x) => x.info);
-    const total = sum(known, (x) => x.info.balance);
-    const spare = sum(known, (x) => x.info.overdraftLimit || 0);
+    // Together is what you have: a credit card is money you owe (it's in Debts), so it isn't added in.
+    const cash = known.filter((x) => x.account.type !== 'credit');
+    const total = sum(cash, (x) => x.info.balance);
+    const spare = sum(cash, (x) => x.info.overdraftLimit || 0);
     const asOf = known.reduce((m, x) => (!m || x.info.asOf < m ? x.info.asOf : m), '');
     const stale = asOf && daysUntil(asOf) < -2;
     return '<section class="now"><header class="sec-head"><h2>Right now</h2><span class="muted">' + (asOf ? 'balances as of ' + esc(fmtDate(asOf, { weekday: true })) : '') + '</span>' +
@@ -164,11 +166,12 @@
       (stale ? '<p class="note-line">' + icon('clock') + '<span>These balances are ' + Math.abs(daysUntil(asOf)) + ' days old. Put in what your banking apps show now so the plan below stays right.</span></p>' : '') +
       '<div class="now-cards">' + list.map((x) => {
         const b = x.info;
-        const neg = b && b.balance < 0;
-        const od = b && b.overdraftLimit ? (neg ? money(b.overdraftLimit + b.balance, { whole: false }) + ' of ' + money(b.overdraftLimit, { whole: true }) + ' overdraft left' : money(b.overdraftLimit, { whole: true }) + ' overdraft available') : neg ? 'Overdrawn' : '';
+        const card = x.account.type === 'credit';
+        const neg = b && b.balance < 0 && !card;
+        const od = card ? (b ? (b.balance < 0 ? money(-b.balance) + ' owed on the card' : 'nothing owed') : '') : b && b.overdraftLimit ? (neg ? money(b.overdraftLimit + b.balance, { whole: false }) + ' of ' + money(b.overdraftLimit, { whole: true }) + ' overdraft left' : money(b.overdraftLimit, { whole: true }) + ' overdraft available') : neg ? 'Overdrawn' : '';
         return '<button type="button" class="now-card' + (neg ? ' is-neg' : '') + '" data-account="' + esc(x.account.id) + '"><span>' + esc(x.account.name) + '</span><b>' + (b ? esc(money(b.balance)) : '–') + '</b><em>' + esc(od || (b ? 'in credit' : 'no balance yet')) + '</em></button>';
       }).join('') +
-      (known.length > 1 ? '<div class="now-card now-card--total' + (total < 0 ? ' is-neg' : '') + '"><span>Together</span><b>' + esc(money(total)) + '</b><em>' + esc(spare ? money(total + spare) + ' available with overdrafts' : 'across your accounts') + '</em></div>' : '') +
+      (cash.length > 1 ? '<div class="now-card now-card--total' + (total < 0 ? ' is-neg' : '') + '"><span>Together</span><b>' + esc(money(total)) + '</b><em>' + esc(spare ? money(total + spare) + ' available with overdrafts' : 'across your accounts') + '</em></div>' : '') +
       owedCard(s) + backCard(s) +
       '</div></section>';
   }

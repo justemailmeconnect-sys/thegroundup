@@ -19,8 +19,9 @@
   const pct = (x) => Math.round(x * 100) + '%';
 
   /* ---------- balances, shared with the Bank and Today tabs ---------- */
-  function balanceLine(info) {
+  function balanceLine(info, acct) {
     if (!info) return '<em>No balance yet. Import a statement or set it by hand.</em>';
+    if (acct && acct.type === 'credit') return '<em>' + esc([info.balance < 0 ? money(-info.balance) + ' owed on the card' : 'Nothing owed', info.staleDays ? 'as of ' + fmtDate(info.asOf, { short: true }) : 'up to today'].join(' · ')) + '</em>';
     const od = info.balance < 0 && info.overdraftLimit ? money(-info.balance, { whole: true }) + ' of ' + money(info.overdraftLimit, { whole: true }) + ' overdraft used'
       : info.balance < 0 ? 'Overdrawn' : info.overdraftLimit ? money(info.available, { whole: true }) + ' available with overdraft' : '';
     return '<em>' + esc([od, info.staleDays ? 'as of ' + fmtDate(info.asOf, { short: true }) : 'up to today'].filter(Boolean).join(' · ')) + '</em>';
@@ -33,12 +34,12 @@
     const list = GU.money.accounts(s).filter((x) => x.info || x.count);
     if (!list.length) return '';
     const known = list.filter((x) => x.info);
-    const total = sum(known, (x) => x.info.balance);
+    const total = sum(known.filter((x) => x.account.type !== 'credit'), (x) => x.info.balance); // a credit card is what you owe, not what you have
     const old = known.some((x) => x.info.staleDays >= 3) || known.length < list.length;
     return '<section class="side-card"><div class="side-card__head"><h2>Your accounts</h2><button type="button" class="btn btn--sm' + (old ? ' btn--soft' : ' btn--ghost') + '" data-balances>' + icon('edit') + 'Update balances</button></div>' +
       (old ? '<p class="side-card__note">Some of these are from older statements. Tap Update balances and put in what your banking apps show now.</p>' : '') +
       '<ul class="acct-mini">' + list.map((x) =>
-      '<li><a href="#transactions" data-account="' + esc(x.account.id) + '"><span><b>' + esc(x.account.name) + '</b>' + balanceLine(x.info) + '</span>' +
+      '<li><a href="#transactions" data-account="' + esc(x.account.id) + '"><span><b>' + esc(x.account.name) + '</b>' + balanceLine(x.info, x.account) + '</span>' +
       '<strong class="' + (x.info && x.info.balance < 0 ? 'is-neg' : '') + '">' + (x.info ? esc(money(x.info.balance)) : '–') + '</strong></a></li>').join('') + '</ul>' +
       (known.length > 1 ? '<p class="side-card__foot">Together <b class="' + (total < 0 ? 'is-neg' : '') + '">' + esc(money(total)) + '</b></p>' : '') +
       '</section>';
@@ -49,13 +50,15 @@
     const list = GU.money.accounts(s).filter((x) => x.info || x.count);
     if (!list.length && !ods.length) return '';
     const known = list.filter((x) => x.info);
-    const total = sum(known, (x) => x.info.balance);
+    const total = sum(known.filter((x) => x.account.type !== 'credit'), (x) => x.info.balance);
     const old = known.some((x) => x.info.staleDays >= 3) || known.length < list.length;
     const odOf = (id) => ods.find((o) => o.account.id === id);
     const row = (x) => {
       const o = odOf(x.account.id);
       const neg = x.info && x.info.balance < 0;
-      const text = o
+      const card = x.account.type === 'credit';
+      const text = card ? (x.info ? (x.info.balance < 0 ? money(-x.info.balance) + ' owed on the card' : 'Nothing owed') + ' · ' + (x.info.staleDays ? 'as of ' + fmtDate(x.info.asOf, { short: true }) : 'up to today') : 'No balance yet. Import a statement or set it by hand.')
+        : o
         ? (o.limit ? money(o.used) + ' of your ' + money(o.limit, { whole: true }) + ' overdraft used' : money(o.used) + ' overdrawn') + (o.fees90 ? ' · ' + money(o.fees90) + ' in overdraft fees over 3 months' : '') + ' · ' + fmtDate(o.asOf, { short: true })
         : x.info ? (x.info.overdraftLimit ? money(x.info.available, { whole: true }) + ' available with overdraft' : 'in credit') + ' · ' + (x.info.staleDays ? 'as of ' + fmtDate(x.info.asOf, { short: true }) : 'up to today') : 'No balance yet. Import a statement or set it by hand.';
       return '<li class="spot od-row"><span class="spot__text"><b>' + esc(x.account.name) + '</b><em>' + esc(text) + '</em></span>' +

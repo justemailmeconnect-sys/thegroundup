@@ -20,7 +20,7 @@
   const WORK_OUT = (GU.finance && GU.finance.WORK_OUT) || 'Work expenses';
   const PAYSLIPS = 'Employment and payslips';
   const IMMIGRATION = 'Residence permit or eVisa';
-  const NOT_FILEABLE = ['unsure', 'bank_statement', 'order_history'];
+  const NOT_FILEABLE = ['unsure', 'bank_statement', 'order_history', 'balances'];
   const undoers = new Map();
   let running = false;
   let modeCache = 'offline';
@@ -88,6 +88,13 @@
         GU.tabs.receipts.importOrders(note, orderPreset(scope));
         return { imported: 'orders' };
       }
+      // Balances typed in (or pasted) wait as a card to check; nothing is saved until Update balances.
+      if (quick && quick.destination === 'balances') return { waiting: 1, id: addBalances(quick.balances, { as_of: quick.as_of, via: 'offline' }) };
+      const typed = GU.brain.balancesFromTyped(note);
+      if (typed && typed.problems.length && !typed.rows.length) {
+        toast('I didn’t use those balances: ' + typed.problems.join('; ') + '.', { timeout: 8000 });
+        return {};
+      }
       if (quick && quick.confidence >= 0.8 && (['task', 'transaction_out', 'transaction_in'].includes(quick.destination) || (quick.destination === 'receipt' && quick.payer))) {
         let result = scope ? applyScope(quick, scope, '', ctx, '') : quick;
         if (!scope) result = S().applyRules({ note, files: [] }, result);
@@ -139,6 +146,8 @@
 
   /* A file you put in a section (or a labelled folder) stays there: the reading only fills in the details. */
   function applyScope(r, scope, sub, ctx, root) {
+    // Balances stay balances wherever they were dropped (only a category you put them in keeps them): they wait for Update balances.
+    if (r.destination === 'balances' && (!scope || scope.kind !== 'section')) return r;
     // A waiting item from before the Visas page went: its folder is a documents folder now.
     if (scope && scope.kind === 'visa') scope = Object.assign({}, scope, { kind: 'documents', docType: IMMIGRATION });
     const out = Object.assign({}, r, { confidence: 1, scoped: true, folder: sub || '' });
@@ -254,6 +263,8 @@
           item.status = result ? 'ready' : 'error';
           item.result = result || null;
           item.error = error;
+          // A note typed with a balances screenshot never keeps a sort code, account number or card number.
+          if (result && result.destination === 'balances' && item.note) item.note = GU.money.scrub(item.note);
         }, { history: false }); // a status update, not something you did
         batch.seen++;
         const quiet = batch.seen > 1 || store.state.inbox.some((i) => i.status === 'reading');
@@ -279,6 +290,11 @@
   function settle(item, quiet) {
     const r = item.result;
     if (!r) return false;
+    // Balances always wait for you: they change what your accounts hold.
+    if (r.destination === 'balances') {
+      if (!quiet && location.hash !== '#hub') toast('Your balances are ready to check in the Sorting hub', { action: 'Review', onAction: () => GU.view.go('hub') });
+      return false;
+    }
     if (asksPayer(r)) {
       const who = GU.brain.payerFor(r);
       if (who) store.commit(() => Object.assign(r, { payer: who, why: r.why || 'Your bank shows you paid it' }), { history: false });
@@ -311,6 +327,8 @@
      Returns {logId, label, ref, tab}, or null when nothing was filed (an importer opened instead). */
   function fileItem(item, result, opts) {
     opts = opts || {};
+    // Never by this route: balances are applied only by Update balances on their card.
+    if (result.destination === 'balances') return null;
     if (result.destination === 'bank_statement') return void openImporter(item);
     if (result.destination === 'order_history') return void openOrders(item);
     const res = GU.brain.file(result, item.files || [], item.note);
@@ -588,7 +606,7 @@
       cardChange(() => {
         for (const item of items) {
           const base = item.result || Object.assign(GU.brain.blank(), { title: item.note || (item.files[0] && item.files[0].name) || 'Item', context: 'home' });
-          item.result = Object.assign(base, { section_id: null, new_section_name: null, list_id: null, new_list_name: null, folder_id: null, new_category: null, section_part: null }, patch,
+          item.result = Object.assign(base, { section_id: null, new_section_name: null, list_id: null, new_list_name: null, folder_id: null, new_category: null, section_part: null, balances: null, as_of: null }, patch,
             { confidence: 1, rule: null, why: 'You chose this place', summary: base.summary || '' });
           item.status = 'ready';
           if (patch.context === 'home') toHome(item);
@@ -605,7 +623,7 @@
       cardChange(() => {
         for (const item of items) {
           const base = item.result || Object.assign(GU.brain.blank(), { title: item.note || (item.files[0] && item.files[0].name) || 'Item' });
-          item.result = Object.assign(S().applyPlace(base, place, extra || {}), { rule: null, why: 'You chose this place', summary: base.summary || '' });
+          item.result = Object.assign(S().applyPlace(base, place, extra || {}), { rule: null, why: 'You chose this place', summary: base.summary || '', balances: null, as_of: null });
           item.status = 'ready';
           if (item.result.context === 'home') toHome(item);
           const m = S().ruleMatchFor(item.result);
@@ -738,6 +756,24 @@
   }
   /* Without Claude: the small offline reader for instructions, otherwise it's a note, sorted as always. */
   async function offlineSubmit(text, why) {
+    // Typed balances ("my balances: HSBC 120.50, Santander -35.20"): a card to check, read on this device.
+    const typed = GU.brain.balancesFromTyped(text);
+    if (typed) {
+      if (typed.rows.length) {
+        try {
+          addBalances(typed.rows, { as_of: typed.as_of, via: 'offline' });
+        } catch (e) {
+          ui.draft = text;
+          return showReply({ offline: true, q: text, note: e.message, error: true });
+        }
+        return showReply({ offline: true, q: text, text: 'I’ve put ' + plural(typed.rows.length, 'balance') + ' below for you to check. Nothing is saved until you press Update balances.' });
+      }
+      ui.draft = text;
+      return showReply({ offline: true, q: text, note: 'I didn’t use those balances: ' + typed.problems.join('; ') + '.', error: true });
+    }
+    if (/\bbalances?\b/i.test(text) && /\b(screenshot|photo|picture|image|screen)\b/i.test(text) && !/\d/.test(text)) {
+      return showReply({ offline: true, q: text, text: 'Drop a screenshot of your banking app here, or use the file button, and I’ll read your balances. You check them before anything is saved.' });
+    }
     if (S().looksLikeInstruction(text)) {
       const res = S().offline(text);
       if (res.handled) return showReply({ offline: true, q: text, text: res.reply, changes: res.changes });
@@ -831,6 +867,204 @@
     GU.render();
   }
 
+  /* ---------- your balances (a screenshot of your banking app, or a typed line) ----------
+     A balances item is a card that shows which of your accounts each balance would update. Nothing changes until you
+     press Update balances, which goes through GU.money.setBalances like the Bank page's Update balances. The card's
+     choices (a row left out, a different account) live on the item's reading: result.balances[i].skip / .map. */
+  const ACCOUNT_KINDS = [{ value: 'current', label: 'Current account' }, { value: 'savings', label: 'Savings' }, { value: 'joint', label: 'Joint account' }, { value: 'business', label: 'Business account' }, { value: 'credit', label: 'Credit card' }];
+  const kindLabel = (t) => (ACCOUNT_KINDS.find((k) => k.value === t) || ACCOUNT_KINDS[0]).label;
+  const isBalances = (r) => !!r && r.destination === 'balances' && Array.isArray(r.balances);
+
+  /* Puts a balances card in the hub from rows ({provider, name, type, amount, overdraft_limit, uncertain}). Returns its id.
+     The same balances already waiting from a typed line don't get a second card. */
+  function addBalances(rows, o) {
+    o = o || {};
+    const result = GU.brain.balancesResult(rows, { as_of: o.as_of, via: o.via || 'offline', confidence: 0.9, why: o.why || 'You told me your balances' });
+    if (!isBalances(result)) throw new Error('Those balances don’t look right');
+    const key = (r) => JSON.stringify((r.balances || []).map((b) => [b.name, b.type, b.amount, b.overdraft_limit]));
+    const same = store.state.inbox.find((i) => !(i.files || []).length && isBalances(i.result) && i.status === 'ready' && key(i.result) === key(result));
+    if (same) return same.id;
+    const item = { id: 'in-' + uid(), created: today(), note: '', files: [], status: 'ready', result };
+    cardChange((st) => st.inbox.push(item));
+    return item.id;
+  }
+
+  /* What a balances card shows: each reading with the account it would update, and the figures after the update. */
+  function balanceView(item) {
+    const r = item.result;
+    const rows = r.balances || [];
+    const p = GU.money.readingsPlan(store.state, rows, { date: r.as_of || undefined });
+    const accts = store.state.accounts || [];
+    // The names the new accounts will really get (a taken name gets its kind added), in the order they are made.
+    const made = p.plan ? p.plan.rows.filter((x) => x.created).map((x) => x.name) : [];
+    let k = 0;
+    const lines = rows.map((b, i) => {
+      const m = p.match[i];
+      const acct = m.accountId ? accts.find((a) => a.id === m.accountId) : null;
+      const state = m.how === 'skip' ? 'skip' : m.how === 'dup' ? 'dup' : acct ? 'update' : 'new';
+      return { b, i, m, acct, state, newName: state === 'new' && made.length === p.create.length ? made[k++] : '' };
+    });
+    const live = lines.filter((x) => x.state === 'update' || x.state === 'new');
+    const together = p.plan ? GU.money.togetherIf(store.state, p.plan.accounts) : null;
+    return { r, rows, p, lines, live, together };
+  }
+  const amountHTML = (b) => {
+    const neg = b.amount < 0;
+    const text = b.type === 'credit' ? (b.amount < 0 ? money(-b.amount) + ' owed' : b.amount > 0 ? money(b.amount) + ' in credit' : 'Nothing owed') : money(b.amount);
+    return '<b class="hub-bal__amt' + (neg && b.type !== 'credit' ? ' is-neg' : '') + '">' + esc(text) + '</b>';
+  };
+  function balanceRowHTML(item, x) {
+    const { b, i, acct } = x;
+    const id = esc(item.id);
+    const left = x.state === 'skip' || x.state === 'dup';
+    const nm = acct ? acct.name : x.newName || GU.money.accountNameFor(b);
+    const readAs = acct && GU.money.keyOf(acct.name) !== GU.money.keyOf(b.name) ? 'read as “' + b.name + '”' : '';
+    const od = b.overdraft_limit != null ? money(b.overdraft_limit, { whole: true }) + ' overdraft limit' + (acct && Number(acct.overdraftLimit) && Number(acct.overdraftLimit) !== b.overdraft_limit ? ' (was ' + money(acct.overdraftLimit, { whole: true }) + ')' : '')
+      : acct && Number(acct.overdraftLimit) && !['credit', 'savings'].includes(b.type) ? money(acct.overdraftLimit, { whole: true }) + ' overdraft kept' : '';
+    const subs = [readAs, b.type !== 'current' ? kindLabel(b.type).toLowerCase() : ''].filter(Boolean);
+    return '<li class="hub-bal__row' + (left ? ' is-left' : '') + (b.uncertain && !left ? ' is-check' : '') + '">' +
+      '<div class="hub-bal__who"><span class="hub-bal__name">' + esc(nm) + '</span>' +
+      (x.state === 'new' ? '<span class="pill pill--new">' + icon('plus') + 'New account</span>' : '') +
+      (b.uncertain && !left ? '<span class="pill pill--warn">' + icon('alert') + 'Check this one</span>' : '') +
+      (x.state === 'dup' ? '<span class="pill pill--muted">Same as another row</span>' : x.state === 'skip' ? '<span class="pill pill--muted">Left out</span>' : '') +
+      (subs.length ? '<small>' + esc(subs.join(' · ')) + '</small>' : '') + '</div>' +
+      '<div class="hub-bal__fig">' + amountHTML(b) + (od ? '<small>' + esc(od) + '</small>' : '') + '</div>' +
+      (x.state === 'dup' ? '<span class="hub-bal__x"></span>'
+        : '<button type="button" class="icon-btn icon-btn--sm hub-bal__x" data-bal-skip="' + id + '|' + i + '" aria-label="' + esc((x.state === 'skip' ? 'Put back ' : 'Leave out ') + nm) + '" data-tip="' + (x.state === 'skip' ? 'Put it back' : 'Leave this one out') + '">' + icon(x.state === 'skip' ? 'undo' : 'x') + '</button>') +
+      '</li>';
+  }
+  function balancesCardHTML(item) {
+    const v = balanceView(item);
+    const r = v.r;
+    const id = esc(item.id);
+    const place = GU.brain.placeOf(r);
+    const { rest } = placeBits(place.label.replace(/^Home › /, ''), place);
+    const low = r.via === 'offline' && r.confidence < 0.6;
+    const files = item.files || [];
+    const thumbs = files.length ? '<button type="button" class="doc-row__thumb hub-card__thumb" data-view="' + id + '" aria-label="View the screenshot">' + thumbHTML(files) + '</button>' : '<span class="thumb thumb--empty hub-card__thumb">' + icon('bank') + '</span>';
+    const n = v.live.length;
+    const asOf = r.as_of && r.as_of !== today() ? 'as of ' + fmtDate(r.as_of, { short: true }) : '';
+    const together = v.together && v.together.count ? '<p class="hub-bal__total">Together <b class="' + (v.together.total < 0 ? 'is-neg' : '') + '">' + esc(money(v.together.total)) + '</b> across your ' +
+      (v.together.savings ? '' : 'current ') + 'accounts <span class="muted">· credit cards aren’t counted</span></p>' : '';
+    const problem = v.p.error && n ? '<p class="hub-card__held">' + icon('alert') + '<span>' + esc(v.p.error) + '. Use Change… to fix it.</span></p>' : '';
+    return '<li class="hub-card hub-card--bal" data-card="' + id + '">' + thumbs + '<div class="hub-card__main">' +
+      '<p class="hub-card__head"><b>Your balances</b><span class="hub-card__facts"><span>' + esc(plural(v.rows.length, 'account')) + '</span>' + (asOf ? '<span>' + esc(asOf) + '</span>' : '') + '</span>' +
+      (low ? pill('Check these', 'warn', 'alert') : '') + '</p>' +
+      (low ? '<p class="hub-card__held">' + icon('alert') + '<span>I read these from the picture on this device, so some may be wrong or missing (type a missing one, like “my balances: HSBC 120.50”). <a class="link" href="#settings">Connect Claude</a> to read screenshots properly.</span></p>' : '') +
+      '<ul class="hub-bal" aria-label="Your balances">' + v.lines.map((x) => balanceRowHTML(item, x)).join('') + '</ul>' +
+      (r.dropped ? '<p class="hub-card__why">' + icon('info') + '<span>' + esc(plural(r.dropped, 'account') + ' couldn’t be read, so ' + (r.dropped === 1 ? 'it was' : 'they were') + ' left out.') + '</span></p>' : '') +
+      together + problem +
+      '<p class="hub-card__dest"><span class="hub-card__part hub-card__part--static hub-card__part--home">' + icon('home') + 'Home</span><span class="hub-card__to">' + icon('chevron') + '<b>' + esc(rest) + '</b></span>' +
+      (low ? '' : confidenceLabel(r.confidence)) + '</p>' +
+      '<p class="hub-card__why">' + icon('info') + '<span>Nothing changes until you press Update balances. Each account is updated from today, and what you import after that adds on top.</span></p>' +
+      '<div class="hub-card__actions">' +
+      '<button type="button" class="btn btn--sm btn--primary" data-bal-apply="' + id + '"' + (n && !v.p.error ? '' : ' disabled') + '>' + icon('check') + 'Update ' + (n === 1 ? '1 balance' : n ? n + ' balances' : 'balances') + '</button>' +
+      btn('data-bal-change', item.id, 'edit', 'Change…') +
+      '<button type="button" class="btn btn--sm btn--ghost hub-card__more" data-more="' + id + '" aria-label="More for your balances">' + icon('more') + '</button>' +
+      btn('data-discard', item.id, 'trash', 'Remove', 'btn--ghost hub-card__remove') + '</div>' +
+      '</div></li>';
+  }
+
+  /* Update balances: saves them through GU.money.setBalances, takes the card (and the screenshot) away, and offers Undo
+     and Redo through the site's history. The screenshot goes to Recently deleted for 30 days (never kept on an account). */
+  function applyBalances(item) {
+    item = store.find('inbox', item.id);
+    const r = item && item.result;
+    if (!isBalances(r)) return null;
+    const p = GU.money.readingsPlan(store.state, r.balances, { date: r.as_of || undefined });
+    if (p.error) {
+      toast(/no balances to set/.test(p.error) ? 'Every account is left out. Put one back, or remove this.' : p.error);
+      return null;
+    }
+    const where = GU.brain.placeOf(r).label;
+    const name = 'Updated ' + plural(p.list.length + p.create.length, 'balance');
+    let res = null;
+    let stepId = '';
+    // Undo (here, in Recently sorted, or Ctrl+Z) is the site's history step for all of it: the balances, the new accounts
+    // and the card going away. Redo puts it all back.
+    const undoStep = () => (stepId ? GU.history.undoStep(stepId).ok : false);
+    GU.history.batch(name, () => {
+      res = GU.money.setBalances(p.list, { date: r.as_of || undefined, create: p.create, label: name });
+      ui.held.delete(item.id);
+      discard(item.id, { quiet: true });
+      logChange({ label: name + (res.created.length ? ' (' + plural(res.created.length, 'new account') + ')' : ''), where, tab: 'transactions', by: 'you', undo: undoStep });
+    });
+    const top = GU.history.list().undo[0];
+    stepId = top && top.label === name ? top.id : '';
+    const msg = name + (res.created.length ? ', ' + plural(res.created.length, 'new account') : '') + '. Together you have ' + money(res.together);
+    toast(msg, { action: 'Undo', plain: true, timeout: 12000, onAction: () => (stepId ? GU.history.undoStep(stepId) : res.undo()) });
+    return res;
+  }
+
+  /* Change…: fix names, types, amounts and which account each one is, or leave a row out. */
+  function changeBalances(item) {
+    const r = item.result;
+    if (!isBalances(r)) return;
+    const v = balanceView(item);
+    const accts = store.state.accounts || [];
+    const fields = [{ name: 'asof', label: 'These balances are from', type: 'date', required: true }];
+    v.lines.forEach((x) => {
+      const i = x.i;
+      const auto = x.m.accountId && !x.b.map ? (accts.find((a) => a.id === x.m.accountId) || {}).name : '';
+      fields.push({ name: 'h' + i, type: 'html', html: '<h3 class="dlg__sub">' + esc(x.b.name) + '</h3>' });
+      fields.push({ name: 'n' + i, label: 'Name', required: true, half: true });
+      fields.push({ name: 't' + i, label: 'Type', type: 'select', options: ACCOUNT_KINDS, half: true });
+      fields.push({ name: 'a' + i, label: 'Balance', type: 'text', half: true, help: 'A minus for overdrawn. For a credit card, a minus for what you owe.' });
+      fields.push({ name: 'o' + i, label: 'Arranged overdraft', type: 'money', optional: true, half: true, showIf: (val) => !['credit', 'savings'].includes(val['t' + i]) });
+      fields.push({ name: 'm' + i, label: 'Which account is it?', type: 'select', options: [{ value: 'auto', label: 'Work it out' + (auto ? ' (' + auto + ')' : '') }]
+        .concat(accts.map((a) => ({ value: a.id, label: a.name + (a.type === 'credit' ? ' (credit card)' : '') })), [{ value: 'new', label: 'It’s a different account: make a new one' }]) });
+      fields.push({ name: 's' + i, type: 'checkbox', checkLabel: 'Leave this one out' });
+    });
+    const values = { asof: r.as_of || today() };
+    v.lines.forEach((x) => {
+      Object.assign(values, { ['n' + x.i]: x.b.name, ['t' + x.i]: x.b.type, ['a' + x.i]: String(x.b.amount), ['o' + x.i]: x.b.overdraft_limit, ['m' + x.i]: x.b.map || 'auto', ['s' + x.i]: !!x.b.skip });
+    });
+    formDialog({
+      title: 'Change your balances',
+      intro: 'Fix anything I got wrong. “It’s a different account” makes a new one instead of updating one you have. Nothing is saved to your accounts until you press Update balances.',
+      fields, values, submitLabel: 'Done', wide: true,
+      onSubmit: (val) => {
+        const next = [];
+        for (const x of v.lines) {
+          const i = x.i;
+          const name = GU.money.nameText(val['n' + i], 40);
+          const amount = GU.brain.balanceNumber(val['a' + i]);
+          if (!name) {
+            toast('Every account needs a name');
+            return false;
+          }
+          if (!Number.isFinite(amount) || Math.abs(amount) >= 1e7) {
+            toast('“' + String(val['a' + i]).slice(0, 20) + '” for ' + name + ' isn’t an amount. Try something like -233.00');
+            return false;
+          }
+          const type = ACCOUNT_KINDS.some((k) => k.value === val['t' + i]) ? val['t' + i] : 'current';
+          const pick = val['m' + i];
+          const target = accts.find((a) => a.id === pick);
+          if (target && GU.money.familyOf(GU.money.typeOf(target.type)) !== GU.money.familyOf(type)) {
+            toast(name + ' is ' + (type === 'credit' ? 'a credit card' : 'not a credit card') + ', but ' + target.name + ' is ' + (target.type === 'credit' ? 'one' : 'not') + '. Pick another account, or change the type.');
+            return false;
+          }
+          let value = Math.round(amount * 100) / 100 || 0;
+          if (type === 'credit' && value > 0) value = -value; // a credit card is shown by what is owed
+          const od = ['credit', 'savings'].includes(type) || val['o' + i] == null ? null : Math.round(val['o' + i] * 100) / 100;
+          const edited = name !== x.b.name || type !== x.b.type || value !== x.b.amount || od !== x.b.overdraft_limit;
+          const row = Object.assign({}, x.b, { name, type, amount: value, overdraft_limit: od, provider: GU.money.knownBank(name) || (name === x.b.name ? x.b.provider : '') });
+          if (edited) row.uncertain = false;
+          row.skip = !!val['s' + i];
+          if (pick === 'new') row.map = 'new';
+          else if (target) row.map = target.id;
+          else delete row.map;
+          if (!row.skip) delete row.skip;
+          next.push(row);
+        }
+        cardChange(() => {
+          item.result = Object.assign({}, item.result, { balances: next, as_of: isRealDay(val.asof) ? val.asof : null, confidence: Math.max(item.result.confidence || 0, 0.9), via: item.result.via });
+        });
+      },
+    });
+  }
+  const isRealDay = (d) => GU.util.isISO(d) && GU.util.fromDays(GU.util.toDays(d)) === d && d <= today();
+
   /* ---------- the page ---------- */
   function confidenceLabel(c) {
     if (c >= 0.85) return pill('Sure', 'good', 'check');
@@ -870,6 +1104,7 @@
       return '<li class="hub-card is-reading">' + thumbs + '<div class="hub-card__main"><p class="hub-card__head"><b>' + esc(label) + '</b></p>' +
         '<p class="reading"><span class="spinner" aria-hidden="true"></span>' + (item.hint ? 'Sorting it again with what you said…' : 'Reading…') + '</p></div></li>';
     }
+    if (isBalances(r)) return balancesCardHTML(item);
     const place = r && r.destination !== 'unsure' ? GU.brain.placeOf(r) : null;
     const dest = place ? place.label : 'Not sorted yet';
     const ask = asksPayer(r);
@@ -1019,7 +1254,9 @@
     const list = agent
       ? ['Dentist 14 Nov 3pm', 'Paid £18 for printer paper for ' + c, 'Make a Pets category and put the vet bill in it', 'File everything you’re sure about', 'Move the Netlify receipt to Get paid back', 'Create a Gym category for PureGym payments']
       : ['Dentist 14 Nov 3pm', 'Paid £18 for printer paper', 'Make a Pets category', 'File everything you’re sure about', 'Always put Amazon in Get paid back'];
-    return '<div class="hub-hints" aria-label="Things you can say"><span class="hub-hints__label">Try</span>' + list.map((h) => '<button type="button" class="chip hub-hint" data-hint="' + esc(h) + '">' + esc(h) + '</button>').join('') + '</div>';
+    // The last one opens the file chooser: drop a screenshot of your banking app (or type "my balances: HSBC 120, Monzo -35.50").
+    return '<div class="hub-hints" aria-label="Things you can say"><span class="hub-hints__label">Try</span>' + list.map((h) => '<button type="button" class="chip hub-hint" data-hint="' + esc(h) + '">' + esc(h) + '</button>').join('') +
+      '<button type="button" class="chip hub-hint" data-hint="Update my balances from a screenshot" data-pick title="Choose a screenshot of your banking app. Or type: my balances: HSBC 120, Monzo -35.50">Update my balances from a screenshot</button></div>';
   }
 
   function rulesHTML() {
@@ -1247,6 +1484,10 @@
       };
       let hit;
       const h = e.target.closest('[data-hint]');
+      if (h && h.hasAttribute('data-pick')) {
+        fileInput.click();
+        return;
+      }
       if (h) {
         box.value = h.dataset.hint;
         ui.draft = box.value;
@@ -1293,6 +1534,21 @@
       if ((list = items('data-file-group'))) return fileGroup(list.map((i) => i.id));
       if ((list = items('data-remove-copies'))) return removeCopies(list);
       if ((list = items('data-place-group'))) return choosePlace(list, e.target.closest('[data-place-group]'));
+      if ((hit = find('data-bal-apply')) && hit.item) return applyBalances(hit.item);
+      if ((hit = find('data-bal-change')) && hit.item) return changeBalances(hit.item);
+      const bs = e.target.closest('[data-bal-skip]');
+      if (bs) {
+        const [iid, n] = String(bs.dataset.balSkip).split('|');
+        const it = store.find('inbox', iid);
+        if (it && isBalances(it.result) && it.result.balances[+n]) {
+          cardChange(() => {
+            const row = it.result.balances[+n];
+            if (row.skip) delete row.skip;
+            else row.skip = true;
+          });
+        }
+        return;
+      }
       if ((hit = find('data-file')) && hit.item) return fileItem(hit.item, hit.item.result);
       if ((hit = find('data-place')) && hit.item) return choosePlace([hit.item], hit.b);
       if ((hit = find('data-tell')) && hit.item) {
@@ -1312,6 +1568,7 @@
         const r = it.result;
         const opts = [];
         if (r && !NOT_FILEABLE.includes(r.destination)) opts.push({ icon: 'edit', label: 'Check details first', hint: 'Open its form, filled in', onClick: () => editAndFile(it) });
+        if (isBalances(r)) opts.push({ icon: 'folder', label: 'It’s something else: choose where', onClick: () => choosePlace([it], hit.b) });
         if ((it.files || []).length) opts.push({ icon: 'eye', label: it.files.length > 1 ? 'View the ' + it.files.length + ' files' : 'View the file', onClick: () => viewFiles(it.files, 0, (r && r.title) || it.note || 'Files') });
         if ((it.files || []).length) opts.push({ icon: 'download', label: it.files.length > 1 ? 'Download all ' + it.files.length : 'Download', onClick: () => GU.ui.downloadFiles(it.files.map((f) => f.id), (r && r.title) || 'Files') });
         if (r && EITHER.includes(r.destination)) opts.push({ icon: r.context === 'work' ? 'home' : 'briefcase', label: r.context === 'work' ? 'Move to Home' : 'Move to Work', onClick: () => flipPart(it) });
@@ -1409,7 +1666,7 @@
     });
   }
 
-  GU.hub = { add, resume, startFresh, fileItem, answerPayer, sortEverything, logChange, undo, discard, setSuggestion, submit, tellWhere, choosePlace, AUTO_FILE_AT };
+  GU.hub = { add, resume, startFresh, fileItem, answerPayer, sortEverything, logChange, undo, discard, setSuggestion, submit, tellWhere, choosePlace, addBalances, applyBalances, AUTO_FILE_AT };
   GU.inbox = GU.hub; // older callers
   GU.tabs.hub = { label: 'Sorting hub', short: 'Sorting hub', icon: 'funnel', part: 'shared', render };
 })();

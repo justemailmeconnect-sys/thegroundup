@@ -1534,6 +1534,33 @@ button.hub-card__part:hover { color: var(--ink); }
 .hub-card__offer { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); background: var(--accent-soft); border-radius: 10px; padding: 6px 6px 6px 10px; }
 .hub-card__offer > .ico { width: 15px; height: 15px; color: var(--accent); flex: none; }
 .hub-card__offer .link--btn { flex: 1; text-align: left; font-size: 13px; }
+/* Your balances: a card with one row for each account, the account it will update and the new balance. */
+.hub-bal { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); overflow: hidden; }
+.hub-bal__row { display: grid; grid-template-columns: minmax(0, 1fr) auto 32px; gap: 4px 12px; align-items: center; padding: 10px 12px; }
+.hub-bal__row + .hub-bal__row { border-top: 1px solid var(--line); }
+.hub-bal__row.is-check { background: var(--warn-soft); }
+.hub-bal__row.is-left { opacity: 0.6; }
+.hub-bal__row.is-left .hub-bal__name, .hub-bal__row.is-left .hub-bal__amt { text-decoration: line-through; text-decoration-thickness: 1px; }
+.hub-bal__who { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+.hub-bal__name { font-weight: 600; font-size: 14.5px; overflow-wrap: break-word; }
+.hub-bal__who small { flex-basis: 100%; font-size: 12.5px; color: var(--ink-3); }
+.hub-bal__who .pill { font-size: 11.5px; padding: 1px 8px; }
+.hub-bal__fig { display: grid; justify-items: end; gap: 1px; text-align: right; }
+.hub-bal__amt { font-size: 15.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hub-bal__amt.is-neg { color: var(--crit); }
+.hub-bal__fig small { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.hub-bal__x { justify-self: end; }
+.hub-bal__total { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+.hub-bal__total b { font-size: 15.5px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.hub-bal__total b.is-neg { color: var(--crit); }
+.hub-bal__total .muted { font-size: 12.5px; }
+.hub-card--bal .hub-card__head .pill { margin-left: 2px; }
+.dlg__sub { font-size: 15px; font-weight: 600; margin: 8px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 560px) {
+  .hub-bal__row { grid-template-columns: minmax(0, 1fr) auto 28px; padding: 9px 10px; gap: 4px 8px; }
+  .hub-bal__amt { font-size: 15px; }
+  .hub-bal__fig small { white-space: normal; max-width: 15ch; }
+}
 /* A group of similar things, with one action for all of them. */
 .hub-group__head { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 14px 18px; }
 .hub-group__stack { position: relative; width: 46px; height: 56px; }

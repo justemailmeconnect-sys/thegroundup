@@ -673,6 +673,7 @@
   function overdrafts(state) {
     const out = [];
     for (const a of state.accounts) {
+      if (a.type === 'credit') continue; // a credit card owes: it's a debt (and in Debts already), not an overdraft
       const b = accountBalance(state, a.id);
       if (!b || b.balance >= 0) continue;
       const fees = state.transactions.filter((t) => t.account === a.id && t.amount < 0 && /overdraft|interest charge/i.test(t.description) && within(t.date, b.asOf, 91));
@@ -709,7 +710,317 @@
     return out;
   }
 
-  GU.money = { accountBalance, accounts, balanceSeries, moveTransactions, mergeAccounts, accountFixes, applyFix, tidyAll, twins, importWarning };
+  /* ---------- setting balances ----------
+     One place sets what an account holds, for the Bank page's Update balances, the Sorting hub (a screenshot or a typed
+     line) and Ask Claude: matching what was read to your accounts, the date the balance is from, the new accounts, and
+     Undo. A balance is an anchor ({date, amount}); the balance now is the anchor plus every later transaction. */
+  const MAX_BALANCES = 12;
+  const ACCOUNT_TYPES = ['current', 'savings', 'credit', 'joint', 'business'];
+  const KNOWN_BANKS = ['HSBC', 'Santander', 'Monzo', 'Barclays', 'Barclaycard', 'Lloyds', 'Halifax', 'NatWest', 'RBS', 'Royal Bank of Scotland', 'Bank of Scotland', 'Nationwide', 'Starling', 'Revolut',
+    'Chase', 'TSB', 'Metro Bank', 'First Direct', 'Virgin Money', 'Co-operative Bank', 'Tesco Bank', 'Sainsbury’s Bank', 'M&S Bank', 'Capital One', 'MBNA', 'American Express', 'Amex', 'Zopa',
+    'Kroo', 'Cashplus', 'Post Office', 'Danske Bank', 'Clydesdale', 'Yorkshire Bank', 'Coventry Building Society', 'Skipton', 'Vanquis', 'Klarna', 'PayPal'];
+  /* Words for what kind of account it is, which are not part of the bank's name: 'Monzo Flex' is Monzo's. */
+  const PRODUCT_WORDS = new Set(['flex', 'credit', 'card', 'cards', 'current', 'account', 'accounts', 'savings', 'saver', 'joint', 'business', 'pot', 'pots', 'plus', 'premium', 'everyday', 'isa', 'ltd', 'limited', 'bank']);
+  const keyOf = (t) => String(t == null ? '' : t).toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9&]+/g, ' ').replace(/\s+/g, ' ').trim();
+  /* 'Monzo Flex' → 'monzo'; 'First Direct' → 'first direct'. Only trailing product words go. */
+  function bankKey(t) {
+    const w = keyOf(t).split(' ').filter(Boolean);
+    while (w.length > 1 && PRODUCT_WORDS.has(w[w.length - 1])) w.pop();
+    return w.join(' ');
+  }
+  /* The bank a text names (as written in KNOWN_BANKS), the longest one if several, or ''. */
+  const knownBank = (text) => {
+    const k = ' ' + keyOf(text) + ' ';
+    let best = '';
+    for (const b of KNOWN_BANKS) if (k.includes(' ' + keyOf(b) + ' ') && b.length > best.length) best = b;
+    return best;
+  };
+  const knownBankIn = (text) => bankKey(knownBank(text));
+  const typeOf = (t) => (ACCOUNT_TYPES.includes(String(t || '').toLowerCase()) ? String(t).toLowerCase() : 'current');
+  /* current, joint and business accounts are all 'current' money; a credit card and savings are their own kind. */
+  const familyOf = (t) => (t === 'credit' ? 'credit' : t === 'savings' ? 'savings' : 'current');
+  /* The bank an account is with: what it says, otherwise a bank named in its name. */
+  const bankOf = (a) => bankKey(a.bank) || knownBankIn(a.name);
+  const providerKey = (r) => bankKey(r.provider) || knownBankIn(r.name) || '';
+
+  /* Sort codes, account and card numbers must never be kept: this takes them out of any text. */
+  function scrub(text) {
+    return String(text == null ? '' : text)
+      .replace(/\b\d{2}[-–−\s]\d{2}[-–−\s]\d{2}\b/g, ' ')
+      .replace(/\b(?:ending|ends|ended)(?:\s+in)?\s*[:#]?\s*\d{3,4}\b/gi, ' ')
+      .replace(/[•*·x]{2,}\s?\d{3,4}\b/gi, ' ')
+      .replace(/\b\d(?:[ -]?\d){5,}\b/g, ' ')
+      .replace(/\b(?:sort\s*code|account\s*(?:number|no\.?)|acc\s*no\.?|iban|card\s*number)\b[:\s]*/gi, ' ')
+      .replace(/\(\s*\)|\[\s*\]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
+  /* A name for an account: one line, no brackets, no numbers that identify it, at most n characters. */
+  const nameText = (v, n) => scrub(String(v == null ? '' : v).normalize('NFKC').replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/[<>]/g, '')).slice(0, n || 40).trim();
+  const isRealDate = (d) => GU.util.isISO(d) && GU.util.fromDays(GU.util.toDays(d)) === d;
+
+  /* A balance typed in for today already includes every payment imported for that account, even ones the bank dated
+     a day ahead, so the anchor goes on the latest of them. */
+  function anchorDate(st, id, date) {
+    const d = date || today();
+    if (d < today()) return d;
+    return st.transactions.reduce((m, t) => (t.account === id && t.date > m ? t.date : m), d);
+  }
+
+  /* The name a new account is given: a bare bank's name ('HSBC') becomes 'HSBC current account'; a name that already
+     says what it is ('Monzo Flex', 'Joint account') stays as it is. */
+  function accountNameFor(r) {
+    const name = nameText((r && (r.name || r.provider)) || '', 40);
+    if (!name) return '';
+    const bank = knownBank(name);
+    if (!bank || keyOf(name) !== keyOf(bank)) return name;
+    const tail = { current: 'current account', savings: 'savings', credit: 'credit card', joint: 'joint account', business: 'business account' }[typeOf(r.type)];
+    return nameText(name + ' ' + tail, 40);
+  }
+
+  /* Which of your accounts each reading ({provider, name, type, map?, skip?}) is. Passes from the surest: the account
+     you chose; the same name; the same bank and the same type (when only one account fits); the same bank when it is
+     your only one of that kind. Nothing matches across kinds (a credit card never overwrites a current account) and
+     no account is matched twice. Returns, for each: {accountId, how: 'chosen'|'name'|'bank'|'only'|'new'|'skip'|'dup'}. */
+  function matchReadings(state, rows) {
+    const accts = state.accounts || [];
+    const claimed = new Set();
+    const out = rows.map((r) => ({ accountId: null, how: r && r.skip ? 'skip' : 'new' }));
+    const fam = (r) => familyOf(typeOf(r.type));
+    const open = (i) => out[i].how === 'new' && !out[i].accountId && !(rows[i] && rows[i].map === 'new');
+    rows.forEach((r, i) => {
+      if (!r || r.skip || !r.map || r.map === 'new') return;
+      const a = accts.find((x) => x.id === r.map);
+      if (a && !claimed.has(a.id) && familyOf(typeOf(a.type)) === fam(r)) {
+        out[i] = { accountId: a.id, how: 'chosen' };
+        claimed.add(a.id);
+      }
+    });
+    const pass = (pick) => {
+      rows.forEach((r, i) => {
+        if (!r || !open(i)) return;
+        const a = pick(r);
+        if (a) {
+          out[i] = { accountId: a.id, how: pick.how };
+          claimed.add(a.id);
+        }
+      });
+    };
+    const free = (a) => !claimed.has(a.id);
+    const byName = (r) => accts.find((a) => free(a) && keyOf(a.name) && [keyOf(r.name), keyOf(accountNameFor(r))].includes(keyOf(a.name)) && familyOf(typeOf(a.type)) === fam(r));
+    byName.how = 'name';
+    const byBank = (r) => {
+      const k = providerKey(r);
+      if (!k) return null;
+      const same = accts.filter((a) => free(a) && bankOf(a) === k && typeOf(a.type) === typeOf(r.type));
+      return same.length === 1 ? same[0] : null;
+    };
+    byBank.how = 'bank';
+    const onlyOne = (r) => {
+      const k = providerKey(r);
+      if (!k) return null;
+      const all = accts.filter((a) => bankOf(a) === k && familyOf(typeOf(a.type)) === fam(r));
+      return all.length === 1 && free(all[0]) ? all[0] : null;
+    };
+    onlyOne.how = 'only';
+    pass(byName);
+    pass(byBank);
+    pass(onlyOne);
+    // The same reading twice (the same name and kind) is one account: the second is left out, never made again.
+    for (let j = 0; j < rows.length; j++) {
+      if (!rows[j] || out[j].how !== 'new' || rows[j].map === 'new') continue;
+      for (let i = 0; i < j; i++) {
+        if (rows[i] && out[i].how !== 'skip' && out[i].how !== 'dup' && keyOf(rows[i].name) === keyOf(rows[j].name) && fam(rows[i]) === fam(rows[j])) {
+          out[j] = { accountId: null, how: 'dup', of: i };
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  /* A name for a new account that isn't one you already have. */
+  function freeName(state, name, type) {
+    const taken = new Set((state.accounts || []).map((a) => keyOf(a.name)));
+    const base = nameText(name, 40) || 'New account';
+    if (!taken.has(keyOf(base))) return base;
+    const kind = { credit: 'credit card', savings: 'savings', joint: 'joint', business: 'business', current: 'current account' }[typeOf(type)];
+    let n = nameText(base + ' (' + kind + ')', 40);
+    for (let i = 2; taken.has(keyOf(n)); i++) n = nameText(base, 34) + ' ' + i;
+    return n;
+  }
+
+  /* What setBalances would do, without doing it. list: [{accountId, amount, overdraftLimit?}] to set;
+     opts.create: [{provider, name, type, amount, overdraftLimit?}] for accounts that don't exist yet; opts.date: the day
+     the balances are from (default today). Throws a plain-English Error for anything that isn't sensible.
+     Returns {ops, rows, date, label, accounts}: accounts is how your accounts would look. */
+  function planBalances(state, list, opts) {
+    opts = opts || {};
+    const sets = Array.isArray(list) ? list : [];
+    const makes = Array.isArray(opts.create) ? opts.create : [];
+    if (!sets.length && !makes.length) throw new Error('There are no balances to set');
+    if (sets.length + makes.length > MAX_BALANCES) throw new Error('That is more than ' + MAX_BALANCES + ' accounts at once');
+    const amountOf = (v, who) => {
+      const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v.replace(/[£,\s]/g, '').replace(/[−–—]/g, '-')) : NaN;
+      if (!Number.isFinite(n) || Math.abs(n) >= 1e7) throw new Error('The balance for ' + (who || 'an account') + ' isn’t a sensible amount (it must be a number below 10,000,000)');
+      return round2(n);
+    };
+    const limitOf = (v, who) => {
+      if (v == null || v === '') return undefined;
+      const n = typeof v === 'number' ? v : Number(String(v).replace(/[£,\s]/g, ''));
+      if (!Number.isFinite(n) || n < 0 || n >= 1e7) throw new Error('The overdraft limit for ' + (who || 'an account') + ' isn’t a sensible amount');
+      return round2(n);
+    };
+    // The day the balances are from, as given (the readings checked in the hub are never in the future); today when it isn't a date.
+    const date = isRealDate(opts.date) ? opts.date : today();
+    const accts = (state.accounts || []).map((a) => Object.assign({}, a));
+    const ops = [];
+    const rows = [];
+    const seen = new Set();
+    const idx = new Map(accts.map((a) => [a.id, a]));
+    // Sets the balance on the copy; returns what it was, and whether it set an overdraft limit too.
+    const apply = (a, amount, od) => {
+      const before = { anchor: a.balanceAnchor ? Object.assign({}, a.balanceAnchor) : null, overdraftLimit: a.overdraftLimit };
+      a.balanceAnchor = { date: anchorDate(state, a.id, date), amount };
+      // An arranged overdraft only means something on a current account.
+      const limitSet = od !== undefined && familyOf(typeOf(a.type)) === 'current';
+      if (limitSet) a.overdraftLimit = od;
+      return { before, limitSet };
+    };
+    const setOne = (a, amount, od) => {
+      const r = apply(a, amount, od);
+      ops.push({ kind: 'set', id: a.id, anchor: Object.assign({}, a.balanceAnchor), limit: r.limitSet ? od : undefined });
+      rows.push({ id: a.id, name: a.name, created: false, amount, before: r.before, limitSet: r.limitSet, after: { anchor: Object.assign({}, a.balanceAnchor), overdraftLimit: a.overdraftLimit } });
+    };
+    for (const it of sets) {
+      const a = it && idx.get(it.accountId);
+      if (!a) throw new Error('One of those accounts doesn’t exist any more');
+      if (seen.has(a.id)) throw new Error('The same account is in the list twice');
+      seen.add(a.id);
+      setOne(a, amountOf(it.amount, a.name), limitOf(it.overdraftLimit, a.name));
+    }
+    const madeKeys = [];
+    for (const it of makes) {
+      const type = typeOf(it && it.type);
+      const provider = nameText(it && it.provider, 40);
+      const label = nameText(it && it.name, 40) || provider;
+      if (!label) throw new Error('A new account needs a name');
+      const amount = amountOf(it.amount, label);
+      const od = limitOf(it.overdraftLimit, label);
+      // An account of this name and kind that's already there (made a moment ago, say) is updated, never made twice.
+      const there = accts.find((a) => keyOf(a.name) === keyOf(label) && familyOf(typeOf(a.type)) === familyOf(type) && !seen.has(a.id));
+      if (there) {
+        seen.add(there.id);
+        setOne(there, amount, od);
+        continue;
+      }
+      const key = keyOf(label) + '|' + familyOf(type);
+      if (madeKeys.includes(key)) continue;
+      madeKeys.push(key);
+      const id = 'acc-' + GU.util.uid() + madeKeys.length;
+      const rec = { id, name: freeName({ accounts: accts }, label, type), bank: provider || knownBank(label), type };
+      if (!rec.bank) delete rec.bank;
+      if (od !== undefined && familyOf(type) === 'current') rec.overdraftLimit = od;
+      rec.balanceAnchor = { date: anchorDate(state, id, date), amount };
+      accts.push(rec);
+      idx.set(id, rec);
+      seen.add(id);
+      ops.push({ kind: 'new', rec: Object.assign({}, rec, { balanceAnchor: Object.assign({}, rec.balanceAnchor) }) });
+      rows.push({ id, name: rec.name, created: true, amount, before: null, limitSet: rec.overdraftLimit !== undefined, after: { anchor: Object.assign({}, rec.balanceAnchor), overdraftLimit: rec.overdraftLimit } });
+    }
+    const label = opts.label || 'Updated ' + GU.util.plural(rows.length, 'balance');
+    return { ops, rows, date, label, accounts: accts };
+  }
+
+  /* What your accounts hold together: every account whose balance is known, leaving out credit cards (money you owe
+     isn't money you have; it is in Debts). Same figure as Right now on Today. */
+  function together(state) {
+    const list = accounts(state).filter((x) => x.info && (x.account.type || 'current') !== 'credit');
+    return { total: sum(list, (x) => x.info.balance), spare: sum(list, (x) => x.info.overdraftLimit || 0), count: list.length, savings: list.some((x) => x.account.type === 'savings') };
+  }
+  /* The figure together() would give if these accounts were yours (a preview). */
+  const togetherIf = (state, accts) => together({ accounts: accts, transactions: state.transactions, settings: state.settings });
+
+  /* Sets balances in one saved step, named in Undo ('Updated 4 balances'). Returns what changed:
+     {label, count, rows: [{id, name, created, amount, before, after}], created, updated, together, undo()}. undo() puts back
+     the exact old anchors and overdraft limits and takes away the accounts it made (unless payments have been put in
+     them since); it returns false if it had to leave one. */
+  function setBalances(list, opts) {
+    opts = opts || {};
+    const state = GU.store.state;
+    const plan = planBalances(state, list, opts);
+    GU.store.commit((st) => {
+      for (const op of plan.ops) {
+        if (op.kind === 'new') {
+          if (!st.accounts.some((a) => a.id === op.rec.id)) st.accounts.push(Object.assign({}, op.rec));
+          continue;
+        }
+        const a = st.accounts.find((x) => x.id === op.id);
+        if (!a) continue;
+        a.balanceAnchor = Object.assign({}, op.anchor);
+        if (op.limit !== undefined) a.overdraftLimit = op.limit;
+      }
+    }, { label: plan.label });
+    const res = {
+      label: plan.label, count: plan.rows.length, rows: plan.rows, date: plan.date,
+      created: plan.rows.filter((r) => r.created).map((r) => ({ id: r.id, name: r.name })),
+      updated: plan.rows.filter((r) => !r.created).map((r) => ({ id: r.id, name: r.name })),
+      together: together(GU.store.state).total,
+      undo() {
+        let kept = 0;
+        GU.store.commit((st) => {
+          for (const r of plan.rows) {
+            if (r.created) {
+              if (st.transactions.some((t) => t.account === r.id)) kept++;
+              else st.accounts = st.accounts.filter((a) => a.id !== r.id);
+              continue;
+            }
+            const a = st.accounts.find((x) => x.id === r.id);
+            if (!a) continue;
+            if (r.before.anchor) a.balanceAnchor = Object.assign({}, r.before.anchor);
+            else delete a.balanceAnchor;
+            if (r.limitSet) {
+              if (r.before.overdraftLimit === undefined) delete a.overdraftLimit;
+              else a.overdraftLimit = r.before.overdraftLimit;
+            }
+          }
+        }, { label: 'Undid “' + plan.label + '”' });
+        return kept === 0;
+      },
+    };
+    return res;
+  }
+
+  /* From readings ({provider, name, type, amount, overdraft_limit, map?, skip?}) to what setBalances takes: each reading's
+     account (see matchReadings), or a new account for the ones that match none. Returns {match, list, create, plan,
+     error}: plan is what it would do (null with an error message when something isn't sensible). */
+  function readingsPlan(state, rows, opts) {
+    const match = matchReadings(state, rows);
+    const list = [];
+    const create = [];
+    rows.forEach((r, i) => {
+      const m = match[i];
+      if (m.how === 'skip' || m.how === 'dup') return;
+      if (m.accountId) list.push({ accountId: m.accountId, amount: r.amount, overdraftLimit: r.overdraft_limit });
+      else create.push({ provider: r.provider, name: accountNameFor(r), type: r.type, amount: r.amount, overdraftLimit: r.overdraft_limit });
+    });
+    let plan = null;
+    let error = '';
+    try {
+      plan = planBalances(state, list, Object.assign({}, opts, { create }));
+    } catch (e) {
+      error = e.message;
+    }
+    return { match, list, create, plan, error };
+  }
+  /* Sets the balances of readings in one saved step (see setBalances). */
+  function setFromReadings(rows, opts) {
+    const p = readingsPlan(GU.store.state, rows, opts);
+    if (p.error) throw new Error(p.error);
+    return setBalances(p.list, Object.assign({}, opts, { create: p.create }));
+  }
+
+  GU.money = { accountBalance, accounts, balanceSeries, moveTransactions, mergeAccounts, accountFixes, applyFix, tidyAll, twins, importWarning,
+    anchorDate, accountNameFor, matchReadings, planBalances, setBalances, readingsPlan, setFromReadings, together, togetherIf, scrub, nameText, freeName, keyOf, bankKey, knownBank, knownBankIn, familyOf, typeOf, KNOWN_BANKS, ACCOUNT_TYPES, MAX_BALANCES };
   /* ---------- instalment plans (Klarna, PayPal Pay in 3, Amazon…) ---------- */
   // Days between payments for lenders that don't collect monthly.
   const EVERY = { Clearpay: 14, Zilch: 14, Laybuy: 7 };

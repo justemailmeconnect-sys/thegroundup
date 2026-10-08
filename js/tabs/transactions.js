@@ -121,7 +121,7 @@
       return '<div class="acct' + (on ? ' is-on' : '') + (b && b.balance < 0 ? ' is-neg' : '') + '">' +
         '<button type="button" class="acct__main" data-acct="' + esc(x.account.id) + '" aria-pressed="' + on + '">' +
         '<span class="acct__name">' + esc(x.account.name) + (x.account.bank && !x.account.name.toLowerCase().includes(x.account.bank.toLowerCase()) ? ' <small>' + esc(x.account.bank) + '</small>' : '') + '</span>' +
-        '<b class="acct__bal">' + (b ? esc(money(b.balance)) : '–') + '</b>' + D.balanceLine(b) + '</button>' +
+        '<b class="acct__bal">' + (b ? esc(money(b.balance)) : '–') + '</b>' + D.balanceLine(b, x.account) + '</button>' +
         '<span class="acct__foot">' + D.staleNote(b) + '<button type="button" class="btn btn--sm btn--ghost" data-acct-edit="' + esc(x.account.id) + '">' + icon('edit') + (b ? 'Update' : 'Set balance') + '</button></span></div>';
     }).join('') + '</div>';
   }
@@ -234,11 +234,7 @@
 
   /* A balance typed in for today already includes every payment imported for that account,
      even ones the bank dated a day ahead. */
-  function anchorDate(st, id, date) {
-    const d = date || today();
-    if (d < today()) return d;
-    return st.transactions.reduce((m, t) => (t.account === id && t.date > m ? t.date : m), d);
-  }
+  const anchorDate = (st, id, date) => GU.money.anchorDate(st, id, date);
 
   /* Tell me what every account holds right now, in one go. Blank boxes are left as they are. */
   function updateBalances() {
@@ -268,11 +264,15 @@
           set.push([x.account.id, amt]);
         }
         if (!set.length) return;
-        store.commit((st) => {
-          for (const [id, amt] of set) st.accounts.find((a) => a.id === id).balanceAnchor = { date: anchorDate(st, id, v.date), amount: amt };
-        });
-        const total = sum(GU.money.accounts(store.state).filter((x) => x.info), (x) => x.info.balance);
-        toast('Balances updated. Together you have ' + money(total));
+        // The same code the Sorting hub and Ask Claude use, so the balance and its date are worked out one way.
+        let res;
+        try {
+          res = GU.money.setBalances(set.map(([id, amount]) => ({ accountId: id, amount })), { date: v.date });
+        } catch (e) {
+          toast(e.message);
+          return false;
+        }
+        toast('Balances updated. Together you have ' + money(res.together));
       },
     });
   }

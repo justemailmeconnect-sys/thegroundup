@@ -142,7 +142,7 @@
     if (GU.money) {
       for (const x of GU.money.accounts(state)) {
         const b = x.info;
-        if (!b) continue;
+        if (!b || x.account.type === 'credit') continue; // a credit card owes: that's in Debts, not an overdraft
         const name = x.account.name;
         const when = b.staleDays > 3 ? ' on ' + fmtDate(b.asOf, { short: true }) : '';
         const go = { account: x.account.id };
