@@ -1110,7 +1110,7 @@
     const label = (r && r.title) || item.note || (item.files[0] && item.files[0].name) || 'Item';
     if (item.status === 'reading') {
       return '<li class="hub-card is-reading">' + thumbs + '<div class="hub-card__main"><p class="hub-card__head"><b>' + esc(label) + '</b></p>' +
-        '<p class="reading"><span class="spinner" aria-hidden="true"></span>' + (item.hint ? 'Sorting it again with what you said…' : 'Reading…') + '</p></div></li>';
+        '<p class="reading"><span class="spinner" aria-hidden="true"></span>' + (item.hint ? 'Sorting it again with what you said…' : 'Reading…') + '</p>' + (GU.art ? GU.art.skeleton(2) : '') + '</div></li>';
     }
     if (isBalances(r)) return balancesCardHTML(item);
     const place = r && r.destination !== 'unsure' ? GU.brain.placeOf(r) : null;
@@ -1231,7 +1231,7 @@
       '<div class="hub-reply__body">' +
       (r.q ? '<p class="hub-reply__q"><span class="visually-hidden">You said: </span>“' + esc(r.q.length > 140 ? r.q.slice(0, 140) + '…' : r.q) + '”</p>' : '') +
       '<div class="hub-reply__text">' + (r.text ? mdLine(r.text) : '') +
-      (r.busy ? '<p class="hub-reply__status"><span class="spinner" aria-hidden="true"></span><span>' + esc(r.status || 'Thinking…') + '</span></p>' : '') +
+      (r.busy ? '<p class="hub-reply__status"><span class="spinner" aria-hidden="true"></span><span>' + esc(r.status || 'Thinking…') + '</span></p>' + (GU.art && !r.text ? GU.art.skeleton(2) : '') : '') +
       (r.note ? '<p class="hub-reply__note' + (r.error ? ' is-error' : '') + '">' + esc(r.note) + (r.note === 'Connect Claude in Settings to sort with instructions.' ? ' <a class="link" href="#settings">Settings</a>' : '') + '</p>' : '') +
       (r.truncated ? '<p class="hub-reply__note">Claude stopped before the end. Ask for less at a time.</p>' : '') + '</div>' +
       (changes.length ? '<ul class="hub-reply__changes">' + changes.map((x) => '<li>' + icon('check') + '<span>' + esc(x.l.kind === 'change' ? x.l.summary : 'Filed “' + (x.l.title || '') + '” in ' + x.l.label) + '</span></li>').join('') + '</ul>' : '') +

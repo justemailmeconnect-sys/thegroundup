@@ -76,8 +76,12 @@
   function pill(text, tone, ico) {
     return '<span class="pill' + (tone ? ' pill--' + tone : '') + '">' + (ico ? icon(ico) : '') + esc(text) + '</span>';
   }
+  /* o: {icon, title, text, action}, and for the picture above it: art (a drawing's name from GU.art.kinds(), or false for none) and
+     size ('full' for a page's main empty state, the default; 'compact' for a small tile inside a panel or a dialog). The drawing
+     follows the icon when art isn't given. The icon stays in the markup (the picture takes its place on screen). */
   function emptyState(o) {
-    return '<div class="empty">' + icon(o.icon || 'info', 'empty__icon') + '<h3>' + esc(o.title) + '</h3>' +
+    const art = GU.art && o.art !== false ? GU.art.block(o.art || GU.art.forIcon(o.icon), { size: o.size }) : '';
+    return '<div class="empty">' + art + icon(o.icon || 'info', 'empty__icon') + '<h3>' + esc(o.title) + '</h3>' +
       (o.text ? '<p>' + o.text + '</p>' : '') + (o.action || '') + '</div>';
   }
   function chips(name, options, current) {
@@ -548,9 +552,22 @@
     root.querySelectorAll('img[data-file]').forEach((img) => {
       const id = img.getAttribute('data-file');
       img.removeAttribute('data-file');
+      // A thumbnail shimmers softly (css/art.css) until its picture is in.
+      const box = img.closest('.thumb');
+      const done = () => box && box.classList.remove('is-loading', 'shimmer');
+      if (box) box.classList.add('is-loading', 'shimmer');
       GU.files.url(id).then((u) => {
-        if (u) img.src = u;
-        else img.replaceWith(Object.assign(document.createElement('span'), { className: 'att__icon', innerHTML: icon('image') }));
+        if (u) {
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+          img.src = u;
+        } else {
+          done();
+          img.replaceWith(Object.assign(document.createElement('span'), { className: 'att__icon', innerHTML: icon('image') }));
+        }
+      }, (err) => {
+        done();
+        throw err;
       });
     });
   }
@@ -567,15 +584,16 @@
   function viewFiles(list, start, title) {
     if (!list || !list.length) return;
     let i = start || 0;
-    const d = openDialog({ title: title || 'Attachment', wide: true, className: 'dlg--viewer', body: '<div class="viewer"></div>', footer: '<div class="viewer__nav"></div>' });
+    const d = openDialog({ title: title || 'Attachment', wide: true, className: 'dlg--viewer', body: '<div class="viewer" aria-busy="true"><span class="viewer__skel shimmer" aria-hidden="true"></span></div>', footer: '<div class="viewer__nav"></div>' });
     async function show() {
       const f = list[i];
       const url = await GU.files.url(f.id);
       const box = d.body.querySelector('.viewer');
-      if (!url) box.innerHTML = emptyState({ icon: 'file', title: 'File not found', text: 'This file may have been removed from this browser.' });
+      box.removeAttribute('aria-busy');
+      if (!url) box.innerHTML = emptyState({ icon: 'file', title: 'File not found', text: 'This file may have been removed from this browser.', size: 'compact' });
       else if (isImage(f.type)) box.innerHTML = '<img src="' + esc(url) + '" alt="' + esc(f.name) + '">';
       else if (/pdf/.test(f.type)) box.innerHTML = '<iframe src="' + esc(url) + '" title="' + esc(f.name) + '"></iframe>';
-      else box.innerHTML = emptyState({ icon: 'file', title: f.name, text: "This type of file can't be previewed here. Download it to open it." });
+      else box.innerHTML = emptyState({ icon: 'file', title: f.name, text: "This type of file can't be previewed here. Download it to open it.", size: 'compact' });
       d.el.querySelector('.viewer__nav').innerHTML =
         '<span class="viewer__name">' + esc(f.name) + ' · ' + fmtBytes(f.size) + (list.length > 1 ? ' · ' + (i + 1) + ' of ' + list.length : '') + '</span>' +
         '<span class="spacer"></span>' +

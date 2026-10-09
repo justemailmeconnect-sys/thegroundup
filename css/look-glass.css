@@ -3,30 +3,388 @@
    Home = plum and lilac, Work = aqua and teal, over a white canvas washed with soft pastel light. Frosted dock, top bar,
    dialogs and menus; everywhere else a translucent surface on a long, soft, tinted shadow. Gentle, springy movement.
    Behaviour (the gliding pill, page entrance) lives in js/look-glass.js. The dark block is written twice
-   (data-theme override and OS preference), so change both together. */
+   (data-theme override and OS preference), so change both together.
+   Colours: every colour that belongs to the Home or the Work family is a palette variable (--h-* and --w-*), declared once in the
+   "palettes" section just below and overridden by one block per palette (:root[data-palette="..."]). Nothing further down hard-codes
+   a family colour; semantic colours (good, warning, critical, info) never change with the palette. */
+/* ============ Soft Glass: palettes ============
+   --h-* is the Home colour family and --w-* the Work family, each complete: the accent and its tints and gradient stops, the door and wash
+   colours, and the tinted neutrals (lines, soft surfaces, ink, the dark page colours). The first three blocks are the default palette, which
+   is exactly the Soft Glass this file started with (Home lilac and plum, Work aqua and teal); the blocks after them replace the same variables
+   for each other palette, light and dark (both dark selectors, as everywhere in this file). <html data-palette="..."> picks one;
+   no attribute means the default. The sections below only ever read these variables.
+   The palette blocks and the swatch colours are generated (scratchpad/skin/palette/gen); the default blocks are today's literals. */
+/*PALETTES-START*/
+:root {
+  /* Home family */
+  --h-bg-2: #f9f6fc; --h-surface-2: #f5f1f9; --h-line: #ece6f2; --h-line-strong: #dbd2e5; --h-ink: #1c1830; --h-ink-2: #48435f; --h-ink-3: #5c5977;
+  --h-accent: #6a2f9e; --h-accent-2: #8b4bc2; --h-accent-soft: #f2e8fb; --h-part-tint: #f8f1fd; --h-part-ink: #2c1244; --h-tint: 106 47 158;
+  --h-grad-a: #9457d2; --h-grad-b: #6a2f9e; --h-rail-ink: #66627f; --h-rail-hover: rgb(106 47 158 / 0.08); --h-rail-active: #f2e8fb;
+  --h-rail-ink-hover: #1c1830; --h-rail-ink-active: #6a2f9e; --h-k-task: #4b4366; --h-k-task-bg: #eee9f6; --h-grid: #f0eaf5; --h-axis: #d9cfe4;
+  --h-backdrop: rgb(36 24 58 / 0.34); --h-wash-1: rgb(206 178 255 / 0.46); --h-wash-2: rgb(255 190 224 / 0.36); --h-wash-3: rgb(186 208 255 / 0.34);
+  --h-door-bg: #f3e9ff; --h-door-ink: #2c1244; --h-door-1: #f7eeff; --h-door-2: #fde9f5; --h-door-3: #e8efff; --h-door-tone: #f4eaff;
+  --h-door-glow-1: rgb(196 156 255 / 0.5); --h-door-glow-2: rgb(255 172 216 / 0.42); --h-bar: #ffffff;
+  /* Work family */
+  --w-bg-2: #f9f6fc; --w-surface-2: #f5f1f9; --w-line: #ece6f2; --w-line-strong: #dbd2e5; --w-ink: #1c1830; --w-ink-2: #48435f; --w-ink-3: #5c5977;
+  --w-accent: #0b6b78; --w-accent-2: #12808c; --w-accent-soft: #dcf3f3; --w-part-tint: #ebf8f8; --w-part-ink: #05303a; --w-tint: 11 107 120;
+  --w-grad-a: #11808c; --w-grad-b: #0b6b78; --w-rail-ink: #66627f; --w-rail-hover: rgb(106 47 158 / 0.08); --w-rail-active: #dcf3f3;
+  --w-rail-ink-hover: #1c1830; --w-rail-ink-active: #0b6b78; --w-k-task: #4b4366; --w-k-task-bg: #eee9f6; --w-grid: #f0eaf5; --w-axis: #d9cfe4;
+  --w-backdrop: rgb(36 24 58 / 0.34); --w-wash-1: rgb(150 232 224 / 0.46); --w-wash-2: rgb(176 234 200 / 0.34); --w-wash-3: rgb(170 214 250 / 0.36);
+  --w-door-bg: #dcf5f3; --w-door-ink: #05303a; --w-door-grid: #d3ebea; --w-door-1: #e1f8f5; --w-door-2: #e4f2fc; --w-door-3: #e9faef;
+  --w-door-tone: #def6f3; --w-door-glow-1: rgb(104 222 214 / 0.5); --w-door-glow-2: rgb(150 210 255 / 0.5); --w-bar: #ffffff;
+}
+:root[data-theme="dark"] {
+  /* Home family */
+  --h-bg: #0f0c18; --h-bg-2: #15111f; --h-surface: #1a1526; --h-surface-2: #241d33; --h-line: #2c2540; --h-line-strong: #40375a; --h-ink: #f2edfb;
+  --h-ink-2: #c6bfd8; --h-ink-3: #9c95b2; --h-accent: #d4b8f6; --h-accent-2: #b78fe8; --h-accent-ink: #1d0c33; --h-accent-soft: #2b2142;
+  --h-part-tint: #1d1630; --h-part-ink: #f3e8ff; --h-tint: 190 150 245; --h-grad-a: #e2cdfb; --h-grad-b: #b88ced; --h-rail: #1b1629;
+  --h-rail-ink: #b4adc9; --h-rail-hover: rgb(190 150 245 / 0.1); --h-rail-active: #2b2142; --h-rail-ink-hover: #f2edfb; --h-rail-ink-active: #d4b8f6;
+  --h-k-task: #c8bfe0; --h-k-task-bg: #2a2340; --h-grid: #241e36; --h-axis: #3a3254; --h-backdrop: rgb(6 3 14 / 0.62);
+  --h-glass: rgb(36 28 56 / 0.58); --h-glass-2: rgb(30 23 48 / 0.88); --h-wash-1: rgb(112 60 190 / 0.34); --h-wash-2: rgb(176 60 150 / 0.2);
+  --h-wash-3: rgb(60 80 190 / 0.22); --h-door-bg: #2a1c44; --h-door-ink: #f3e8ff; --h-door-1: #2c1b49; --h-door-2: #3a1c45; --h-door-3: #1f2650;
+  --h-door-tone: #2a1c44; --h-door-glow-1: rgb(160 110 255 / 0.4); --h-door-glow-2: rgb(255 110 190 / 0.28); --h-dlg: #1d1730; --h-toast-bg: #f2edfb;
+  --h-toast-ink: #1d1730; --h-ring-rail: #1b1629; --h-bar: #0f0c18; --h-ring-dot: rgb(26 21 38 / 0.9);
+  /* Work family */
+  --w-bg: #0a1317; --w-bg-2: #0e1a1f; --w-surface: #12202a; --w-surface-2: #19303a; --w-line: #1e3640; --w-line-strong: #2d4b57; --w-ink: #f2edfb;
+  --w-ink-2: #c6bfd8; --w-ink-3: #8fa9b2; --w-accent: #86dde3; --w-accent-2: #4fbfc8; --w-accent-ink: #032a30; --w-accent-soft: #14343c;
+  --w-part-tint: #11262b; --w-part-ink: #d7f4f5; --w-tint: 100 215 225; --w-grad-a: #a6eaee; --w-grad-b: #4fbfc8; --w-rail: #112028;
+  --w-rail-ink: #b4adc9; --w-rail-hover: rgb(190 150 245 / 0.1); --w-rail-active: #14343c; --w-rail-ink-hover: #f2edfb; --w-rail-ink-active: #86dde3;
+  --w-k-task: #c8bfe0; --w-k-task-bg: #2a2340; --w-grid: #172a32; --w-axis: #2b4651; --w-backdrop: rgb(6 3 14 / 0.62);
+  --w-glass: rgb(20 40 50 / 0.58); --w-glass-2: rgb(16 34 43 / 0.8); --w-wash-1: rgb(18 140 150 / 0.32); --w-wash-2: rgb(30 150 110 / 0.2);
+  --w-wash-3: rgb(30 100 190 / 0.24); --w-door-bg: #0f3338; --w-door-ink: #d7f4f5; --w-door-grid: #17383d; --w-door-1: #0e3a40; --w-door-2: #10334a;
+  --w-door-3: #0f3b34; --w-door-tone: #0f3338; --w-door-glow-1: rgb(40 200 205 / 0.36); --w-door-glow-2: rgb(60 140 230 / 0.32); --w-dlg: #1d1730;
+  --w-toast-bg: #f2edfb; --w-toast-ink: #1d1730; --w-ring-rail: #1b1629; --w-bar: #0a1317; --w-ring-dot: rgb(26 21 38 / 0.9);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) {
+  /* Home family */
+  --h-bg: #0f0c18; --h-bg-2: #15111f; --h-surface: #1a1526; --h-surface-2: #241d33; --h-line: #2c2540; --h-line-strong: #40375a; --h-ink: #f2edfb;
+  --h-ink-2: #c6bfd8; --h-ink-3: #9c95b2; --h-accent: #d4b8f6; --h-accent-2: #b78fe8; --h-accent-ink: #1d0c33; --h-accent-soft: #2b2142;
+  --h-part-tint: #1d1630; --h-part-ink: #f3e8ff; --h-tint: 190 150 245; --h-grad-a: #e2cdfb; --h-grad-b: #b88ced; --h-rail: #1b1629;
+  --h-rail-ink: #b4adc9; --h-rail-hover: rgb(190 150 245 / 0.1); --h-rail-active: #2b2142; --h-rail-ink-hover: #f2edfb; --h-rail-ink-active: #d4b8f6;
+  --h-k-task: #c8bfe0; --h-k-task-bg: #2a2340; --h-grid: #241e36; --h-axis: #3a3254; --h-backdrop: rgb(6 3 14 / 0.62);
+  --h-glass: rgb(36 28 56 / 0.58); --h-glass-2: rgb(30 23 48 / 0.88); --h-wash-1: rgb(112 60 190 / 0.34); --h-wash-2: rgb(176 60 150 / 0.2);
+  --h-wash-3: rgb(60 80 190 / 0.22); --h-door-bg: #2a1c44; --h-door-ink: #f3e8ff; --h-door-1: #2c1b49; --h-door-2: #3a1c45; --h-door-3: #1f2650;
+  --h-door-tone: #2a1c44; --h-door-glow-1: rgb(160 110 255 / 0.4); --h-door-glow-2: rgb(255 110 190 / 0.28); --h-dlg: #1d1730; --h-toast-bg: #f2edfb;
+  --h-toast-ink: #1d1730; --h-ring-rail: #1b1629; --h-bar: #0f0c18; --h-ring-dot: rgb(26 21 38 / 0.9);
+  /* Work family */
+  --w-bg: #0a1317; --w-bg-2: #0e1a1f; --w-surface: #12202a; --w-surface-2: #19303a; --w-line: #1e3640; --w-line-strong: #2d4b57; --w-ink: #f2edfb;
+  --w-ink-2: #c6bfd8; --w-ink-3: #8fa9b2; --w-accent: #86dde3; --w-accent-2: #4fbfc8; --w-accent-ink: #032a30; --w-accent-soft: #14343c;
+  --w-part-tint: #11262b; --w-part-ink: #d7f4f5; --w-tint: 100 215 225; --w-grad-a: #a6eaee; --w-grad-b: #4fbfc8; --w-rail: #112028;
+  --w-rail-ink: #b4adc9; --w-rail-hover: rgb(190 150 245 / 0.1); --w-rail-active: #14343c; --w-rail-ink-hover: #f2edfb; --w-rail-ink-active: #86dde3;
+  --w-k-task: #c8bfe0; --w-k-task-bg: #2a2340; --w-grid: #172a32; --w-axis: #2b4651; --w-backdrop: rgb(6 3 14 / 0.62);
+  --w-glass: rgb(20 40 50 / 0.58); --w-glass-2: rgb(16 34 43 / 0.8); --w-wash-1: rgb(18 140 150 / 0.32); --w-wash-2: rgb(30 150 110 / 0.2);
+  --w-wash-3: rgb(30 100 190 / 0.24); --w-door-bg: #0f3338; --w-door-ink: #d7f4f5; --w-door-grid: #17383d; --w-door-1: #0e3a40; --w-door-2: #10334a;
+  --w-door-3: #0f3b34; --w-door-tone: #0f3338; --w-door-glow-1: rgb(40 200 205 / 0.36); --w-door-glow-2: rgb(60 140 230 / 0.32); --w-dlg: #1d1730;
+  --w-toast-bg: #f2edfb; --w-toast-ink: #1d1730; --w-ring-rail: #1b1629; --w-bar: #0a1317; --w-ring-dot: rgb(26 21 38 / 0.9);
+}
+}
+/* Ocean */
+:root[data-palette="ocean"] {
+  /* Home family */
+  --h-bg-2: #f4f8fd; --h-surface-2: #eef3fb; --h-line: #e2eaf5; --h-line-strong: #cbd8e9; --h-ink: #031d2e; --h-ink-2: #2f495d; --h-ink-3: #426074;
+  --h-accent: #004ba0; --h-accent-2: #1966d2; --h-accent-soft: #e3edff; --h-part-tint: #eff4ff; --h-part-ink: #001e49; --h-tint: 0 75 160;
+  --h-grad-a: #1672df; --h-grad-b: #004ba0; --h-rail-ink: #4d687d; --h-rail-hover: rgb(0 79 168 / 0.08); --h-rail-active: #e3edff;
+  --h-rail-ink-hover: #031d2e; --h-rail-ink-active: #004ba0; --h-k-task: #2b4b65; --h-k-task-bg: #e4edf8; --h-grid: #e7edf8; --h-axis: #c7d5e8;
+  --h-backdrop: rgb(1 33 60 / 0.34); --h-wash-1: rgb(151 198 255 / 0.46); --h-wash-2: rgb(218 202 255 / 0.36); --h-wash-3: rgb(155 220 239 / 0.34);
+  --h-door-bg: #e4efff; --h-door-ink: #001e49; --h-door-1: #ebf3ff; --h-door-2: #f0edff; --h-door-3: #dff3fa; --h-door-tone: #e6f0ff;
+  --h-door-glow-1: rgb(124 183 255 / 0.5); --h-door-glow-2: rgb(210 188 255 / 0.42); --h-bar: #f0f6ff;
+  /* Work family */
+  --w-bg-2: #f1f9f9; --w-surface-2: #ebf6f5; --w-line: #ddedeb; --w-line-strong: #c3ddda; --w-ink: #002018; --w-ink-2: #294e45; --w-ink-3: #3e6458;
+  --w-accent: #006d69; --w-accent-2: #00827a; --w-accent-soft: #d5f6ed; --w-part-tint: #e7faf5; --w-part-ink: #003133; --w-tint: 0 109 105;
+  --w-grad-a: #00827a; --w-grad-b: #006d69; --w-rail-ink: #476c61; --w-rail-hover: rgb(84 3 216 / 0.08); --w-rail-active: #d5f6ed;
+  --w-rail-ink-hover: #002018; --w-rail-ink-active: #006d69; --w-k-task: #1d5146; --w-k-task-bg: #dff0ed; --w-grid: #e1f0f0; --w-axis: #bedbd8;
+  --w-backdrop: rgb(0 39 33 / 0.34); --w-wash-1: rgb(125 240 199 / 0.46); --w-wash-2: rgb(180 237 164 / 0.34); --w-wash-3: rgb(133 222 255 / 0.36);
+  --w-door-bg: #d6f8eb; --w-door-ink: #003133; --w-door-grid: #cdeee3; --w-door-1: #dcfbed; --w-door-2: #daf5fe; --w-door-3: #eafbe4;
+  --w-door-tone: #d9f9eb; --w-door-glow-1: rgb(32 232 182 / 0.5); --w-door-glow-2: rgb(106 219 255 / 0.5); --w-bar: #ecf9f8;
+}
+:root[data-theme="dark"][data-palette="ocean"] {
+  /* Home family */
+  --h-bg: #070f19; --h-bg-2: #0c1420; --h-surface: #0f1928; --h-surface-2: #152236; --h-line: #1a2b42; --h-line-strong: #293e5d; --h-ink: #e9f0fd;
+  --h-ink-2: #b7c5db; --h-ink-3: #8a9bb5; --h-accent: #a2c9ff; --h-accent-2: #6ba7f6; --h-accent-ink: #001732; --h-accent-soft: #0b2a44;
+  --h-part-tint: #041d31; --h-part-ink: #e4efff; --h-tint: 111 176 255; --h-grad-a: #c0d9ff; --h-grad-b: #64a6fc; --h-rail: #0e1a2b;
+  --h-rail-ink: #a3b3cc; --h-rail-hover: rgb(111 176 255 / 0.1); --h-rail-active: #0b2a44; --h-rail-ink-hover: #e9f0fd; --h-rail-ink-active: #a2c9ff;
+  --h-k-task: #b3c6e4; --h-k-task-bg: #162942; --h-grid: #142338; --h-axis: #233957; --h-backdrop: rgb(1 5 16 / 0.62);
+  --h-glass: rgb(17 34 59 / 0.58); --h-glass-2: rgb(13 28 50 / 0.88); --h-wash-1: rgb(0 100 170 / 0.34); --h-wash-2: rgb(116 87 210 / 0.2);
+  --h-wash-3: rgb(0 105 130 / 0.22); --h-door-bg: #012747; --h-door-ink: #e4efff; --h-door-1: #00284a; --h-door-2: #1a2752; --h-door-3: #00303f;
+  --h-door-tone: #012747; --h-door-glow-1: rgb(0 150 247 / 0.4); --h-door-glow-2: rgb(187 144 255 / 0.28); --h-dlg: #0b1c32; --h-toast-bg: #e9f0fd;
+  --h-toast-ink: #0b1c32; --h-ring-rail: #0e1a2b; --h-bar: #070f19; --h-ring-dot: rgb(15 25 40 / 0.9);
+  /* Work family */
+  --w-bg: #0a1412; --w-bg-2: #0e1b18; --w-surface: #0d2221; --w-surface-2: #18322d; --w-line: #1d3832; --w-line-strong: #2d4e45; --w-ink: #e2f4f4;
+  --w-ink-2: #aacbca; --w-ink-3: #91aba1; --w-accent: #4ee6de; --w-accent-2: #00c5c0; --w-accent-ink: #002b2d; --w-accent-soft: #00363c;
+  --w-part-tint: #01282c; --w-part-ink: #ccf8f3; --w-tint: 0 223 218; --w-grad-a: #84f2ea; --w-grad-b: #00c5c0; --w-rail: #0f221f;
+  --w-rail-ink: #95bab8; --w-rail-hover: rgb(174 155 255 / 0.1); --w-rail-active: #00363c; --w-rail-ink-hover: #e2f4f4; --w-rail-ink-active: #4ee6de;
+  --w-k-task: #a3d0cd; --w-k-task-bg: #00302d; --w-grid: #172c27; --w-axis: #2b4841; --w-backdrop: rgb(0 7 6 / 0.62);
+  --w-glass: rgb(17 42 38 / 0.58); --w-glass-2: rgb(14 36 33 / 0.8); --w-wash-1: rgb(0 142 140 / 0.32); --w-wash-2: rgb(0 153 82 / 0.2);
+  --w-wash-3: rgb(0 107 172 / 0.24); --w-door-bg: #003536; --w-door-ink: #ccf8f3; --w-door-grid: #003b3c; --w-door-1: #003c3d; --w-door-2: #003549;
+  --w-door-3: #003d2d; --w-door-tone: #003536; --w-door-glow-1: rgb(0 203 191 / 0.36); --w-door-glow-2: rgb(0 147 222 / 0.32); --w-dlg: #00221f;
+  --w-toast-bg: #e2f4f4; --w-toast-ink: #00221f; --w-ring-rail: #001f1e; --w-bar: #0a1412; --w-ring-dot: rgb(2 29 28 / 0.9);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="ocean"] {
+  /* Home family */
+  --h-bg: #070f19; --h-bg-2: #0c1420; --h-surface: #0f1928; --h-surface-2: #152236; --h-line: #1a2b42; --h-line-strong: #293e5d; --h-ink: #e9f0fd;
+  --h-ink-2: #b7c5db; --h-ink-3: #8a9bb5; --h-accent: #a2c9ff; --h-accent-2: #6ba7f6; --h-accent-ink: #001732; --h-accent-soft: #0b2a44;
+  --h-part-tint: #041d31; --h-part-ink: #e4efff; --h-tint: 111 176 255; --h-grad-a: #c0d9ff; --h-grad-b: #64a6fc; --h-rail: #0e1a2b;
+  --h-rail-ink: #a3b3cc; --h-rail-hover: rgb(111 176 255 / 0.1); --h-rail-active: #0b2a44; --h-rail-ink-hover: #e9f0fd; --h-rail-ink-active: #a2c9ff;
+  --h-k-task: #b3c6e4; --h-k-task-bg: #162942; --h-grid: #142338; --h-axis: #233957; --h-backdrop: rgb(1 5 16 / 0.62);
+  --h-glass: rgb(17 34 59 / 0.58); --h-glass-2: rgb(13 28 50 / 0.88); --h-wash-1: rgb(0 100 170 / 0.34); --h-wash-2: rgb(116 87 210 / 0.2);
+  --h-wash-3: rgb(0 105 130 / 0.22); --h-door-bg: #012747; --h-door-ink: #e4efff; --h-door-1: #00284a; --h-door-2: #1a2752; --h-door-3: #00303f;
+  --h-door-tone: #012747; --h-door-glow-1: rgb(0 150 247 / 0.4); --h-door-glow-2: rgb(187 144 255 / 0.28); --h-dlg: #0b1c32; --h-toast-bg: #e9f0fd;
+  --h-toast-ink: #0b1c32; --h-ring-rail: #0e1a2b; --h-bar: #070f19; --h-ring-dot: rgb(15 25 40 / 0.9);
+  /* Work family */
+  --w-bg: #0a1412; --w-bg-2: #0e1b18; --w-surface: #0d2221; --w-surface-2: #18322d; --w-line: #1d3832; --w-line-strong: #2d4e45; --w-ink: #e2f4f4;
+  --w-ink-2: #aacbca; --w-ink-3: #91aba1; --w-accent: #4ee6de; --w-accent-2: #00c5c0; --w-accent-ink: #002b2d; --w-accent-soft: #00363c;
+  --w-part-tint: #01282c; --w-part-ink: #ccf8f3; --w-tint: 0 223 218; --w-grad-a: #84f2ea; --w-grad-b: #00c5c0; --w-rail: #0f221f;
+  --w-rail-ink: #95bab8; --w-rail-hover: rgb(174 155 255 / 0.1); --w-rail-active: #00363c; --w-rail-ink-hover: #e2f4f4; --w-rail-ink-active: #4ee6de;
+  --w-k-task: #a3d0cd; --w-k-task-bg: #00302d; --w-grid: #172c27; --w-axis: #2b4841; --w-backdrop: rgb(0 7 6 / 0.62);
+  --w-glass: rgb(17 42 38 / 0.58); --w-glass-2: rgb(14 36 33 / 0.8); --w-wash-1: rgb(0 142 140 / 0.32); --w-wash-2: rgb(0 153 82 / 0.2);
+  --w-wash-3: rgb(0 107 172 / 0.24); --w-door-bg: #003536; --w-door-ink: #ccf8f3; --w-door-grid: #003b3c; --w-door-1: #003c3d; --w-door-2: #003549;
+  --w-door-3: #003d2d; --w-door-tone: #003536; --w-door-glow-1: rgb(0 203 191 / 0.36); --w-door-glow-2: rgb(0 147 222 / 0.32); --w-dlg: #00221f;
+  --w-toast-bg: #e2f4f4; --w-toast-ink: #00221f; --w-ring-rail: #001f1e; --w-bar: #0a1412; --w-ring-dot: rgb(2 29 28 / 0.9);
+}
+}
+/* Blush */
+:root[data-palette="blush"] {
+  /* Home family */
+  --h-bg-2: #fcf5f9; --h-surface-2: #f9f0f5; --h-line: #f1e5ed; --h-line-strong: #e3d0dd; --h-ink: #261529; --h-ink-2: #543f56; --h-ink-3: #6a556e;
+  --h-accent: #8a1b74; --h-accent-2: #b03992; --h-accent-soft: #fbe6f2; --h-part-tint: #fef0f7; --h-part-ink: #3b0a31; --h-tint: 138 27 116;
+  --h-grad-a: #bc45a1; --h-grad-b: #8a1b74; --h-rail-ink: #735e76; --h-rail-hover: rgb(138 27 116 / 0.08); --h-rail-active: #fbe6f2;
+  --h-rail-ink-hover: #261529; --h-rail-ink-active: #8a1b74; --h-k-task: #593e5b; --h-k-task-bg: #f4e7f1; --h-grid: #f5e9f0; --h-axis: #e2cddb;
+  --h-backdrop: rgb(48 19 47 / 0.34); --h-wash-1: rgb(238 167 224 / 0.46); --h-wash-2: rgb(255 195 194 / 0.36); --h-wash-3: rgb(214 199 248 / 0.34);
+  --h-door-bg: #fde6f5; --h-door-ink: #3b0a31; --h-door-1: #ffecf7; --h-door-2: #ffeaeb; --h-door-3: #f1ecfc; --h-door-tone: #fee7f5;
+  --h-door-glow-1: rgb(235 142 215 / 0.5); --h-door-glow-2: rgb(255 178 177 / 0.42); --h-bar: #fdf2f9;
+  /* Work family */
+  --w-bg-2: #f3f8fd; --w-surface-2: #edf4fa; --w-line: #e0eaf4; --w-line-strong: #c8d9e8; --w-ink: #001e2a; --w-ink-2: #2a4b5b; --w-ink-3: #3d6171;
+  --w-accent: #396386; --w-accent-2: #43779d; --w-accent-soft: #e0f1fa; --w-part-tint: #edf7fc; --w-part-ink: #1a2b3f; --w-tint: 57 99 134;
+  --w-grad-a: #43779d; --w-grad-b: #396386; --w-rail-ink: #486a79; --w-rail-hover: rgb(135 37 110 / 0.08); --w-rail-active: #e0f1fa;
+  --w-rail-ink-hover: #001e2a; --w-rail-ink-active: #396386; --w-k-task: #234d62; --w-k-task-bg: #e2eef7; --w-grid: #e5eef7; --w-axis: #c4d7e7;
+  --w-backdrop: rgb(0 35 53 / 0.34); --w-wash-1: rgb(161 226 250 / 0.46); --w-wash-2: rgb(165 233 231 / 0.34); --w-wash-3: rgb(198 205 249 / 0.36);
+  --w-door-bg: #dff3fb; --w-door-ink: #1a2b3f; --w-door-grid: #d7e9f2; --w-door-1: #e3f6fd; --w-door-2: #eceffc; --w-door-3: #e6faf9;
+  --w-door-tone: #e0f4fb; --w-door-glow-1: rgb(125 213 246 / 0.5); --w-door-glow-2: rgb(188 198 254 / 0.5); --w-bar: #eef7ff;
+}
+:root[data-theme="dark"][data-palette="blush"] {
+  /* Home family */
+  --h-bg: #150a12; --h-bg-2: #1c0f18; --h-surface: #23121d; --h-surface-2: #2f1928; --h-line: #3a2033; --h-line-strong: #523149; --h-ink: #faebf3;
+  --h-ink-2: #d4bbca; --h-ink-3: #ad91a3; --h-accent: #eeb1dc; --h-accent-2: #da84c4; --h-accent-ink: #290625; --h-accent-soft: #381c36;
+  --h-part-tint: #271227; --h-part-ink: #fde5f4; --h-tint: 226 137 207; --h-grad-a: #f6c8e7; --h-grad-b: #dd80c6; --h-rail: #251320;
+  --h-rail-ink: #c5a9bb; --h-rail-hover: rgb(226 137 207 / 0.1); --h-rail-active: #381c36; --h-rail-ink-hover: #faebf3; --h-rail-ink-active: #eeb1dc;
+  --h-k-task: #dbbace; --h-k-task-bg: #391e32; --h-grid: #301a2a; --h-axis: #4c2c44; --h-backdrop: rgb(11 2 7 / 0.62);
+  --h-glass: rgb(50 23 42 / 0.58); --h-glass-2: rgb(42 19 36 / 0.88); --h-wash-1: rgb(152 37 147 / 0.34); --h-wash-2: rgb(195 51 88 / 0.2);
+  --h-wash-3: rgb(116 59 172 / 0.22); --h-door-bg: #391636; --h-door-ink: #fde5f4; --h-door-1: #3c1439; --h-door-2: #461731; --h-door-3: #341f48;
+  --h-door-tone: #391636; --h-door-glow-1: rgb(211 88 206 / 0.4); --h-door-glow-2: rgb(255 124 124 / 0.28); --h-dlg: #2a1224; --h-toast-bg: #faebf3;
+  --h-toast-ink: #2a1224; --h-ring-rail: #251320; --h-bar: #150a12; --h-ring-dot: rgb(35 18 29 / 0.9);
+  /* Work family */
+  --w-bg: #0b1317; --w-bg-2: #0f1a20; --w-surface: #13202b; --w-surface-2: #1a2f3b; --w-line: #1f3541; --w-line-strong: #2f4a58; --w-ink: #e7f1fd;
+  --w-ink-2: #b2c6da; --w-ink-3: #90a8b4; --w-accent: #a5d5fe; --w-accent-2: #7eb5e5; --w-accent-ink: #172537; --w-accent-soft: #242f41;
+  --w-part-tint: #1b232f; --w-part-ink: #dff0ff; --w-tint: 144 201 253; --w-grad-a: #bde1ff; --w-grad-b: #7db4e4; --w-rail: #122029;
+  --w-rail-ink: #9eb5ca; --w-rail-hover: rgb(229 139 189 / 0.1); --w-rail-active: #242f41; --w-rail-ink-hover: #e7f1fd; --w-rail-ink-active: #a5d5fe;
+  --w-k-task: #aec9e3; --w-k-task-bg: #0e2b41; --w-grid: #182a33; --w-axis: #2d4552; --w-backdrop: rgb(0 5 15 / 0.62);
+  --w-glass: rgb(22 40 51 / 0.58); --w-glass-2: rgb(17 34 44 / 0.8); --w-wash-1: rgb(80 128 173 / 0.32); --w-wash-2: rgb(0 145 161 / 0.2);
+  --w-wash-3: rgb(117 79 170 / 0.24); --w-door-bg: #1f2f3f; --w-door-ink: #dff0ff; --w-door-grid: #253444; --w-door-1: #233549; --w-door-2: #2d2c49;
+  --w-door-3: #163844; --w-door-tone: #1f2f3f; --w-door-glow-1: rgb(109 185 241 / 0.36); --w-door-glow-2: rgb(149 118 212 / 0.32); --w-dlg: #041e30;
+  --w-toast-bg: #e7f1fd; --w-toast-ink: #041e30; --w-ring-rail: #091b2a; --w-bar: #0b1317; --w-ring-dot: rgb(11 26 39 / 0.9);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="blush"] {
+  /* Home family */
+  --h-bg: #150a12; --h-bg-2: #1c0f18; --h-surface: #23121d; --h-surface-2: #2f1928; --h-line: #3a2033; --h-line-strong: #523149; --h-ink: #faebf3;
+  --h-ink-2: #d4bbca; --h-ink-3: #ad91a3; --h-accent: #eeb1dc; --h-accent-2: #da84c4; --h-accent-ink: #290625; --h-accent-soft: #381c36;
+  --h-part-tint: #271227; --h-part-ink: #fde5f4; --h-tint: 226 137 207; --h-grad-a: #f6c8e7; --h-grad-b: #dd80c6; --h-rail: #251320;
+  --h-rail-ink: #c5a9bb; --h-rail-hover: rgb(226 137 207 / 0.1); --h-rail-active: #381c36; --h-rail-ink-hover: #faebf3; --h-rail-ink-active: #eeb1dc;
+  --h-k-task: #dbbace; --h-k-task-bg: #391e32; --h-grid: #301a2a; --h-axis: #4c2c44; --h-backdrop: rgb(11 2 7 / 0.62);
+  --h-glass: rgb(50 23 42 / 0.58); --h-glass-2: rgb(42 19 36 / 0.88); --h-wash-1: rgb(152 37 147 / 0.34); --h-wash-2: rgb(195 51 88 / 0.2);
+  --h-wash-3: rgb(116 59 172 / 0.22); --h-door-bg: #391636; --h-door-ink: #fde5f4; --h-door-1: #3c1439; --h-door-2: #461731; --h-door-3: #341f48;
+  --h-door-tone: #391636; --h-door-glow-1: rgb(211 88 206 / 0.4); --h-door-glow-2: rgb(255 124 124 / 0.28); --h-dlg: #2a1224; --h-toast-bg: #faebf3;
+  --h-toast-ink: #2a1224; --h-ring-rail: #251320; --h-bar: #150a12; --h-ring-dot: rgb(35 18 29 / 0.9);
+  /* Work family */
+  --w-bg: #0b1317; --w-bg-2: #0f1a20; --w-surface: #13202b; --w-surface-2: #1a2f3b; --w-line: #1f3541; --w-line-strong: #2f4a58; --w-ink: #e7f1fd;
+  --w-ink-2: #b2c6da; --w-ink-3: #90a8b4; --w-accent: #a5d5fe; --w-accent-2: #7eb5e5; --w-accent-ink: #172537; --w-accent-soft: #242f41;
+  --w-part-tint: #1b232f; --w-part-ink: #dff0ff; --w-tint: 144 201 253; --w-grad-a: #bde1ff; --w-grad-b: #7db4e4; --w-rail: #122029;
+  --w-rail-ink: #9eb5ca; --w-rail-hover: rgb(229 139 189 / 0.1); --w-rail-active: #242f41; --w-rail-ink-hover: #e7f1fd; --w-rail-ink-active: #a5d5fe;
+  --w-k-task: #aec9e3; --w-k-task-bg: #0e2b41; --w-grid: #182a33; --w-axis: #2d4552; --w-backdrop: rgb(0 5 15 / 0.62);
+  --w-glass: rgb(22 40 51 / 0.58); --w-glass-2: rgb(17 34 44 / 0.8); --w-wash-1: rgb(80 128 173 / 0.32); --w-wash-2: rgb(0 145 161 / 0.2);
+  --w-wash-3: rgb(117 79 170 / 0.24); --w-door-bg: #1f2f3f; --w-door-ink: #dff0ff; --w-door-grid: #253444; --w-door-1: #233549; --w-door-2: #2d2c49;
+  --w-door-3: #163844; --w-door-tone: #1f2f3f; --w-door-glow-1: rgb(109 185 241 / 0.36); --w-door-glow-2: rgb(149 118 212 / 0.32); --w-dlg: #041e30;
+  --w-toast-bg: #e7f1fd; --w-toast-ink: #041e30; --w-ring-rail: #091b2a; --w-bar: #0b1317; --w-ring-dot: rgb(11 26 39 / 0.9);
+}
+}
+/* Meadow */
+:root[data-palette="meadow"] {
+  /* Home family */
+  --h-bg-2: #f4f9f4; --h-surface-2: #eff5ee; --h-line: #e3ece1; --h-line-strong: #cddbca; --h-ink: #171e04; --h-ink-2: #404b2e; --h-ink-3: #576042;
+  --h-accent: #175a00; --h-accent-2: #1b7b0b; --h-accent-soft: #e3f1e3; --h-part-tint: #eef7ee; --h-part-ink: #052600; --h-tint: 23 90 0;
+  --h-grad-a: #318611; --h-grad-b: #175a00; --h-rail-ink: #5f694c; --h-rail-hover: rgb(27 101 0 / 0.08); --h-rail-active: #e3f1e3;
+  --h-rail-ink-hover: #171e04; --h-rail-ink-active: #175a00; --h-k-task: #3f4d2a; --h-k-task-bg: #e6efe3; --h-grid: #e7f0e6; --h-axis: #cad9c6;
+  --h-backdrop: rgb(21 38 1 / 0.34); --h-wash-1: rgb(165 210 145 / 0.46); --h-wash-2: rgb(154 230 216 / 0.36); --h-wash-3: rgb(217 210 162 / 0.34);
+  --h-door-bg: #e4f3e2; --h-door-ink: #052600; --h-door-1: #eaf6e9; --h-door-2: #e0f5ef; --h-door-3: #f1f0e0; --h-door-tone: #e5f4e3;
+  --h-door-glow-1: rgb(139 198 115 / 0.5); --h-door-glow-2: rgb(120 223 207 / 0.42); --h-bar: #f1f8ef;
+  /* Work family */
+  --w-bg-2: #f8f6fc; --w-surface-2: #f4f1fa; --w-line: #ebe6f3; --w-line-strong: #d9d3e6; --w-ink: #191931; --w-ink-2: #444460; --w-ink-3: #585a78;
+  --w-accent: #665486; --w-accent-2: #7766a0; --w-accent-soft: #ececfe; --w-part-tint: #f4f4fe; --w-part-ink: #31243d; --w-tint: 102 84 134;
+  --w-grad-a: #7766a0; --w-grad-b: #665486; --w-rail-ink: #626380; --w-rail-hover: rgb(151 34 0 / 0.08); --w-rail-active: #ececfe;
+  --w-rail-ink-hover: #191931; --w-rail-ink-active: #665486; --w-k-task: #474467; --w-k-task-bg: #ece9f7; --w-grid: #efeaf6; --w-axis: #d6d0e6;
+  --w-backdrop: rgb(32 25 60 / 0.34); --w-wash-1: rgb(204 211 255 / 0.46); --w-wash-2: rgb(190 222 255 / 0.34); --w-wash-3: rgb(236 192 227 / 0.36);
+  --w-door-bg: #eceeff; --w-door-ink: #31243d; --w-door-grid: #e3e3f6; --w-door-1: #eff1ff; --w-door-2: #f8ebf6; --w-door-3: #edf6ff;
+  --w-door-tone: #ecefff; --w-door-glow-1: rgb(187 194 255 / 0.5); --w-door-glow-2: rgb(237 181 228 / 0.5); --w-bar: #f7f4fe;
+}
+:root[data-theme="dark"][data-palette="meadow"] {
+  /* Home family */
+  --h-bg: #061109; --h-bg-2: #09170e; --h-surface: #0b1d11; --h-surface-2: #0f2719; --h-line: #15311e; --h-line-strong: #23472e; --h-ink: #e6f4eb;
+  --h-ink-2: #b2cbba; --h-ink-3: #87a28e; --h-accent: #aed1b6; --h-accent-2: #81b38c; --h-accent-ink: #081c0b; --h-accent-soft: #1e2d1d;
+  --h-part-tint: #141f12; --h-part-ink: #e4f2e8; --h-tint: 136 188 145; --h-grad-a: #c5dfcb; --h-grad-b: #7db489; --h-rail: #0b1f11;
+  --h-rail-ink: #9fbaa6; --h-rail-hover: rgb(136 188 145 / 0.1); --h-rail-active: #1e2d1d; --h-rail-ink-hover: #e6f4eb; --h-rail-ink-active: #aed1b6;
+  --h-k-task: #aecfb8; --h-k-task-bg: #12301b; --h-grid: #102917; --h-axis: #1f4128; --h-backdrop: rgb(0 7 2 / 0.62);
+  --h-glass: rgb(10 41 21 / 0.58); --h-glass-2: rgb(7 34 17 / 0.88); --h-wash-1: rgb(51 113 52 / 0.34); --h-wash-2: rgb(0 132 121 / 0.2);
+  --h-wash-3: rgb(90 101 21 / 0.22); --h-door-bg: #182b18; --h-door-ink: #e4f2e8; --h-door-1: #172d17; --h-door-2: #113224; --h-door-3: #272e13;
+  --h-door-tone: #182b18; --h-door-glow-1: rgb(98 164 95 / 0.4); --h-door-glow-2: rgb(53 192 193 / 0.28); --h-dlg: #08220f; --h-toast-bg: #e6f4eb;
+  --h-toast-ink: #08220f; --h-ring-rail: #0b1f11; --h-bar: #061109; --h-ring-dot: rgb(11 29 17 / 0.9);
+  /* Work family */
+  --w-bg: #111018; --w-bg-2: #171721; --w-surface: #201b29; --w-surface-2: #2c2a3d; --w-line: #313043; --w-line-strong: #44435c; --w-ink: #f3edfa;
+  --w-ink-2: #c8bed7; --w-ink-3: #a1a3b9; --w-accent: #d9c6ff; --w-accent-2: #bda3e8; --w-accent-ink: #2b1f34; --w-accent-soft: #37293d;
+  --w-part-tint: #271e2c; --w-part-ink: #efeaff; --w-tint: 207 179 252; --w-grad-a: #e2d6ff; --w-grad-b: #bca2e7; --w-rail: #1e1c29;
+  --w-rail-ink: #b6acc8; --w-rail-hover: rgb(245 140 101 / 0.1); --w-rail-active: #37293d; --w-rail-ink-hover: #f3edfa; --w-rail-ink-active: #d9c6ff;
+  --w-k-task: #cabede; --w-k-task-bg: #2c223f; --w-grid: #262535; --w-axis: #403f55; --w-backdrop: rgb(7 3 13 / 0.62);
+  --w-glass: rgb(37 34 52 / 0.58); --w-glass-2: rgb(32 29 44 / 0.8); --w-wash-1: rgb(135 109 171 / 0.32); --w-wash-2: rgb(91 126 199 / 0.2);
+  --w-wash-3: rgb(167 53 106 / 0.24); --w-door-bg: #33283e; --w-door-ink: #efeaff; --w-door-grid: #382d42; --w-door-1: #3a2d46; --w-door-2: #432439;
+  --w-door-3: #2d304c; --w-door-tone: #33283e; --w-door-glow-1: rgb(185 160 245 / 0.36); --w-door-glow-2: rgb(207 93 148 / 0.32); --w-dlg: #1f162f;
+  --w-toast-bg: #f3edfa; --w-toast-ink: #1f162f; --w-ring-rail: #1c1628; --w-bar: #111018; --w-ring-dot: rgb(27 21 37 / 0.9);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="meadow"] {
+  /* Home family */
+  --h-bg: #061109; --h-bg-2: #09170e; --h-surface: #0b1d11; --h-surface-2: #0f2719; --h-line: #15311e; --h-line-strong: #23472e; --h-ink: #e6f4eb;
+  --h-ink-2: #b2cbba; --h-ink-3: #87a28e; --h-accent: #aed1b6; --h-accent-2: #81b38c; --h-accent-ink: #081c0b; --h-accent-soft: #1e2d1d;
+  --h-part-tint: #141f12; --h-part-ink: #e4f2e8; --h-tint: 136 188 145; --h-grad-a: #c5dfcb; --h-grad-b: #7db489; --h-rail: #0b1f11;
+  --h-rail-ink: #9fbaa6; --h-rail-hover: rgb(136 188 145 / 0.1); --h-rail-active: #1e2d1d; --h-rail-ink-hover: #e6f4eb; --h-rail-ink-active: #aed1b6;
+  --h-k-task: #aecfb8; --h-k-task-bg: #12301b; --h-grid: #102917; --h-axis: #1f4128; --h-backdrop: rgb(0 7 2 / 0.62);
+  --h-glass: rgb(10 41 21 / 0.58); --h-glass-2: rgb(7 34 17 / 0.88); --h-wash-1: rgb(51 113 52 / 0.34); --h-wash-2: rgb(0 132 121 / 0.2);
+  --h-wash-3: rgb(90 101 21 / 0.22); --h-door-bg: #182b18; --h-door-ink: #e4f2e8; --h-door-1: #172d17; --h-door-2: #113224; --h-door-3: #272e13;
+  --h-door-tone: #182b18; --h-door-glow-1: rgb(98 164 95 / 0.4); --h-door-glow-2: rgb(53 192 193 / 0.28); --h-dlg: #08220f; --h-toast-bg: #e6f4eb;
+  --h-toast-ink: #08220f; --h-ring-rail: #0b1f11; --h-bar: #061109; --h-ring-dot: rgb(11 29 17 / 0.9);
+  /* Work family */
+  --w-bg: #111018; --w-bg-2: #171721; --w-surface: #201b29; --w-surface-2: #2c2a3d; --w-line: #313043; --w-line-strong: #44435c; --w-ink: #f3edfa;
+  --w-ink-2: #c8bed7; --w-ink-3: #a1a3b9; --w-accent: #d9c6ff; --w-accent-2: #bda3e8; --w-accent-ink: #2b1f34; --w-accent-soft: #37293d;
+  --w-part-tint: #271e2c; --w-part-ink: #efeaff; --w-tint: 207 179 252; --w-grad-a: #e2d6ff; --w-grad-b: #bca2e7; --w-rail: #1e1c29;
+  --w-rail-ink: #b6acc8; --w-rail-hover: rgb(245 140 101 / 0.1); --w-rail-active: #37293d; --w-rail-ink-hover: #f3edfa; --w-rail-ink-active: #d9c6ff;
+  --w-k-task: #cabede; --w-k-task-bg: #2c223f; --w-grid: #262535; --w-axis: #403f55; --w-backdrop: rgb(7 3 13 / 0.62);
+  --w-glass: rgb(37 34 52 / 0.58); --w-glass-2: rgb(32 29 44 / 0.8); --w-wash-1: rgb(135 109 171 / 0.32); --w-wash-2: rgb(91 126 199 / 0.2);
+  --w-wash-3: rgb(167 53 106 / 0.24); --w-door-bg: #33283e; --w-door-ink: #efeaff; --w-door-grid: #382d42; --w-door-1: #3a2d46; --w-door-2: #432439;
+  --w-door-3: #2d304c; --w-door-tone: #33283e; --w-door-glow-1: rgb(185 160 245 / 0.36); --w-door-glow-2: rgb(207 93 148 / 0.32); --w-dlg: #1f162f;
+  --w-toast-bg: #f3edfa; --w-toast-ink: #1f162f; --w-ring-rail: #1c1628; --w-bar: #111018; --w-ring-dot: rgb(27 21 37 / 0.9);
+}
+}
+/* Dusk */
+:root[data-palette="dusk"] {
+  /* Home family */
+  --h-bg-2: #f7f7fd; --h-surface-2: #f2f2fa; --h-line: #e8e7f4; --h-line-strong: #d4d4e8; --h-ink: #131a31; --h-ink-2: #3d4661; --h-ink-3: #515c79;
+  --h-accent: #5039ab; --h-accent-2: #6d55d1; --h-accent-soft: #eceafe; --h-part-tint: #f4f2ff; --h-part-ink: #1f164a; --h-tint: 80 57 171;
+  --h-grad-a: #7361e0; --h-grad-b: #5039ab; --h-rail-ink: #5b6581; --h-rail-hover: rgb(81 58 172 / 0.08); --h-rail-active: #eceafe;
+  --h-rail-ink-hover: #131a31; --h-rail-ink-active: #5039ab; --h-k-task: #3e4668; --h-k-task-bg: #e9ebf8; --h-grid: #ecebf7; --h-axis: #d1d1e8;
+  --h-backdrop: rgb(25 28 62 / 0.34); --h-wash-1: rgb(184 187 255 / 0.46); --h-wash-2: rgb(244 193 242 / 0.36); --h-wash-3: rgb(171 213 252 / 0.34);
+  --h-door-bg: #ececff; --h-door-ink: #1f164a; --h-door-1: #f2f0ff; --h-door-2: #f9eafa; --h-door-3: #e4f1fe; --h-door-tone: #eeedff;
+  --h-door-glow-1: rgb(169 168 255 / 0.5); --h-door-glow-2: rgb(241 176 238 / 0.42); --h-bar: #f5f5ff;
+  /* Work family */
+  --w-bg-2: #fcf5f9; --w-surface-2: #f9f0f5; --w-line: #f1e5ed; --w-line-strong: #e3d0dd; --w-ink: #261529; --w-ink-2: #543f56; --w-ink-3: #6a556e;
+  --w-accent: #7d4c6f; --w-accent-2: #925d87; --w-accent-soft: #f6e8f7; --w-part-tint: #faf2fa; --w-part-ink: #3b202f; --w-tint: 125 76 111;
+  --w-grad-a: #925d87; --w-grad-b: #7d4c6f; --w-rail-ink: #735e76; --w-rail-hover: rgb(115 74 0 / 0.08); --w-rail-active: #f6e8f7;
+  --w-rail-ink-hover: #261529; --w-rail-ink-active: #7d4c6f; --w-k-task: #593e5b; --w-k-task-bg: #f4e7f1; --w-grid: #f5e9f0; --w-axis: #e2cddb;
+  --w-backdrop: rgb(48 19 47 / 0.34); --w-wash-1: rgb(236 198 251 / 0.46); --w-wash-2: rgb(215 213 255 / 0.34); --w-wash-3: rgb(249 190 197 / 0.36);
+  --w-door-bg: #f7eafa; --w-door-ink: #3b202f; --w-door-grid: #eee0f0; --w-door-1: #f9eefe; --w-door-2: #fdeaed; --w-door-3: #f4f4ff;
+  --w-door-tone: #f7ebfc; --w-door-glow-1: rgb(228 178 245 / 0.5); --w-door-glow-2: rgb(254 179 189 / 0.5); --w-bar: #fdf2f9;
+}
+:root[data-theme="dark"][data-palette="dusk"] {
+  /* Home family */
+  --h-bg: #0a0e19; --h-bg-2: #0f1321; --h-surface: #131728; --h-surface-2: #1b2036; --h-line: #212943; --h-line-strong: #313c5e; --h-ink: #eceffd;
+  --h-ink-2: #bcc3db; --h-ink-3: #9099b5; --h-accent: #b0c4ff; --h-accent-2: #83a0f8; --h-accent-ink: #061438; --h-accent-soft: #162745;
+  --h-part-tint: #0c1b32; --h-part-ink: #e7edff; --h-tint: 137 169 255; --h-grad-a: #c9d6ff; --h-grad-b: #7f9ffe; --h-rail: #13192b;
+  --h-rail-ink: #a8b1cc; --h-rail-hover: rgb(137 169 255 / 0.1); --h-rail-active: #162745; --h-rail-ink-hover: #eceffd; --h-rail-ink-active: #b0c4ff;
+  --h-k-task: #bbc4e4; --h-k-task-bg: #1e2743; --h-grid: #1a2138; --h-axis: #2c3757; --h-backdrop: rgb(3 4 16 / 0.62);
+  --h-glass: rgb(24 32 59 / 0.58); --h-glass-2: rgb(20 26 51 / 0.88); --h-wash-1: rgb(26 86 204 / 0.34); --h-wash-2: rgb(136 79 199 / 0.2);
+  --h-wash-3: rgb(0 102 144 / 0.22); --h-door-bg: #112449; --h-door-ink: #e7edff; --h-door-1: #0f244e; --h-door-2: #252451; --h-door-3: #002e47;
+  --h-door-tone: #112449; --h-door-glow-1: rgb(77 141 255 / 0.4); --h-door-glow-2: rgb(213 127 255 / 0.28); --h-dlg: #121a32; --h-toast-bg: #eceffd;
+  --h-toast-ink: #121a32; --h-ring-rail: #13192b; --h-bar: #0a0e19; --h-ring-dot: rgb(19 23 40 / 0.9);
+  /* Work family */
+  --w-bg: #150f15; --w-bg-2: #1d151d; --w-surface: #271922; --w-surface-2: #362736; --w-line: #3c2c3c; --w-line-strong: #513f53; --w-ink: #faebf3;
+  --w-ink-2: #d4bbca; --w-ink-3: #ae9fb1; --w-accent: #ffb9ea; --w-accent-2: #e795cd; --w-accent-ink: #361929; --w-accent-soft: #422531;
+  --w-part-tint: #2f1c24; --w-part-ink: #ffe5f8; --w-tint: 249 162 221; --w-grad-a: #ffcbef; --w-grad-b: #e492ca; --w-rail: #251923;
+  --w-rail-ink: #c4a8ba; --w-rail-hover: rgb(224 159 0 / 0.1); --w-rail-active: #422531; --w-rail-ink-hover: #faebf3; --w-rail-ink-active: #ffb9ea;
+  --w-k-task: #dbbace; --w-k-task-bg: #391e32; --w-grid: #2e222f; --w-axis: #4c3b4d; --w-backdrop: rgb(11 2 7 / 0.62);
+  --w-glass: rgb(46 31 44 / 0.58); --w-glass-2: rgb(40 26 38 / 0.8); --w-wash-1: rgb(169 94 145 / 0.32); --w-wash-2: rgb(144 105 198 / 0.2);
+  --w-wash-3: rgb(185 39 0 / 0.24); --w-door-bg: #3f2333; --w-door-ink: #ffe5f8; --w-door-grid: #442838; --w-door-1: #48273a; --w-door-2: #4d1f22;
+  --w-door-3: #3f2947; --w-door-tone: #3f2333; --w-door-glow-1: rgb(233 139 214 / 0.36); --w-door-glow-2: rgb(230 81 62 / 0.32); --w-dlg: #2a1224;
+  --w-toast-bg: #faebf3; --w-toast-ink: #2a1224; --w-ring-rail: #251320; --w-bar: #150f15; --w-ring-dot: rgb(35 18 29 / 0.9);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="dusk"] {
+  /* Home family */
+  --h-bg: #0a0e19; --h-bg-2: #0f1321; --h-surface: #131728; --h-surface-2: #1b2036; --h-line: #212943; --h-line-strong: #313c5e; --h-ink: #eceffd;
+  --h-ink-2: #bcc3db; --h-ink-3: #9099b5; --h-accent: #b0c4ff; --h-accent-2: #83a0f8; --h-accent-ink: #061438; --h-accent-soft: #162745;
+  --h-part-tint: #0c1b32; --h-part-ink: #e7edff; --h-tint: 137 169 255; --h-grad-a: #c9d6ff; --h-grad-b: #7f9ffe; --h-rail: #13192b;
+  --h-rail-ink: #a8b1cc; --h-rail-hover: rgb(137 169 255 / 0.1); --h-rail-active: #162745; --h-rail-ink-hover: #eceffd; --h-rail-ink-active: #b0c4ff;
+  --h-k-task: #bbc4e4; --h-k-task-bg: #1e2743; --h-grid: #1a2138; --h-axis: #2c3757; --h-backdrop: rgb(3 4 16 / 0.62);
+  --h-glass: rgb(24 32 59 / 0.58); --h-glass-2: rgb(20 26 51 / 0.88); --h-wash-1: rgb(26 86 204 / 0.34); --h-wash-2: rgb(136 79 199 / 0.2);
+  --h-wash-3: rgb(0 102 144 / 0.22); --h-door-bg: #112449; --h-door-ink: #e7edff; --h-door-1: #0f244e; --h-door-2: #252451; --h-door-3: #002e47;
+  --h-door-tone: #112449; --h-door-glow-1: rgb(77 141 255 / 0.4); --h-door-glow-2: rgb(213 127 255 / 0.28); --h-dlg: #121a32; --h-toast-bg: #eceffd;
+  --h-toast-ink: #121a32; --h-ring-rail: #13192b; --h-bar: #0a0e19; --h-ring-dot: rgb(19 23 40 / 0.9);
+  /* Work family */
+  --w-bg: #150f15; --w-bg-2: #1d151d; --w-surface: #271922; --w-surface-2: #362736; --w-line: #3c2c3c; --w-line-strong: #513f53; --w-ink: #faebf3;
+  --w-ink-2: #d4bbca; --w-ink-3: #ae9fb1; --w-accent: #ffb9ea; --w-accent-2: #e795cd; --w-accent-ink: #361929; --w-accent-soft: #422531;
+  --w-part-tint: #2f1c24; --w-part-ink: #ffe5f8; --w-tint: 249 162 221; --w-grad-a: #ffcbef; --w-grad-b: #e492ca; --w-rail: #251923;
+  --w-rail-ink: #c4a8ba; --w-rail-hover: rgb(224 159 0 / 0.1); --w-rail-active: #422531; --w-rail-ink-hover: #faebf3; --w-rail-ink-active: #ffb9ea;
+  --w-k-task: #dbbace; --w-k-task-bg: #391e32; --w-grid: #2e222f; --w-axis: #4c3b4d; --w-backdrop: rgb(11 2 7 / 0.62);
+  --w-glass: rgb(46 31 44 / 0.58); --w-glass-2: rgb(40 26 38 / 0.8); --w-wash-1: rgb(169 94 145 / 0.32); --w-wash-2: rgb(144 105 198 / 0.2);
+  --w-wash-3: rgb(185 39 0 / 0.24); --w-door-bg: #3f2333; --w-door-ink: #ffe5f8; --w-door-grid: #442838; --w-door-1: #48273a; --w-door-2: #4d1f22;
+  --w-door-3: #3f2947; --w-door-tone: #3f2333; --w-door-glow-1: rgb(233 139 214 / 0.36); --w-door-glow-2: rgb(230 81 62 / 0.32); --w-dlg: #2a1224;
+  --w-toast-bg: #faebf3; --w-toast-ink: #2a1224; --w-ring-rail: #251320; --w-bar: #150f15; --w-ring-dot: rgb(35 18 29 / 0.9);
+}
+}
+/*PALETTES-END*/
+/* the swatches in Settings > Look > Colours: each palette's Home and Work colours as this look draws them (two stops each) */
+/*SWATCHES-START*/
+.pal-sw--default { --sw-h1: #9457d2; --sw-h2: #6a2f9e; --sw-w1: #11808c; --sw-w2: #0b6b78; }
+.pal-sw--ocean { --sw-h1: #1672df; --sw-h2: #004ba0; --sw-w1: #00827a; --sw-w2: #006d69; }
+.pal-sw--blush { --sw-h1: #bc45a1; --sw-h2: #8a1b74; --sw-w1: #43779d; --sw-w2: #396386; }
+.pal-sw--meadow { --sw-h1: #318611; --sw-h2: #175a00; --sw-w1: #7766a0; --sw-w2: #665486; }
+.pal-sw--dusk { --sw-h1: #7361e0; --sw-h2: #5039ab; --sw-w1: #925d87; --sw-w2: #7d4c6f; }
+:root[data-theme="dark"] .pal-sw--default { --sw-h1: #e2cdfb; --sw-h2: #b88ced; --sw-w1: #a6eaee; --sw-w2: #4fbfc8; }
+:root[data-theme="dark"] .pal-sw--ocean { --sw-h1: #c0d9ff; --sw-h2: #64a6fc; --sw-w1: #84f2ea; --sw-w2: #00c5c0; }
+:root[data-theme="dark"] .pal-sw--blush { --sw-h1: #f6c8e7; --sw-h2: #dd80c6; --sw-w1: #bde1ff; --sw-w2: #7db4e4; }
+:root[data-theme="dark"] .pal-sw--meadow { --sw-h1: #c5dfcb; --sw-h2: #7db489; --sw-w1: #e2d6ff; --sw-w2: #bca2e7; }
+:root[data-theme="dark"] .pal-sw--dusk { --sw-h1: #c9d6ff; --sw-h2: #7f9ffe; --sw-w1: #ffcbef; --sw-w2: #e492ca; }
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) .pal-sw--default { --sw-h1: #e2cdfb; --sw-h2: #b88ced; --sw-w1: #a6eaee; --sw-w2: #4fbfc8; }
+:root:not([data-theme="light"]) .pal-sw--ocean { --sw-h1: #c0d9ff; --sw-h2: #64a6fc; --sw-w1: #84f2ea; --sw-w2: #00c5c0; }
+:root:not([data-theme="light"]) .pal-sw--blush { --sw-h1: #f6c8e7; --sw-h2: #dd80c6; --sw-w1: #bde1ff; --sw-w2: #7db4e4; }
+:root:not([data-theme="light"]) .pal-sw--meadow { --sw-h1: #c5dfcb; --sw-h2: #7db489; --sw-w1: #e2d6ff; --sw-w2: #bca2e7; }
+:root:not([data-theme="light"]) .pal-sw--dusk { --sw-h1: #c9d6ff; --sw-h2: #7f9ffe; --sw-w1: #ffcbef; --sw-w2: #e492ca; }
+}
+/*SWATCHES-END*/
+
 /* ============ Soft Glass: tokens ============
-   Home = plum / lilac, Work = aqua / teal, warm lilac-greys elsewhere. White canvas (--bg stays #ffffff in light).
+   The base tokens (the ones styles.css and every rule below read), pointed at the palette variables above: Home's family by default and
+   whenever <html data-part="home">, Work's under data-part="work". White canvas (--bg stays #ffffff in light).
    --tint is an "r g b" triple used for every long, soft, tinted shadow and hairline. */
 :root {
-  --bg: #ffffff; --bg-2: #f9f6fc; --surface: #ffffff; --surface-2: #f5f1f9; --line: #ece6f2; --line-strong: #dbd2e5;
-  --ink: #1c1830; --ink-2: #48435f; --ink-3: #5c5977;
-  --accent: #6a2f9e; --accent-2: #8b4bc2; --accent-ink: #ffffff; --accent-soft: #f2e8fb; --part-tint: #f8f1fd; --part-ink: #2c1244;
-  --tint: 106 47 158;
-  --grad-a: #9457d2; --grad-b: #6a2f9e;
-  --rail: #ffffff; --rail-ink: #66627f; --rail-hover: rgb(106 47 158 / 0.08); --rail-active: #f2e8fb;
-  --rail-ink-hover: #1c1830; --rail-ink-active: #6a2f9e; --rail-badge: #c8265c; --rail-badge-ink: #ffffff;
+  --bg: #ffffff; --bg-2: var(--h-bg-2); --surface: #ffffff; --surface-2: var(--h-surface-2); --line: var(--h-line); --line-strong: var(--h-line-strong);
+  --ink: var(--h-ink); --ink-2: var(--h-ink-2); --ink-3: var(--h-ink-3);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: #ffffff; --accent-soft: var(--h-accent-soft); --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink);
+  --tint: var(--h-tint);
+  --grad-a: var(--h-grad-a); --grad-b: var(--h-grad-b);
+  --rail: #ffffff; --rail-ink: var(--h-rail-ink); --rail-hover: var(--h-rail-hover); --rail-active: var(--h-rail-active);
+  --rail-ink-hover: var(--h-rail-ink-hover); --rail-ink-active: var(--h-rail-ink-active); --rail-badge: #c8265c; --rail-badge-ink: #ffffff;
   --good: #0d6841; --good-soft: #e1f5e9;
   --warn: #8c5a06; --warn-soft: #fcf0d4;
   --crit: #b0302c; --crit-soft: #fde6e2;
   --info: #3f4bb5; --info-soft: #e9ebfc;
-  --k-task: #4b4366; --k-task-bg: #eee9f6;
+  --k-task: var(--h-k-task); --k-task-bg: var(--h-k-task-bg);
   --k-money: #94470f; --k-money-bg: #fdecd9;
   --k-in: #1e5c98; --k-in-bg: #e0eefc;
   --k-doc: #55601f; --k-doc-bg: #edf1d6;
-  --series-in: #2a76bf; --series-out: #cf6420; --grid: #f0eaf5; --axis: #d9cfe4;
-  --home-door-bg: #f3e9ff; --home-door-ink: #2c1244; --home-door-accent: #6a2f9e;
-  --work-door-bg: #dcf5f3; --work-door-ink: #05303a; --work-door-accent: #0b6b78; --work-door-grid: #d3ebea;
-  --backdrop: rgb(36 24 58 / 0.34);
+  --series-in: #2a76bf; --series-out: #cf6420; --grid: var(--h-grid); --axis: var(--h-axis);
+  --home-door-bg: var(--h-door-bg); --home-door-ink: var(--h-part-ink); --home-door-accent: var(--h-accent);
+  --work-door-bg: var(--w-door-bg); --work-door-ink: var(--w-part-ink); --work-door-accent: var(--w-accent); --work-door-grid: var(--w-door-grid);
+  --backdrop: var(--h-backdrop);
 
   /* glass */
   --glass: rgb(255 255 255 / 0.66);
@@ -55,20 +413,31 @@
   --t-micro: 180ms; --t-page: 380ms; --t-overlay: 340ms;
 
   /* the wash behind everything (home = lilac / rose / periwinkle; work = aqua / mint / sky) */
-  --wash-1: rgb(206 178 255 / 0.46); --wash-2: rgb(255 190 224 / 0.36); --wash-3: rgb(186 208 255 / 0.34);
-  --wash-w1: rgb(150 232 224 / 0.46); --wash-w2: rgb(176 234 200 / 0.34); --wash-w3: rgb(170 214 250 / 0.36);
+  --wash-1: var(--h-wash-1); --wash-2: var(--h-wash-2); --wash-3: var(--h-wash-3);
+  --wash-w1: var(--w-wash-1); --wash-w2: var(--w-wash-2); --wash-w3: var(--w-wash-3);
+  --look-bar: var(--h-bar);
+  /* the illustrations (css/art.css) take the part's colour and its soft tint, so a palette recolours them too */
+  --art-1: var(--accent); --art-2: var(--accent-soft);
 }
 :root[data-part="home"] {
-  --accent: #6a2f9e; --accent-2: #8b4bc2; --accent-ink: #ffffff; --accent-soft: #f2e8fb;
-  --rail-active: #f2e8fb; --rail-ink-active: #6a2f9e; --part-tint: #f8f1fd; --part-ink: #2c1244;
-  --tint: 106 47 158; --grad-a: #9457d2; --grad-b: #6a2f9e;
+  --accent-ink: #ffffff; --bg-2: var(--h-bg-2); --surface-2: var(--h-surface-2); --line: var(--h-line); --line-strong: var(--h-line-strong);
+  --ink: var(--h-ink); --ink-2: var(--h-ink-2); --ink-3: var(--h-ink-3); --accent: var(--h-accent); --accent-2: var(--h-accent-2);
+  --accent-soft: var(--h-accent-soft); --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink); --tint: var(--h-tint);
+  --grad-a: var(--h-grad-a); --grad-b: var(--h-grad-b); --rail-ink: var(--h-rail-ink); --rail-hover: var(--h-rail-hover);
+  --rail-active: var(--h-rail-active); --rail-ink-hover: var(--h-rail-ink-hover); --rail-ink-active: var(--h-rail-ink-active);
+  --k-task: var(--h-k-task); --k-task-bg: var(--h-k-task-bg); --grid: var(--h-grid); --axis: var(--h-axis); --backdrop: var(--h-backdrop);
+  --look-bar: var(--h-bar);
 }
 :root[data-part="work"] {
-  --accent: #0b6b78; --accent-2: #12808c; --accent-ink: #ffffff; --accent-soft: #dcf3f3;
-  --rail-active: #dcf3f3; --rail-ink-active: #0b6b78; --part-tint: #ebf8f8; --part-ink: #05303a;
-  --tint: 11 107 120; --grad-a: #11808c; --grad-b: #0b6b78;
+  --accent-ink: #ffffff; --bg-2: var(--w-bg-2); --surface-2: var(--w-surface-2); --line: var(--w-line); --line-strong: var(--w-line-strong);
+  --ink: var(--w-ink); --ink-2: var(--w-ink-2); --ink-3: var(--w-ink-3); --accent: var(--w-accent); --accent-2: var(--w-accent-2);
+  --accent-soft: var(--w-accent-soft); --part-tint: var(--w-part-tint); --part-ink: var(--w-part-ink); --tint: var(--w-tint);
+  --grad-a: var(--w-grad-a); --grad-b: var(--w-grad-b); --rail-ink: var(--w-rail-ink); --rail-hover: var(--w-rail-hover);
+  --rail-active: var(--w-rail-active); --rail-ink-hover: var(--w-rail-ink-hover); --rail-ink-active: var(--w-rail-ink-active);
+  --k-task: var(--w-k-task); --k-task-bg: var(--w-k-task-bg); --grid: var(--w-grid); --axis: var(--w-axis); --backdrop: var(--w-backdrop);
+  --look-bar: var(--w-bar);
 }
-:root { --home-accent: #6a2f9e; --work-accent: #0b6b78; }
+:root { --home-accent: var(--h-accent); --work-accent: var(--w-accent); }
 
 /* ============ the wash: soft pastel light behind the page, crossfading between Home and Work ============ */
 html { background: var(--bg); }
@@ -541,15 +910,15 @@ details > summary { transition: color 0.2s; }
 /* ============ Today: the two doors ============ */
 .doors { gap: 14px; margin: 0 0 30px; }
 .door {
-  --dt: 106 47 158;
+  --dt: var(--h-tint);
   padding: 28px 30px 30px; border-radius: 34px; gap: 12px 12px;
   box-shadow: var(--glass-hi), 0 0 0 1px rgb(var(--dt) / 0.1), 0 24px 50px -26px rgb(var(--dt) / 0.45), 0 2px 4px rgb(var(--dt) / 0.05);
   transition: flex-grow 0.5s var(--spring), box-shadow 0.3s;
 }
-.door--home { --dt: 106 47 158; --door-bg: #f4eaff; background: linear-gradient(135deg, #f7eeff 0%, #fde9f5 52%, #e8efff 100%); }
-.door--work { --dt: 11 107 120; --door-bg: #def6f3; background: linear-gradient(135deg, #e1f8f5 0%, #e4f2fc 54%, #e9faef 100%); }
-.door--home::before { background: radial-gradient(62% 95% at 100% 0%, rgb(196 156 255 / 0.5), transparent 64%), radial-gradient(52% 80% at 0% 112%, rgb(255 172 216 / 0.42), transparent 66%); -webkit-mask-image: none; mask-image: none; }
-.door--work::before { background: radial-gradient(62% 95% at 100% 0%, rgb(104 222 214 / 0.5), transparent 64%), radial-gradient(52% 80% at 0% 112%, rgb(150 210 255 / 0.5), transparent 66%); -webkit-mask-image: none; mask-image: none; }
+.door--home { --dt: var(--h-tint); --door-bg: var(--h-door-tone); background: linear-gradient(135deg, var(--h-door-1) 0%, var(--h-door-2) 52%, var(--h-door-3) 100%); }
+.door--work { --dt: var(--w-tint); --door-bg: var(--w-door-tone); background: linear-gradient(135deg, var(--w-door-1) 0%, var(--w-door-2) 54%, var(--w-door-3) 100%); }
+.door--home::before { background: radial-gradient(62% 95% at 100% 0%, var(--h-door-glow-1), transparent 64%), radial-gradient(52% 80% at 0% 112%, var(--h-door-glow-2), transparent 66%); -webkit-mask-image: none; mask-image: none; }
+.door--work::before { background: radial-gradient(62% 95% at 100% 0%, var(--w-door-glow-1), transparent 64%), radial-gradient(52% 80% at 0% 112%, var(--w-door-glow-2), transparent 66%); -webkit-mask-image: none; mask-image: none; }
 .door::after {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
   background:
@@ -561,8 +930,8 @@ details > summary { transition: color 0.2s; }
 }
 .door--active { box-shadow: var(--glass-hi), 0 0 0 1px rgb(var(--dt) / 0.14), 0 30px 60px -26px rgb(var(--dt) / 0.55), 0 2px 4px rgb(var(--dt) / 0.06); }
 .door__eyebrow { font: 700 11px/1.35 var(--font-body); letter-spacing: 0.1em; color: rgb(var(--dt) / 0.85); }
-.door--home .door__eyebrow { color: #6a2f9e; }
-.door--work .door__eyebrow { color: #0b6b78; }
+.door--home .door__eyebrow { color: var(--h-accent); }
+.door--work .door__eyebrow { color: var(--w-accent); }
 .door__word, .door--home .door__word, .door--work .door__word {
   font-family: var(--font-display); font-style: normal; font-weight: 800; letter-spacing: -0.055em; font-variation-settings: normal; font-optical-sizing: auto;
   font-size: clamp(50px, 5.6vw, 78px); line-height: 0.98; padding: 2px 0 4px;
@@ -574,8 +943,8 @@ details > summary { transition: color 0.2s; }
 .door__btn { min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 700; background: rgb(255 255 255 / 0.7); border: 1px solid rgb(var(--dt) / 0.28); color: var(--door-accent); box-shadow: var(--glass-hi); }
 .door__btn:hover { background: #fff; border-color: rgb(var(--dt) / 0.5); }
 .door__btn.btn--primary { background: linear-gradient(135deg, var(--door-accent), color-mix(in srgb, var(--door-accent) 62%, #000)); border-color: transparent; color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 12px 24px -10px rgb(var(--dt) / 0.7); }
-.door--home .door__btn.btn--primary { background: linear-gradient(135deg, #9457d2, #6a2f9e); }
-.door--work .door__btn.btn--primary { background: linear-gradient(135deg, #11808c, #0b6b78); }
+.door--home .door__btn.btn--primary { background: linear-gradient(135deg, var(--h-grad-a), var(--h-grad-b)); }
+.door--work .door__btn.btn--primary { background: linear-gradient(135deg, var(--w-grad-a), var(--w-grad-b)); }
 .door__chips .chip { padding: 6px 13px; font-size: 13px; background: rgb(255 255 255 / 0.62); border-color: rgb(var(--dt) / 0.2); color: var(--door-ink); box-shadow: var(--glass-hi); }
 .door__chips .chip:hover { background: #fff; border-color: rgb(var(--dt) / 0.45); }
 .doors__seam {
@@ -807,49 +1176,57 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
 /* ============ dark ============
    The same block twice: once for the :root[data-theme="dark"] override, once for the OS preference. Keep them in step. */
 :root[data-theme="dark"] {
-  --bg: #0f0c18; --bg-2: #15111f; --surface: #1a1526; --surface-2: #241d33; --line: #2c2540; --line-strong: #40375a;
-  --ink: #f2edfb; --ink-2: #c6bfd8; --ink-3: #9c95b2;
-  --accent: #d4b8f6; --accent-2: #b78fe8; --accent-ink: #1d0c33; --accent-soft: #2b2142; --part-tint: #1d1630; --part-ink: #f3e8ff;
-  --tint: 190 150 245;
-  --grad-a: #e2cdfb; --grad-b: #b88ced;
-  --rail: #1b1629; --rail-ink: #b4adc9; --rail-hover: rgb(190 150 245 / 0.1); --rail-active: #2b2142;
-  --rail-ink-hover: #f2edfb; --rail-ink-active: #d4b8f6; --rail-badge: #cb2c68; --rail-badge-ink: #ffffff;
+  --bg: var(--h-bg); --bg-2: var(--h-bg-2); --surface: var(--h-surface); --surface-2: var(--h-surface-2); --line: var(--h-line); --line-strong: var(--h-line-strong);
+  --ink: var(--h-ink); --ink-2: var(--h-ink-2); --ink-3: var(--h-ink-3);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft); --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink);
+  --tint: var(--h-tint);
+  --grad-a: var(--h-grad-a); --grad-b: var(--h-grad-b);
+  --rail: var(--h-rail); --rail-ink: var(--h-rail-ink); --rail-hover: var(--h-rail-hover); --rail-active: var(--h-rail-active);
+  --rail-ink-hover: var(--h-rail-ink-hover); --rail-ink-active: var(--h-rail-ink-active); --rail-badge: #cb2c68; --rail-badge-ink: #ffffff;
   --good: #8ad9a6; --good-soft: #14281d;
   --warn: #e6b865; --warn-soft: #2e2512;
   --crit: #f08a86; --crit-soft: #37191c;
   --info: #a9b4f3; --info-soft: #1f2340;
-  --k-task: #c8bfe0; --k-task-bg: #2a2340;
+  --k-task: var(--h-k-task); --k-task-bg: var(--h-k-task-bg);
   --k-money: #f0bd90; --k-money-bg: #35261a;
   --k-in: #9ec6ef; --k-in-bg: #162639;
   --k-doc: #d3d595; --k-doc-bg: #27290f;
-  --series-in: #5a9be0; --series-out: #e0733a; --grid: #241e36; --axis: #3a3254;
-  --home-door-bg: #2a1c44; --home-door-ink: #f3e8ff; --home-door-accent: #d4b8f6;
-  --work-door-bg: #0f3338; --work-door-ink: #d7f4f5; --work-door-accent: #86dde3; --work-door-grid: #17383d;
-  --backdrop: rgb(6 3 14 / 0.62);
-  --glass: rgb(36 28 56 / 0.58); --glass-2: rgb(30 23 48 / 0.88); --glass-line: rgb(190 150 245 / 0.14);
+  --series-in: #5a9be0; --series-out: #e0733a; --grid: var(--h-grid); --axis: var(--h-axis);
+  --home-door-bg: var(--h-door-bg); --home-door-ink: var(--h-part-ink); --home-door-accent: var(--h-accent);
+  --work-door-bg: var(--w-door-bg); --work-door-ink: var(--w-part-ink); --work-door-accent: var(--w-accent); --work-door-grid: var(--w-door-grid);
+  --backdrop: var(--h-backdrop);
+  --glass: var(--h-glass); --glass-2: var(--h-glass-2); --glass-line: rgb(var(--tint) / 0.14);
   --glass-hi: inset 0 1px 0 rgb(255 255 255 / 0.09);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 18px 38px -16px rgb(0 0 0 / 0.6), 0 0 0 0 transparent;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 20px -10px rgb(0 0 0 / 0.55);
   --shadow-lg: 0 2px 4px rgb(0 0 0 / 0.3), 0 34px 80px -20px rgb(0 0 0 / 0.75);
   --glow: 0 10px 28px -8px rgb(var(--tint) / 0.4);
-  --wash-1: rgb(112 60 190 / 0.34); --wash-2: rgb(176 60 150 / 0.2); --wash-3: rgb(60 80 190 / 0.22);
-  --wash-w1: rgb(18 140 150 / 0.32); --wash-w2: rgb(30 150 110 / 0.2); --wash-w3: rgb(30 100 190 / 0.24);
-  --home-accent: #d4b8f6; --work-accent: #86dde3;
+  --wash-1: var(--h-wash-1); --wash-2: var(--h-wash-2); --wash-3: var(--h-wash-3);
+  --wash-w1: var(--w-wash-1); --wash-w2: var(--w-wash-2); --wash-w3: var(--w-wash-3);
+  --home-accent: var(--h-accent); --work-accent: var(--w-accent);
+  --ring-rail: var(--h-ring-rail); --ring-dot: var(--h-ring-dot); --dlg: var(--h-dlg); --toast-bg: var(--h-toast-bg); --toast-ink: var(--h-toast-ink);
+  --look-bar: var(--h-bar);
   color-scheme: dark;
 }
 :root[data-theme="dark"][data-part="home"] {
-  --accent: #d4b8f6; --accent-2: #b78fe8; --accent-ink: #1d0c33; --accent-soft: #2b2142;
-  --rail-active: #2b2142; --rail-ink-active: #d4b8f6; --part-tint: #1d1630; --part-ink: #f3e8ff;
-  --tint: 190 150 245; --grad-a: #e2cdfb; --grad-b: #b88ced;
+  --bg: var(--h-bg); --bg-2: var(--h-bg-2); --surface: var(--h-surface); --surface-2: var(--h-surface-2); --line: var(--h-line);
+  --line-strong: var(--h-line-strong); --ink: var(--h-ink); --ink-2: var(--h-ink-2); --ink-3: var(--h-ink-3); --accent: var(--h-accent);
+  --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft); --part-tint: var(--h-part-tint);
+  --part-ink: var(--h-part-ink); --tint: var(--h-tint); --grad-a: var(--h-grad-a); --grad-b: var(--h-grad-b); --rail: var(--h-rail);
+  --rail-ink: var(--h-rail-ink); --rail-hover: var(--h-rail-hover); --rail-active: var(--h-rail-active); --rail-ink-hover: var(--h-rail-ink-hover);
+  --rail-ink-active: var(--h-rail-ink-active); --k-task: var(--h-k-task); --k-task-bg: var(--h-k-task-bg); --grid: var(--h-grid);
+  --axis: var(--h-axis); --backdrop: var(--h-backdrop); --glass: var(--h-glass); --glass-2: var(--h-glass-2); --ring-rail: var(--h-ring-rail);
+  --ring-dot: var(--h-ring-dot); --dlg: var(--h-dlg); --toast-bg: var(--h-toast-bg); --toast-ink: var(--h-toast-ink); --look-bar: var(--h-bar);
 }
 :root[data-theme="dark"][data-part="work"] {
-  --bg: #0a1317; --bg-2: #0e1a1f; --surface: #12202a; --surface-2: #19303a; --line: #1e3640; --line-strong: #2d4b57;
-  --accent: #86dde3; --accent-2: #4fbfc8; --accent-ink: #032a30; --accent-soft: #14343c;
-  --rail: #112028; --rail-active: #14343c; --rail-ink-active: #86dde3; --part-tint: #11262b; --part-ink: #d7f4f5;
-  --tint: 100 215 225; --grad-a: #a6eaee; --grad-b: #4fbfc8; --grid: #172a32; --axis: #2b4651;
-  --glass: rgb(20 40 50 / 0.58); --glass-2: rgb(16 34 43 / 0.8);
-  --glass-line: rgb(100 215 225 / 0.14);
-  --ink-3: #8fa9b2;
+  --bg: var(--w-bg); --bg-2: var(--w-bg-2); --surface: var(--w-surface); --surface-2: var(--w-surface-2); --line: var(--w-line);
+  --line-strong: var(--w-line-strong); --ink: var(--w-ink); --ink-2: var(--w-ink-2); --ink-3: var(--w-ink-3); --accent: var(--w-accent);
+  --accent-2: var(--w-accent-2); --accent-ink: var(--w-accent-ink); --accent-soft: var(--w-accent-soft); --part-tint: var(--w-part-tint);
+  --part-ink: var(--w-part-ink); --tint: var(--w-tint); --grad-a: var(--w-grad-a); --grad-b: var(--w-grad-b); --rail: var(--w-rail);
+  --rail-ink: var(--w-rail-ink); --rail-hover: var(--w-rail-hover); --rail-active: var(--w-rail-active); --rail-ink-hover: var(--w-rail-ink-hover);
+  --rail-ink-active: var(--w-rail-ink-active); --k-task: var(--w-k-task); --k-task-bg: var(--w-k-task-bg); --grid: var(--w-grid);
+  --axis: var(--w-axis); --backdrop: var(--w-backdrop); --glass: var(--w-glass); --glass-2: var(--w-glass-2); --ring-rail: var(--w-ring-rail);
+  --ring-dot: var(--w-ring-dot); --dlg: var(--w-dlg); --toast-bg: var(--w-toast-bg); --toast-ink: var(--w-toast-ink); --look-bar: var(--w-bar);
 }
 
 /* dark: the places where light-mode literals (white fills) must turn into glass */
@@ -890,21 +1267,17 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
 :root[data-theme="dark"] .dropbar, :root[data-theme="dark"] .drop { background: rgb(var(--tint) / 0.06); }
 :root[data-theme="dark"] .rail, :root[data-theme="dark"] .partbar { background: var(--glass-2); }
 :root[data-theme="dark"] .rail__foot { background: linear-gradient(to top, var(--glass-2) 78%, transparent); }
-:root[data-theme="dark"] .partswitch__count { box-shadow: 0 0 0 2px #1b1629, 0 4px 8px -2px rgb(0 0 0 / 0.5); }
-:root[data-theme="dark"] .partswitch--bar .partswitch__count { box-shadow: 0 0 0 2px #1d1730, 0 4px 8px -2px rgb(0 0 0 / 0.5); }
-:root[data-theme="dark"] .rail__badge { box-shadow: 0 0 0 2px #1b1629, 0 4px 8px -2px rgb(0 0 0 / 0.5); }
+:root[data-theme="dark"] .partswitch__count { box-shadow: 0 0 0 2px var(--ring-rail), 0 4px 8px -2px rgb(0 0 0 / 0.5); }
+:root[data-theme="dark"] .partswitch--bar .partswitch__count { box-shadow: 0 0 0 2px var(--dlg), 0 4px 8px -2px rgb(0 0 0 / 0.5); }
+:root[data-theme="dark"] .rail__badge { box-shadow: 0 0 0 2px var(--ring-rail), 0 4px 8px -2px rgb(0 0 0 / 0.5); }
 :root[data-theme="dark"] .rail__brand { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
 :root[data-theme="dark"] .rail__brand span, :root[data-theme="dark"] .partbar__brand span { color: var(--accent-ink); }
 :root[data-theme="dark"] .partbar__add { color: var(--accent-ink); }
-:root[data-theme="dark"] .toast { background: color-mix(in srgb, #f2edfb 94%, transparent); color: #1d1730; }
-:root[data-theme="dark"] .tooltip { background: #f2edfb; color: #1d1730; }
-:root[data-theme="dark"] dialog.dlg, :root[data-theme="dark"] dialog.search-ov { background: color-mix(in srgb, #1d1730 90%, transparent); }
-:root[data-theme="dark"] .popover { background: color-mix(in srgb, #1d1730 95%, transparent); }
+:root[data-theme="dark"] .toast { background: color-mix(in srgb, var(--toast-bg) 94%, transparent); color: var(--toast-ink); }
+:root[data-theme="dark"] .tooltip { background: var(--toast-bg); color: var(--toast-ink); }
+:root[data-theme="dark"] dialog.dlg, :root[data-theme="dark"] dialog.search-ov { background: color-mix(in srgb, var(--dlg) 90%, transparent); }
+:root[data-theme="dark"] .popover { background: color-mix(in srgb, var(--dlg) 95%, transparent); }
 :root[data-theme="dark"] .banner { background: color-mix(in srgb, var(--warn-soft) 85%, transparent); }
-:root[data-theme="dark"] .door--home { --door-bg: #2a1c44; background: linear-gradient(135deg, #2c1b49 0%, #3a1c45 52%, #1f2650 100%); }
-:root[data-theme="dark"] .door--work { --door-bg: #0f3338; background: linear-gradient(135deg, #0e3a40 0%, #10334a 54%, #0f3b34 100%); }
-:root[data-theme="dark"] .door--home::before { background: radial-gradient(62% 95% at 100% 0%, rgb(160 110 255 / 0.4), transparent 64%), radial-gradient(52% 80% at 0% 112%, rgb(255 110 190 / 0.28), transparent 66%); }
-:root[data-theme="dark"] .door--work::before { background: radial-gradient(62% 95% at 100% 0%, rgb(40 200 205 / 0.36), transparent 64%), radial-gradient(52% 80% at 0% 112%, rgb(60 140 230 / 0.32), transparent 66%); }
 :root[data-theme="dark"] .door::after { background:
     radial-gradient(circle at 86% 26%, rgb(255 255 255 / 0.07) 0 58px, transparent 59px),
     radial-gradient(circle at 86% 26%, transparent 0 59px, rgb(255 255 255 / 0.22) 60px 61px, transparent 62px),
@@ -912,18 +1285,13 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
     radial-gradient(circle at 79% 42%, transparent 0 41px, rgb(255 255 255 / 0.16) 42px 43px, transparent 44px),
     linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0) 44%); }
 @media (max-width: 720px) { :root[data-theme="dark"] .door::after { background: radial-gradient(circle at 90% 18%, rgb(255 255 255 / 0.07) 0 40px, transparent 41px), radial-gradient(circle at 90% 18%, transparent 0 41px, rgb(255 255 255 / 0.22) 42px 43px, transparent 44px), linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0) 44%); } }
-:root[data-theme="dark"] .door--home .door__eyebrow { color: #d4b8f6; }
-:root[data-theme="dark"] .door--work .door__eyebrow { color: #86dde3; }
 :root[data-theme="dark"] .door__btn { background: rgb(255 255 255 / 0.08); border-color: rgb(var(--dt) / 0.4); }
 :root[data-theme="dark"] .door__btn:hover { background: rgb(255 255 255 / 0.14); }
-:root[data-theme="dark"] .door--home .door__btn.btn--primary { background: linear-gradient(135deg, #e2cdfb, #b88ced); color: #1d0c33; }
-:root[data-theme="dark"] .door--work .door__btn.btn--primary { background: linear-gradient(135deg, #a6eaee, #4fbfc8); color: #032a30; }
+:root[data-theme="dark"] .door--home .door__btn.btn--primary { background: linear-gradient(135deg, var(--h-grad-a), var(--h-grad-b)); color: var(--h-accent-ink); }
+:root[data-theme="dark"] .door--work .door__btn.btn--primary { background: linear-gradient(135deg, var(--w-grad-a), var(--w-grad-b)); color: var(--w-accent-ink); }
 :root[data-theme="dark"] .door__chips .chip { background: rgb(255 255 255 / 0.07); border-color: rgb(var(--dt) / 0.3); color: var(--door-ink); }
 :root[data-theme="dark"] .door__chips .chip:hover { background: rgb(255 255 255 / 0.13); }
-:root[data-theme="dark"] .door--home { --dt: 190 150 245; }
-:root[data-theme="dark"] .door--work { --dt: 100 215 225; }
-:root[data-theme="dark"] .doors__seam { color: var(--accent-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 6px rgb(15 12 24 / 0.75), 0 16px 30px -8px rgb(var(--tint) / 0.5); }
-:root[data-theme="dark"][data-part="work"] .doors__seam { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 6px rgb(10 19 23 / 0.75), 0 16px 30px -8px rgb(var(--tint) / 0.5); }
+:root[data-theme="dark"] .doors__seam { color: var(--accent-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 6px color-mix(in srgb, var(--bg) 75%, transparent), 0 16px 30px -8px rgb(var(--tint) / 0.5); }
 :root[data-theme="dark"] .door__word, :root[data-theme="dark"] .door--home .door__word, :root[data-theme="dark"] .door--work .door__word { background-image: linear-gradient(120deg, #ffffff 25%, var(--door-accent) 110%); }
 :root[data-theme="dark"] .door__line { color: color-mix(in srgb, var(--door-ink) 82%, transparent); }
 :root[data-theme="dark"] .linechart__limit span { background: var(--surface); }
@@ -949,7 +1317,7 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
 :root[data-theme="dark"] .tl-day__items { border-left-color: rgb(var(--tint) / 0.2); }
 :root[data-theme="dark"] .tl-day--today .tl-day__items, :root[data-theme="dark"] .tl-day--today .tl-day__clear { border-left-color: var(--accent-2); }
 :root[data-theme="dark"] .capture__field input, :root[data-theme="dark"] .capture__field input:focus, :root[data-theme="dark"] .hub-compose textarea, :root[data-theme="dark"] .hub-compose textarea:focus, :root[data-theme="dark"] .rq-price__box input, :root[data-theme="dark"] .rq-price__box input:focus, :root[data-theme="dark"] .money-input input, :root[data-theme="dark"] .money-input input:focus { background-color: transparent; box-shadow: none; }
-:root[data-theme="dark"] .linechart__hits span:hover::after, :root[data-theme="dark"] .linechart__hits span.is-last::after { box-shadow: 0 0 0 3px rgb(26 21 38 / 0.9), 0 4px 10px rgb(0 0 0 / 0.5); }
+:root[data-theme="dark"] .linechart__hits span:hover::after, :root[data-theme="dark"] .linechart__hits span.is-last::after { box-shadow: 0 0 0 3px var(--ring-dot), 0 4px 10px rgb(0 0 0 / 0.5); }
 :root[data-theme="dark"] .tl-day__items::before, :root[data-theme="dark"] .tl-day__clear::before { background: rgb(var(--tint) / 0.22); }
 :root[data-theme="dark"] .tl-day--today .tl-day__items::before, :root[data-theme="dark"] .tl-day--today .tl-day__clear::before { background: linear-gradient(180deg, var(--grad-a), var(--grad-b)); }
 :root[data-theme="dark"] .tl-day--overdue .tl-day__items::before { background: linear-gradient(180deg, color-mix(in srgb, var(--crit) 55%, #000), var(--crit)); }
@@ -963,49 +1331,57 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
 
 @media (prefers-color-scheme: dark) {
 :root:not([data-theme="light"]) {
-  --bg: #0f0c18; --bg-2: #15111f; --surface: #1a1526; --surface-2: #241d33; --line: #2c2540; --line-strong: #40375a;
-  --ink: #f2edfb; --ink-2: #c6bfd8; --ink-3: #9c95b2;
-  --accent: #d4b8f6; --accent-2: #b78fe8; --accent-ink: #1d0c33; --accent-soft: #2b2142; --part-tint: #1d1630; --part-ink: #f3e8ff;
-  --tint: 190 150 245;
-  --grad-a: #e2cdfb; --grad-b: #b88ced;
-  --rail: #1b1629; --rail-ink: #b4adc9; --rail-hover: rgb(190 150 245 / 0.1); --rail-active: #2b2142;
-  --rail-ink-hover: #f2edfb; --rail-ink-active: #d4b8f6; --rail-badge: #cb2c68; --rail-badge-ink: #ffffff;
+  --bg: var(--h-bg); --bg-2: var(--h-bg-2); --surface: var(--h-surface); --surface-2: var(--h-surface-2); --line: var(--h-line); --line-strong: var(--h-line-strong);
+  --ink: var(--h-ink); --ink-2: var(--h-ink-2); --ink-3: var(--h-ink-3);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft); --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink);
+  --tint: var(--h-tint);
+  --grad-a: var(--h-grad-a); --grad-b: var(--h-grad-b);
+  --rail: var(--h-rail); --rail-ink: var(--h-rail-ink); --rail-hover: var(--h-rail-hover); --rail-active: var(--h-rail-active);
+  --rail-ink-hover: var(--h-rail-ink-hover); --rail-ink-active: var(--h-rail-ink-active); --rail-badge: #cb2c68; --rail-badge-ink: #ffffff;
   --good: #8ad9a6; --good-soft: #14281d;
   --warn: #e6b865; --warn-soft: #2e2512;
   --crit: #f08a86; --crit-soft: #37191c;
   --info: #a9b4f3; --info-soft: #1f2340;
-  --k-task: #c8bfe0; --k-task-bg: #2a2340;
+  --k-task: var(--h-k-task); --k-task-bg: var(--h-k-task-bg);
   --k-money: #f0bd90; --k-money-bg: #35261a;
   --k-in: #9ec6ef; --k-in-bg: #162639;
   --k-doc: #d3d595; --k-doc-bg: #27290f;
-  --series-in: #5a9be0; --series-out: #e0733a; --grid: #241e36; --axis: #3a3254;
-  --home-door-bg: #2a1c44; --home-door-ink: #f3e8ff; --home-door-accent: #d4b8f6;
-  --work-door-bg: #0f3338; --work-door-ink: #d7f4f5; --work-door-accent: #86dde3; --work-door-grid: #17383d;
-  --backdrop: rgb(6 3 14 / 0.62);
-  --glass: rgb(36 28 56 / 0.58); --glass-2: rgb(30 23 48 / 0.88); --glass-line: rgb(190 150 245 / 0.14);
+  --series-in: #5a9be0; --series-out: #e0733a; --grid: var(--h-grid); --axis: var(--h-axis);
+  --home-door-bg: var(--h-door-bg); --home-door-ink: var(--h-part-ink); --home-door-accent: var(--h-accent);
+  --work-door-bg: var(--w-door-bg); --work-door-ink: var(--w-part-ink); --work-door-accent: var(--w-accent); --work-door-grid: var(--w-door-grid);
+  --backdrop: var(--h-backdrop);
+  --glass: var(--h-glass); --glass-2: var(--h-glass-2); --glass-line: rgb(var(--tint) / 0.14);
   --glass-hi: inset 0 1px 0 rgb(255 255 255 / 0.09);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 18px 38px -16px rgb(0 0 0 / 0.6), 0 0 0 0 transparent;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 20px -10px rgb(0 0 0 / 0.55);
   --shadow-lg: 0 2px 4px rgb(0 0 0 / 0.3), 0 34px 80px -20px rgb(0 0 0 / 0.75);
   --glow: 0 10px 28px -8px rgb(var(--tint) / 0.4);
-  --wash-1: rgb(112 60 190 / 0.34); --wash-2: rgb(176 60 150 / 0.2); --wash-3: rgb(60 80 190 / 0.22);
-  --wash-w1: rgb(18 140 150 / 0.32); --wash-w2: rgb(30 150 110 / 0.2); --wash-w3: rgb(30 100 190 / 0.24);
-  --home-accent: #d4b8f6; --work-accent: #86dde3;
+  --wash-1: var(--h-wash-1); --wash-2: var(--h-wash-2); --wash-3: var(--h-wash-3);
+  --wash-w1: var(--w-wash-1); --wash-w2: var(--w-wash-2); --wash-w3: var(--w-wash-3);
+  --home-accent: var(--h-accent); --work-accent: var(--w-accent);
+  --ring-rail: var(--h-ring-rail); --ring-dot: var(--h-ring-dot); --dlg: var(--h-dlg); --toast-bg: var(--h-toast-bg); --toast-ink: var(--h-toast-ink);
+  --look-bar: var(--h-bar);
   color-scheme: dark;
 }
 :root:not([data-theme="light"])[data-part="home"] {
-  --accent: #d4b8f6; --accent-2: #b78fe8; --accent-ink: #1d0c33; --accent-soft: #2b2142;
-  --rail-active: #2b2142; --rail-ink-active: #d4b8f6; --part-tint: #1d1630; --part-ink: #f3e8ff;
-  --tint: 190 150 245; --grad-a: #e2cdfb; --grad-b: #b88ced;
+  --bg: var(--h-bg); --bg-2: var(--h-bg-2); --surface: var(--h-surface); --surface-2: var(--h-surface-2); --line: var(--h-line);
+  --line-strong: var(--h-line-strong); --ink: var(--h-ink); --ink-2: var(--h-ink-2); --ink-3: var(--h-ink-3); --accent: var(--h-accent);
+  --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft); --part-tint: var(--h-part-tint);
+  --part-ink: var(--h-part-ink); --tint: var(--h-tint); --grad-a: var(--h-grad-a); --grad-b: var(--h-grad-b); --rail: var(--h-rail);
+  --rail-ink: var(--h-rail-ink); --rail-hover: var(--h-rail-hover); --rail-active: var(--h-rail-active); --rail-ink-hover: var(--h-rail-ink-hover);
+  --rail-ink-active: var(--h-rail-ink-active); --k-task: var(--h-k-task); --k-task-bg: var(--h-k-task-bg); --grid: var(--h-grid);
+  --axis: var(--h-axis); --backdrop: var(--h-backdrop); --glass: var(--h-glass); --glass-2: var(--h-glass-2); --ring-rail: var(--h-ring-rail);
+  --ring-dot: var(--h-ring-dot); --dlg: var(--h-dlg); --toast-bg: var(--h-toast-bg); --toast-ink: var(--h-toast-ink); --look-bar: var(--h-bar);
 }
 :root:not([data-theme="light"])[data-part="work"] {
-  --bg: #0a1317; --bg-2: #0e1a1f; --surface: #12202a; --surface-2: #19303a; --line: #1e3640; --line-strong: #2d4b57;
-  --accent: #86dde3; --accent-2: #4fbfc8; --accent-ink: #032a30; --accent-soft: #14343c;
-  --rail: #112028; --rail-active: #14343c; --rail-ink-active: #86dde3; --part-tint: #11262b; --part-ink: #d7f4f5;
-  --tint: 100 215 225; --grad-a: #a6eaee; --grad-b: #4fbfc8; --grid: #172a32; --axis: #2b4651;
-  --glass: rgb(20 40 50 / 0.58); --glass-2: rgb(16 34 43 / 0.8);
-  --glass-line: rgb(100 215 225 / 0.14);
-  --ink-3: #8fa9b2;
+  --bg: var(--w-bg); --bg-2: var(--w-bg-2); --surface: var(--w-surface); --surface-2: var(--w-surface-2); --line: var(--w-line);
+  --line-strong: var(--w-line-strong); --ink: var(--w-ink); --ink-2: var(--w-ink-2); --ink-3: var(--w-ink-3); --accent: var(--w-accent);
+  --accent-2: var(--w-accent-2); --accent-ink: var(--w-accent-ink); --accent-soft: var(--w-accent-soft); --part-tint: var(--w-part-tint);
+  --part-ink: var(--w-part-ink); --tint: var(--w-tint); --grad-a: var(--w-grad-a); --grad-b: var(--w-grad-b); --rail: var(--w-rail);
+  --rail-ink: var(--w-rail-ink); --rail-hover: var(--w-rail-hover); --rail-active: var(--w-rail-active); --rail-ink-hover: var(--w-rail-ink-hover);
+  --rail-ink-active: var(--w-rail-ink-active); --k-task: var(--w-k-task); --k-task-bg: var(--w-k-task-bg); --grid: var(--w-grid);
+  --axis: var(--w-axis); --backdrop: var(--w-backdrop); --glass: var(--w-glass); --glass-2: var(--w-glass-2); --ring-rail: var(--w-ring-rail);
+  --ring-dot: var(--w-ring-dot); --dlg: var(--w-dlg); --toast-bg: var(--w-toast-bg); --toast-ink: var(--w-toast-ink); --look-bar: var(--w-bar);
 }
 
 /* dark: the places where light-mode literals (white fills) must turn into glass */
@@ -1046,21 +1422,17 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
 :root:not([data-theme="light"]) .dropbar, :root:not([data-theme="light"]) .drop { background: rgb(var(--tint) / 0.06); }
 :root:not([data-theme="light"]) .rail, :root:not([data-theme="light"]) .partbar { background: var(--glass-2); }
 :root:not([data-theme="light"]) .rail__foot { background: linear-gradient(to top, var(--glass-2) 78%, transparent); }
-:root:not([data-theme="light"]) .partswitch__count { box-shadow: 0 0 0 2px #1b1629, 0 4px 8px -2px rgb(0 0 0 / 0.5); }
-:root:not([data-theme="light"]) .partswitch--bar .partswitch__count { box-shadow: 0 0 0 2px #1d1730, 0 4px 8px -2px rgb(0 0 0 / 0.5); }
-:root:not([data-theme="light"]) .rail__badge { box-shadow: 0 0 0 2px #1b1629, 0 4px 8px -2px rgb(0 0 0 / 0.5); }
+:root:not([data-theme="light"]) .partswitch__count { box-shadow: 0 0 0 2px var(--ring-rail), 0 4px 8px -2px rgb(0 0 0 / 0.5); }
+:root:not([data-theme="light"]) .partswitch--bar .partswitch__count { box-shadow: 0 0 0 2px var(--dlg), 0 4px 8px -2px rgb(0 0 0 / 0.5); }
+:root:not([data-theme="light"]) .rail__badge { box-shadow: 0 0 0 2px var(--ring-rail), 0 4px 8px -2px rgb(0 0 0 / 0.5); }
 :root:not([data-theme="light"]) .rail__brand { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
 :root:not([data-theme="light"]) .rail__brand span, :root:not([data-theme="light"]) .partbar__brand span { color: var(--accent-ink); }
 :root:not([data-theme="light"]) .partbar__add { color: var(--accent-ink); }
-:root:not([data-theme="light"]) .toast { background: color-mix(in srgb, #f2edfb 94%, transparent); color: #1d1730; }
-:root:not([data-theme="light"]) .tooltip { background: #f2edfb; color: #1d1730; }
-:root:not([data-theme="light"]) dialog.dlg, :root:not([data-theme="light"]) dialog.search-ov { background: color-mix(in srgb, #1d1730 90%, transparent); }
-:root:not([data-theme="light"]) .popover { background: color-mix(in srgb, #1d1730 95%, transparent); }
+:root:not([data-theme="light"]) .toast { background: color-mix(in srgb, var(--toast-bg) 94%, transparent); color: var(--toast-ink); }
+:root:not([data-theme="light"]) .tooltip { background: var(--toast-bg); color: var(--toast-ink); }
+:root:not([data-theme="light"]) dialog.dlg, :root:not([data-theme="light"]) dialog.search-ov { background: color-mix(in srgb, var(--dlg) 90%, transparent); }
+:root:not([data-theme="light"]) .popover { background: color-mix(in srgb, var(--dlg) 95%, transparent); }
 :root:not([data-theme="light"]) .banner { background: color-mix(in srgb, var(--warn-soft) 85%, transparent); }
-:root:not([data-theme="light"]) .door--home { --door-bg: #2a1c44; background: linear-gradient(135deg, #2c1b49 0%, #3a1c45 52%, #1f2650 100%); }
-:root:not([data-theme="light"]) .door--work { --door-bg: #0f3338; background: linear-gradient(135deg, #0e3a40 0%, #10334a 54%, #0f3b34 100%); }
-:root:not([data-theme="light"]) .door--home::before { background: radial-gradient(62% 95% at 100% 0%, rgb(160 110 255 / 0.4), transparent 64%), radial-gradient(52% 80% at 0% 112%, rgb(255 110 190 / 0.28), transparent 66%); }
-:root:not([data-theme="light"]) .door--work::before { background: radial-gradient(62% 95% at 100% 0%, rgb(40 200 205 / 0.36), transparent 64%), radial-gradient(52% 80% at 0% 112%, rgb(60 140 230 / 0.32), transparent 66%); }
 :root:not([data-theme="light"]) .door::after { background:
     radial-gradient(circle at 86% 26%, rgb(255 255 255 / 0.07) 0 58px, transparent 59px),
     radial-gradient(circle at 86% 26%, transparent 0 59px, rgb(255 255 255 / 0.22) 60px 61px, transparent 62px),
@@ -1068,18 +1440,13 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
     radial-gradient(circle at 79% 42%, transparent 0 41px, rgb(255 255 255 / 0.16) 42px 43px, transparent 44px),
     linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0) 44%); }
 @media (max-width: 720px) { :root:not([data-theme="light"]) .door::after { background: radial-gradient(circle at 90% 18%, rgb(255 255 255 / 0.07) 0 40px, transparent 41px), radial-gradient(circle at 90% 18%, transparent 0 41px, rgb(255 255 255 / 0.22) 42px 43px, transparent 44px), linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0) 44%); } }
-:root:not([data-theme="light"]) .door--home .door__eyebrow { color: #d4b8f6; }
-:root:not([data-theme="light"]) .door--work .door__eyebrow { color: #86dde3; }
 :root:not([data-theme="light"]) .door__btn { background: rgb(255 255 255 / 0.08); border-color: rgb(var(--dt) / 0.4); }
 :root:not([data-theme="light"]) .door__btn:hover { background: rgb(255 255 255 / 0.14); }
-:root:not([data-theme="light"]) .door--home .door__btn.btn--primary { background: linear-gradient(135deg, #e2cdfb, #b88ced); color: #1d0c33; }
-:root:not([data-theme="light"]) .door--work .door__btn.btn--primary { background: linear-gradient(135deg, #a6eaee, #4fbfc8); color: #032a30; }
+:root:not([data-theme="light"]) .door--home .door__btn.btn--primary { background: linear-gradient(135deg, var(--h-grad-a), var(--h-grad-b)); color: var(--h-accent-ink); }
+:root:not([data-theme="light"]) .door--work .door__btn.btn--primary { background: linear-gradient(135deg, var(--w-grad-a), var(--w-grad-b)); color: var(--w-accent-ink); }
 :root:not([data-theme="light"]) .door__chips .chip { background: rgb(255 255 255 / 0.07); border-color: rgb(var(--dt) / 0.3); color: var(--door-ink); }
 :root:not([data-theme="light"]) .door__chips .chip:hover { background: rgb(255 255 255 / 0.13); }
-:root:not([data-theme="light"]) .door--home { --dt: 190 150 245; }
-:root:not([data-theme="light"]) .door--work { --dt: 100 215 225; }
-:root:not([data-theme="light"]) .doors__seam { color: var(--accent-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 6px rgb(15 12 24 / 0.75), 0 16px 30px -8px rgb(var(--tint) / 0.5); }
-:root:not([data-theme="light"])[data-part="work"] .doors__seam { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 6px rgb(10 19 23 / 0.75), 0 16px 30px -8px rgb(var(--tint) / 0.5); }
+:root:not([data-theme="light"]) .doors__seam { color: var(--accent-ink); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 6px color-mix(in srgb, var(--bg) 75%, transparent), 0 16px 30px -8px rgb(var(--tint) / 0.5); }
 :root:not([data-theme="light"]) .door__word, :root:not([data-theme="light"]) .door--home .door__word, :root:not([data-theme="light"]) .door--work .door__word { background-image: linear-gradient(120deg, #ffffff 25%, var(--door-accent) 110%); }
 :root:not([data-theme="light"]) .door__line { color: color-mix(in srgb, var(--door-ink) 82%, transparent); }
 :root:not([data-theme="light"]) .linechart__limit span { background: var(--surface); }
@@ -1105,7 +1472,7 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
 :root:not([data-theme="light"]) .tl-day__items { border-left-color: rgb(var(--tint) / 0.2); }
 :root:not([data-theme="light"]) .tl-day--today .tl-day__items, :root:not([data-theme="light"]) .tl-day--today .tl-day__clear { border-left-color: var(--accent-2); }
 :root:not([data-theme="light"]) .capture__field input, :root:not([data-theme="light"]) .capture__field input:focus, :root:not([data-theme="light"]) .hub-compose textarea, :root:not([data-theme="light"]) .hub-compose textarea:focus, :root:not([data-theme="light"]) .rq-price__box input, :root:not([data-theme="light"]) .rq-price__box input:focus, :root:not([data-theme="light"]) .money-input input, :root:not([data-theme="light"]) .money-input input:focus { background-color: transparent; box-shadow: none; }
-:root:not([data-theme="light"]) .linechart__hits span:hover::after, :root:not([data-theme="light"]) .linechart__hits span.is-last::after { box-shadow: 0 0 0 3px rgb(26 21 38 / 0.9), 0 4px 10px rgb(0 0 0 / 0.5); }
+:root:not([data-theme="light"]) .linechart__hits span:hover::after, :root:not([data-theme="light"]) .linechart__hits span.is-last::after { box-shadow: 0 0 0 3px var(--ring-dot), 0 4px 10px rgb(0 0 0 / 0.5); }
 :root:not([data-theme="light"]) .tl-day__items::before, :root:not([data-theme="light"]) .tl-day__clear::before { background: rgb(var(--tint) / 0.22); }
 :root:not([data-theme="light"]) .tl-day--today .tl-day__items::before, :root:not([data-theme="light"]) .tl-day--today .tl-day__clear::before { background: linear-gradient(180deg, var(--grad-a), var(--grad-b)); }
 :root:not([data-theme="light"]) .tl-day--overdue .tl-day__items::before { background: linear-gradient(180deg, color-mix(in srgb, var(--crit) 55%, #000), var(--crit)); }
@@ -1116,5 +1483,4 @@ dialog.dlg::backdrop, dialog.search-ov::backdrop { background: var(--backdrop); 
 :root:not([data-theme="light"]) .lockpad__key:active { background: rgb(var(--tint) / 0.2); }
 :root:not([data-theme="light"]) .lockpad__key--act, :root:not([data-theme="light"]) .lockpad__key--act:hover { background: transparent; border-color: transparent; }
 :root:not([data-theme="light"]) .lockscreen__logo { color: var(--accent-ink); }
-
 }

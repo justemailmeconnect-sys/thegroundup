@@ -90,7 +90,7 @@
           '<span class="doc-group__name">' + esc(g.type) + '</span><span class="muted">' + g.items.length + '</span></button></h2>' +
           (isOpen ? '<ul class="doc-rows">' + g.items.map((d) => rowHTML(d, true)).join('') + '</ul>' : '') + '</section>';
       }).join('')
-        : dedupe && list.length ? '' : '<section class="panel">' + emptyState({ icon: 'folder', title: docs.length ? 'Nothing matches' : 'No documents yet', text: docs.length ? 'Try another search.' : 'Start with your passport, driving licence and tenancy or mortgage papers.', action: docs.length ? '' : '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a document</button>' }) + '</section>') +
+        : dedupe && list.length ? '' : '<section class="panel">' + emptyState({ icon: 'folder', art: docs.length ? 'search' : 'documents', title: docs.length ? 'Nothing matches' : 'No documents yet', text: docs.length ? 'Try another search.' : 'Start with your passport, driving licence and tenancy or mortgage papers.', action: docs.length ? '' : '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add a document</button>' }) + '</section>') +
       '<p class="privacy-note">' + icon('lock') + 'Documents and scans are stored only in this browser. Reference numbers are hidden until you tap Show.</p>';
 
     GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'documents', name: 'Important documents' } }));

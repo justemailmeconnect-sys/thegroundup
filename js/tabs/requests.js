@@ -883,7 +883,7 @@
         laneHTML({ id: 'bought', title: 'Bought this month', icon: 'check', rows: T.bought, total: T.boughtTotal, fold: true, open: ui.boughtOpen, empty: 'Nothing bought this month yet. Once you mark something bought, it moves here.',
           foot: T.older ? plural(T.older, 'earlier one') + ' not shown here. The receipts are where you filed them.' : '' }) +
         (T.dropped.length ? laneHTML({ id: 'dropped', title: 'Not needed', icon: 'x', rows: T.dropped, fold: true, open: ui.droppedOpen, empty: '' }) : '')
-      : '<p class="wk-quiet">' + esc('Nothing to get right now.') + '</p>';
+      : (GU.art ? GU.art.row('bag', '<p class="wk-quiet">' + esc('Nothing to get right now.') + '</p>') : '<p class="wk-quiet">' + esc('Nothing to get right now.') + '</p>');
     // Notes for this page: a panel once there are some, until then a small '+ Note' button in the head.
     const W = GU.work;
     const notes = W && W.notesOf ? W.notesOf(s, 'requests').slice().sort((x, y) => (y.updated || y.created || '').localeCompare(x.updated || x.created || '')) : [];

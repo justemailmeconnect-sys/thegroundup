@@ -698,7 +698,7 @@
     // Nothing in this tab but things in the others: one quiet line, not a big empty box.
     if (empty && area === 'invoices' && list.length && !ui.q) return extra + '<p class="wk-quiet">' + esc(emptyTitle + '. ' + emptyText) + '</p>';
     return extra + '<section class="panel">' +
-      (empty ? emptyState({ icon: a.icon, title: emptyTitle, text: esc(emptyText) })
+      (empty ? emptyState({ icon: a.icon, art: ui.q ? 'search' : area === 'projects' ? 'board' : undefined, title: emptyTitle, text: esc(emptyText) })
         : groupsHTML(s, area, groups, ui.showDone)) + '</section>';
   }
 
@@ -1262,7 +1262,7 @@
     const plan = GU.costs.schedule(s);
     const b = plan.base;
     if (!b.known) {
-      return '<section class="panel"><div class="panel__body cf-empty">' + icon('bank') + '<p>Put in what’s in your accounts first, and I’ll work out when you can afford each idea.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
+      return '<section class="panel"><div class="panel__body cf-empty">' + (GU.art ? GU.art.block('money') : '') + icon('bank') + '<p>Put in what’s in your accounts first, and I’ll work out when you can afford each idea.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
     }
     const results = plan.results.filter((r) => !ctx || ideaPart(r.idea) === ctx);
     const outstanding = round2(sum(results, (r) => r.cost));

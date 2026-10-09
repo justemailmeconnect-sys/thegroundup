@@ -92,7 +92,7 @@
 
   function rowsHTML(list) {
     if (!list.length) {
-      return '<tr><td colspan="6">' + emptyState({ icon: 'search', title: store.state.transactions.length ? 'No transactions match' : 'No transactions yet',
+      return '<tr><td colspan="6">' + emptyState({ icon: 'search', art: store.state.transactions.length ? 'search' : 'money', title: store.state.transactions.length ? 'No transactions match' : 'No transactions yet',
         text: store.state.transactions.length ? 'Try clearing the search or filters.' : 'Import a CSV statement from your bank, or add a payment by hand.' }) + '</td></tr>';
     }
     const s = store.state;
@@ -952,7 +952,7 @@
 
     async function load(f) {
       file = f;
-      step.innerHTML = '<p class="reading"><span class="spinner" aria-hidden="true"></span>Reading ' + esc(f.name) + '…</p>';
+      step.innerHTML = '<p class="reading" role="status"><span class="spinner" aria-hidden="true"></span>Reading ' + esc(f.name) + '…</p>' + (GU.art ? GU.art.skeleton(3) : '');
       let res;
       try {
         res = await GU.statements.read(f);
@@ -975,7 +975,7 @@
       step.querySelector('[data-again]').addEventListener('click', pickStep);
       const b = step.querySelector('[data-claude]');
       if (b) b.addEventListener('click', async () => {
-        step.innerHTML = '<p class="reading"><span class="spinner" aria-hidden="true"></span>Claude is reading your statement. Long statements take a minute or two…</p>';
+        step.innerHTML = '<p class="reading" role="status"><span class="spinner" aria-hidden="true"></span>Claude is reading your statement. Long statements take a minute or two…</p>' + (GU.art ? GU.art.skeleton(3) : '');
         try {
           const r = await GU.brain.readStatement(file);
           if (r && r.transactions.length) return reviewStep(r);

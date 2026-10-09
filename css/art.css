@@ -1,0 +1,259 @@
+/* art.css: the empty-state illustrations (js/illustrations.js) and the shared loading shimmer.
+   Loaded after styles.css and before the two looks. Presentation only. Colours come from the app's own tokens, so a look, a palette
+   and dark mode recolour everything; a look can also set --art-1 (accent), --art-2 (soft tint), --art-ink, --art-line and --art-paper.
+   Per-look differences are written as :root[data-look="glass"] / :root[data-look="bold"]; the dark blocks are written twice
+   (prefers-color-scheme and :root[data-theme="dark"]), so change both together. Motion: transform and opacity only, never under
+   prefers-reduced-motion, and the float only while the picture is on screen (js/illustrations.js adds .is-on). */
+
+/* ============ the drawing: what each role is ============ */
+.art {
+  display: block; overflow: visible;
+  --a1: var(--art-1, var(--accent, #6b3a6e));
+  --a2: var(--art-2, var(--accent-soft, #f1eaf4));
+  --ai: var(--art-ink, var(--ink, #181b21));
+  --al: var(--art-line, var(--line, #e5e1d9));
+  --ap: var(--art-paper, var(--surface, #ffffff));
+  --aw: var(--accent-ink, #ffffff);
+  --a3: var(--a2); --a4: var(--a1);
+  --aedge: var(--al); --amute: var(--al); --abg: var(--a2); --abg2: var(--a2);
+  --apaper: var(--ap); --apaper2: var(--a2); --ashade: var(--ai);
+  --gb: url(#gu-art-gb) var(--abg); --gp: url(#gu-art-gp) var(--apaper);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .art {
+    --a3: color-mix(in srgb, var(--a1) 22%, var(--ap));
+    --a4: color-mix(in srgb, var(--a1) 68%, var(--ai));
+    --aedge: color-mix(in srgb, var(--a1) 36%, var(--ap));
+    --amute: color-mix(in srgb, var(--a1) 22%, var(--ap));
+    --abg: color-mix(in srgb, var(--a1) 12%, var(--ap));
+    --abg2: color-mix(in srgb, var(--a1) 20%, var(--ap));
+    --apaper2: color-mix(in srgb, var(--a1) 9%, var(--ap));
+  }
+}
+.art .b { fill: var(--abg); }
+.art .b2 { fill: var(--abg2); }
+.art .g { fill: var(--ashade); opacity: 0.08; }
+.art .p, .art .q, .art .s { stroke: var(--aedge); stroke-width: 1.8; stroke-linejoin: round; }
+.art .p { fill: var(--apaper); }
+.art .q { fill: var(--apaper2); }
+.art .s { fill: var(--a3); }
+.art .a { fill: var(--a1); }
+.art .m { fill: var(--amute); }
+.art .k { fill: var(--a4); }
+.art .w { fill: var(--aw); }
+.art .pop { fill: var(--a1); }
+.art .pop--soft { fill: var(--a3); }
+.art .l, .art .lw, .art .lk, .art .dash, .art .lwr, .art .lr, .art .track, .art .arc, .art .lens, .art .hand, .art .shine, .art .hl, .art .arrow, .art .head, .art .rim, .art .dashbox {
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
+}
+.art .l { stroke: var(--a1); stroke-width: 3.4; }
+.art .lw { stroke: var(--aw); stroke-width: 3; }
+.art .lk { stroke: var(--aedge); stroke-width: 1.8; }
+.art .dash { stroke: var(--aedge); stroke-width: 1.8; stroke-dasharray: 1.5 4; }
+.art .lwr { stroke: var(--aw); stroke-width: 1.8; opacity: 0.7; }
+.art .lr { stroke: var(--a1); stroke-width: 1.8; opacity: 0.7; }
+.art .track { stroke: var(--amute); stroke-width: 6.5; }
+.art .arc { stroke: var(--a1); stroke-width: 6.5; }
+.art .lens { stroke: var(--a1); stroke-width: 6.5; }
+.art .hand { stroke: var(--a4); stroke-width: 9; }
+.art .shine { stroke: #fff; stroke-width: 3; opacity: 0.7; }
+.art .hl { stroke: var(--a4); stroke-width: 6; }
+.art .arrow { stroke: var(--a1); stroke-width: 4; }
+.art .head { fill: var(--a1); stroke: var(--a1); stroke-width: 3; }
+.art .rim { stroke: var(--a1); stroke-width: 3; }
+.art .dashbox { stroke: var(--a1); stroke-width: 2.2; stroke-dasharray: 2.5 4.5; opacity: 0.75; }
+/* the shared gradients (one hidden svg, js/illustrations.js); only Soft Glass paints with them */
+.gu-art-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.gu-art-defs .gs0 { stop-color: var(--art-1, var(--accent, #6b3a6e)); stop-opacity: 0.3; }
+.gu-art-defs .gs1 { stop-color: var(--art-1, var(--accent, #6b3a6e)); stop-opacity: 0.05; }
+.gu-art-defs .gp0, .gu-art-defs .gp1 { stop-color: #fff; }
+.gu-art-defs .gp0 { stop-opacity: 0.98; }
+.gu-art-defs .gp1 { stop-opacity: 0.86; }
+.art .lwb { fill: var(--aw); opacity: 0.85; }
+.art--c .p, .art--c .q, .art--c .s { stroke-width: 2.6; }
+.art--c .lk, .art--c .dash { stroke-width: 2.4; }
+
+/* ============ the block around it ============ */
+.empty-art { position: relative; isolation: isolate; display: grid; place-items: center; pointer-events: none; user-select: none; -webkit-user-select: none; flex: none; }
+.empty-art--full { width: 160px; height: 120px; margin: -6px auto 2px; }
+.empty-art--full > .art { width: 100%; height: 100%; }
+.empty-art--compact { width: 56px; height: 56px; border-radius: 18px; background: var(--accent-soft); margin: 0 auto 4px; }
+.empty-art--compact > .art { width: 48px; height: 48px; }
+/* the old small icon is replaced, not removed: it stays in the markup, out of sight */
+.empty > .empty-art + .empty__icon, .cf-empty > .empty-art + .ico { display: none; }
+/* a phone: smaller, and tighter, so the button that belongs to the empty state stays on the first screen */
+@media (max-width: 400px) {
+  .empty-art--full { width: 112px; height: 84px; margin: -8px auto -6px; }
+  /* the drawing borrows the empty block's own top padding (and the gap the old icon took), so it adds only a little height */
+  .empty > .empty-art--full:first-child { margin-top: -26px; margin-bottom: -6px; }
+  .cf-empty > .empty-art--full:first-child { margin-top: -22px; margin-bottom: -6px; }
+}
+/* a short empty beside its picture, inside a panel (Settings lists, a quiet note) */
+.empty-row { display: flex; align-items: center; gap: 14px; }
+.empty-row > .empty-art--compact { margin: 0; }
+.empty-row__text { flex: 1 1 0; min-width: 0; }
+.empty-row__text > p { margin: 0; }
+/* a little tile above a short note (search, Ask Claude) */
+.gs-empty > .empty-art--compact, .chat__empty > .empty-art--compact { margin: 2px 0 4px; justify-self: start; }
+.chat__empty > .empty-art--compact { margin: 6px 0 8px; }
+.empty .empty-art--compact { width: 52px; height: 52px; border-radius: 16px; margin-bottom: 6px; }
+.empty .empty-art--compact > .art { width: 44px; height: 44px; }
+
+/* ============ Soft Glass: translucent shapes, pastel gradients, a faint glow ============ */
+:root[data-look="glass"] .art {
+  --apaper: rgb(255 255 255 / 0.84); --apaper2: rgb(255 255 255 / 0.5);
+  --aedge: rgb(var(--tint, 106 47 158) / 0.3);
+  --ashade: rgb(var(--tint, 106 47 158) / 1);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  :root[data-look="glass"] .art {
+    --aedge: color-mix(in srgb, var(--a1) 34%, transparent);
+    --ashade: color-mix(in srgb, var(--a1) 80%, transparent);
+    --amute: color-mix(in srgb, var(--a1) 20%, transparent);
+    --a3: color-mix(in srgb, var(--a1) 18%, transparent);
+  }
+}
+:root[data-look="glass"] .art .b { fill: var(--gb, var(--abg)); }
+:root[data-look="glass"] .art .b2 { fill: var(--abg2); opacity: 0.6; }
+:root[data-look="glass"] .art .g { opacity: 0.1; }
+:root[data-look="glass"] .art .p { fill: var(--gp, var(--apaper)); }
+:root[data-look="glass"] .art .a { fill: var(--a1); fill-opacity: 0.92; }
+:root[data-look="glass"] .art .pop--soft { fill: var(--a1); opacity: 0.4; }
+:root[data-look="glass"] .empty-art--full::before {
+  content: ""; position: absolute; z-index: -1; left: 50%; top: 52%; width: 190px; height: 150px; transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgb(var(--tint, 106 47 158) / 0.2), transparent 78%);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  :root[data-look="glass"] .empty-art--full::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 24%, transparent), transparent 78%); }
+}
+:root[data-look="glass"] .empty-art--compact { background: color-mix(in srgb, var(--accent) 11%, rgb(255 255 255 / 0.55)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9); }
+@media (prefers-color-scheme: dark) {
+  :root[data-look="glass"]:not([data-theme="light"]) .art { --apaper: var(--surface-2, #25232d); --apaper2: var(--surface, #1b1a21); --ashade: #000; --aedge: color-mix(in srgb, var(--a1) 58%, transparent); --amute: color-mix(in srgb, var(--a1) 28%, transparent); }
+  :root[data-look="glass"]:not([data-theme="light"]) .gu-art-defs .gs0 { stop-opacity: 0.24; }
+  :root[data-look="glass"]:not([data-theme="light"]) .gu-art-defs .gs1 { stop-opacity: 0.03; }
+  :root[data-look="glass"]:not([data-theme="light"]) .gu-art-defs .gp0 { stop-color: var(--surface-2, #25232d); stop-opacity: 0.97; }
+  :root[data-look="glass"]:not([data-theme="light"]) .gu-art-defs .gp1 { stop-color: var(--surface, #1b1a21); stop-opacity: 0.9; }
+  :root[data-look="glass"]:not([data-theme="light"]) .art .g { opacity: 0.3; }
+  :root[data-look="glass"]:not([data-theme="light"]) .art .shine { opacity: 0.3; }
+  :root[data-look="glass"]:not([data-theme="light"]) .empty-art--compact { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); }
+  :root[data-look="glass"]:not([data-theme="light"]) .empty-art--full::before { opacity: 0.8; }
+}
+:root[data-look="glass"][data-theme="dark"] .art { --apaper: var(--surface-2, #25232d); --apaper2: var(--surface, #1b1a21); --ashade: #000; --aedge: color-mix(in srgb, var(--a1) 58%, transparent); --amute: color-mix(in srgb, var(--a1) 28%, transparent); }
+:root[data-look="glass"][data-theme="dark"] .gu-art-defs .gs0 { stop-opacity: 0.24; }
+:root[data-look="glass"][data-theme="dark"] .gu-art-defs .gs1 { stop-opacity: 0.03; }
+:root[data-look="glass"][data-theme="dark"] .gu-art-defs .gp0 { stop-color: var(--surface-2, #25232d); stop-opacity: 0.97; }
+:root[data-look="glass"][data-theme="dark"] .gu-art-defs .gp1 { stop-color: var(--surface, #1b1a21); stop-opacity: 0.9; }
+:root[data-look="glass"][data-theme="dark"] .art .g { opacity: 0.3; }
+:root[data-look="glass"][data-theme="dark"] .art .shine { opacity: 0.3; }
+:root[data-look="glass"][data-theme="dark"] .empty-art--compact { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); }
+:root[data-look="glass"][data-theme="dark"] .empty-art--full::before { opacity: 0.8; }
+
+/* ============ Bold Colour: saturated duotone blocks, white details ============ */
+:root[data-look="bold"] .art {
+  --apaper: #ffffff; --apaper2: #ffffff;
+  --aw: #ffffff; --aedge: var(--a1); --ashade: #000;
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  :root[data-look="bold"] .art {
+    --a3: color-mix(in srgb, var(--a1) 24%, #ffffff);
+    --a4: color-mix(in srgb, var(--a1) 62%, #1a0a24);
+    --amute: color-mix(in srgb, var(--a1) 26%, #ffffff);
+    --apaper2: color-mix(in srgb, var(--a1) 11%, #ffffff);
+  }
+}
+:root[data-look="bold"] .art .b { fill: var(--a1); }
+:root[data-look="bold"] .art .b2 { fill: var(--a4); }
+:root[data-look="bold"] .art .g { opacity: 0.16; }
+/* white pieces are cut out of the colour with a thin gap of the block's own colour */
+:root[data-look="bold"] .art .p, :root[data-look="bold"] .art .q, :root[data-look="bold"] .art .s { stroke: var(--a1); stroke-width: 2.4; paint-order: stroke fill; }
+:root[data-look="bold"] .art .a { fill: var(--a4); }
+:root[data-look="bold"] .art .pop { fill: #ffffff; }
+:root[data-look="bold"] .art .pop--soft { fill: #ffffff; opacity: 0.6; }
+:root[data-look="bold"] .art .l { stroke: var(--a4); }
+:root[data-look="bold"] .art .lk { stroke: var(--a1); opacity: 0.45; }
+:root[data-look="bold"] .art .dash { stroke: var(--a1); opacity: 0.5; }
+:root[data-look="bold"] .art .lr { stroke: var(--a4); }
+:root[data-look="bold"] .art .arc { stroke: var(--a4); }
+:root[data-look="bold"] .art .lens, :root[data-look="bold"] .art .rim { stroke: var(--a4); }
+:root[data-look="bold"] .art .arrow { stroke: #ffffff; }
+:root[data-look="bold"] .art .head { fill: #ffffff; stroke: #ffffff; }
+:root[data-look="bold"] .art .hand { stroke: #ffffff; }
+:root[data-look="bold"] .art .hl { stroke: #ffffff; }
+:root[data-look="bold"] .art .dashbox { stroke: #ffffff; opacity: 0.9; }
+:root[data-look="bold"] .art .shine { opacity: 0.9; stroke: var(--a1); stroke-width: 2.6; }
+:root[data-look="bold"] .empty-art--compact { background: var(--a1, var(--accent)); }
+:root[data-look="bold"] .empty-art--compact { background: var(--accent); }
+:root[data-look="bold"] .empty-art--compact > .art { --aedge: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  :root[data-look="bold"]:not([data-theme="light"]) .art { --apaper: var(--surface, #1b1a21); --apaper2: var(--surface-2, #25232d); --aw: var(--accent-ink, #2d0624); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .a { fill: var(--ai); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .w { fill: var(--surface, #1b1a21); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .g { opacity: 0.32; }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .b2 { fill: var(--a4); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .pop { fill: var(--ai); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .l, :root[data-look="bold"]:not([data-theme="light"]) .art .arc, :root[data-look="bold"]:not([data-theme="light"]) .art .lens, :root[data-look="bold"]:not([data-theme="light"]) .art .rim, :root[data-look="bold"]:not([data-theme="light"]) .art .lr { stroke: var(--a1); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .hl, :root[data-look="bold"]:not([data-theme="light"]) .art .hand { stroke: var(--ai); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .arrow, :root[data-look="bold"]:not([data-theme="light"]) .art .dashbox { stroke: var(--ai); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .head { fill: var(--ai); stroke: var(--ai); }
+  :root[data-look="bold"]:not([data-theme="light"]) .art .shine { stroke: var(--surface, #1b1a21); }
+}
+:root[data-look="bold"][data-theme="dark"] .art { --apaper: var(--surface, #1b1a21); --apaper2: var(--surface-2, #25232d); --aw: var(--accent-ink, #2d0624); }
+:root[data-look="bold"][data-theme="dark"] .art .a { fill: var(--ai); }
+:root[data-look="bold"][data-theme="dark"] .art .w { fill: var(--surface, #1b1a21); }
+:root[data-look="bold"][data-theme="dark"] .art .g { opacity: 0.32; }
+:root[data-look="bold"][data-theme="dark"] .art .b2 { fill: var(--a4); }
+:root[data-look="bold"][data-theme="dark"] .art .pop { fill: var(--ai); }
+:root[data-look="bold"][data-theme="dark"] .art .l, :root[data-look="bold"][data-theme="dark"] .art .arc, :root[data-look="bold"][data-theme="dark"] .art .lens, :root[data-look="bold"][data-theme="dark"] .art .rim, :root[data-look="bold"][data-theme="dark"] .art .lr { stroke: var(--a1); }
+:root[data-look="bold"][data-theme="dark"] .art .hl, :root[data-look="bold"][data-theme="dark"] .art .hand { stroke: var(--ai); }
+:root[data-look="bold"][data-theme="dark"] .art .arrow, :root[data-look="bold"][data-theme="dark"] .art .dashbox { stroke: var(--ai); }
+:root[data-look="bold"][data-theme="dark"] .art .head { fill: var(--ai); stroke: var(--ai); }
+:root[data-look="bold"][data-theme="dark"] .art .shine { stroke: var(--surface, #1b1a21); }
+
+/* ============ movement ============ */
+@media (prefers-reduced-motion: no-preference) {
+  /* Soft Glass: the main shape floats very slowly, only while it is on screen */
+  @keyframes art-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3.5px); } }
+  :root[data-look="glass"] .empty-art.is-on .ar-float { animation: art-float 7s ease-in-out infinite; }
+  /* Bold Colour: one snappy pop when the page opens (the look adds .gu-in / .is-entering then, never on a background redraw) */
+  @keyframes art-pop { from { opacity: 0; transform: translateY(8px) scale(0.84); } to { opacity: 1; transform: none; } }
+  :root[data-look="bold"] .gu-in .empty-art > .art, :root[data-look="bold"] .is-entering .empty-art > .art {
+    animation: art-pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--i, 0) * var(--stagger, 38ms) + 120ms - var(--e, 0ms)) backwards; transform-origin: 50% 60%;
+  }
+}
+
+/* ============ loading: one quiet shimmer, used wherever something is busy ============
+   A soft highlight slides across (a transformed pseudo-element inside an overflow-hidden box). With reduced motion it is a still,
+   soft tint. js/illustrations.js: GU.art.skeleton(n) makes the placeholder lines; GU.art.phase() keeps a redrawn one in step. */
+.shimmer { position: relative; overflow: hidden; isolation: isolate; }
+.shimmer::after {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 55%; pointer-events: none; opacity: 0;
+  background: linear-gradient(100deg, transparent 0%, var(--shim, rgb(255 255 255 / 0.6)) 50%, transparent 100%);
+  transform: translateX(-100%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes gu-shim { 0% { transform: translateX(-100%); } 70%, 100% { transform: translateX(280%); } }
+  /* it waits a moment first, so something that loads at once never flashes */
+  .shimmer::after { opacity: 1; animation: gu-shim var(--shim-t, 1.6s) var(--shim-ease, ease-in-out) infinite; animation-delay: var(--shim-d, 0s); }
+  .thumb.is-loading.shimmer::after { animation-delay: calc(var(--shim-d, 0s) + 0.25s); }
+}
+.skel { display: grid; gap: 8px; margin-top: 10px; max-width: 460px; }
+.skel > i { display: block; height: 10px; border-radius: 6px; background: var(--skel, rgb(0 0 0 / 0.06)); }
+.skel > i:nth-child(1) { width: 92%; }
+.skel > i:nth-child(2) { width: 74%; }
+.skel > i:nth-child(3) { width: 52%; }
+.skel > i:nth-child(n+4) { width: 64%; }
+@supports (color: color-mix(in srgb, red, blue)) {
+  :root { --skel: color-mix(in srgb, var(--ink) 7%, transparent); }
+}
+:root { --shim: rgb(255 255 255 / 0.62); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --shim: rgb(255 255 255 / 0.09); } }
+:root[data-theme="dark"] { --shim: rgb(255 255 255 / 0.09); }
+:root[data-look="bold"] { --shim-ease: cubic-bezier(0.3, 0, 0.2, 1); }
+@supports (color: color-mix(in srgb, red, blue)) {
+  :root[data-look="glass"] { --skel: color-mix(in srgb, var(--accent) 11%, transparent); }
+  :root[data-look="bold"] { --skel: color-mix(in srgb, var(--accent) 13%, transparent); --shim: color-mix(in srgb, var(--accent) 16%, rgb(255 255 255 / 0.55)); }
+}
+/* things that are loading and get the placeholder look */
+.hub-card.is-reading .skel { margin-top: 10px; }
+.chat__thinking + .skel, .hub-reply__status + .skel { margin-top: 8px; }
+.viewer__skel { width: min(560px, 86%); height: min(46vh, 340px); border-radius: 14px; background: var(--skel, rgb(0 0 0 / 0.06)); }

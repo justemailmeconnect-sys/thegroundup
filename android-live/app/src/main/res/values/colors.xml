@@ -3,5 +3,4 @@
     <!-- Browser toolbar colours: white to match the dashboard, and its dark page colour when the phone is in dark mode. -->
     <color name="toolbar_light">#ffffff</color>
     <color name="toolbar_dark">#141311</color>
-    <color name="ic_launcher_background">#6b3a6e</color>
 </resources>

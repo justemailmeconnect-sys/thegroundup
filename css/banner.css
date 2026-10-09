@@ -1,0 +1,87 @@
+/* banner.css: styles for the slim example-data banner and other top-of-page strips. Loaded before the looks; use :root[data-look="glass"] / [data-look="bold"] selectors here for per-look differences. */
+
+/* ===== The two strips at the top of a page (js/app.js, renderBanner) =====
+   "Example data" (with Clear examples) and, rarely, "This browser is not saving your changes".
+   Computer: as before, the full sentence in one strip. Phones (600px and under): one slim line.
+     [i]  Example data  What is this? v          [Clear examples]
+          Anything you add is kept
+   "What is this?" is a real button (aria-expanded); it opens the full sentence under the line. The full sentence is always in the page:
+   a screen reader reads it whether or not it is open. Selectors say .banner[data-banner] so they win over the looks (which load after this file). */
+.banner[data-banner] > .banner__more { display: none; }
+.banner[data-banner] > .banner__full { margin: 0; }
+
+@media (max-width: 600px) {
+  .banner[data-banner] {
+    position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ico more act" "full full full";
+    align-items: center; column-gap: 8px; row-gap: 0; min-height: 48px; padding: 2px 4px 2px 12px; margin: 0 0 14px;
+    border-radius: 16px; font-size: 13px; line-height: 1.3;
+  }
+  .banner[data-banner] > .ico { grid-area: ico; align-self: center; width: 20px; height: 20px; padding: 0; margin: 0; background: none; border-radius: 0; flex: none; }
+  .banner[data-banner]:not(.banner--crit) > .ico { color: var(--warn); }
+  .banner[data-banner].banner--crit > .ico { color: var(--crit); background: none; }
+  :root[data-look="bold"] .banner[data-banner] > .ico { width: 26px; height: 26px; padding: 5px; border-radius: 9px; background: #ffc53d; color: #3d2400; }
+  :root[data-look="bold"] .banner[data-banner].banner--crit > .ico { background: var(--crit); color: #fff; }
+
+  /* the words and "What is this?": one button, so the whole left side is the tap target (48px tall) */
+  .banner[data-banner] > .banner__more {
+    grid-area: more; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; min-height: 44px;
+    margin: 0; padding: 2px 6px 2px 0; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .banner[data-banner] > .banner__more:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .banner[data-banner] .banner__more span { flex: none; }
+  .banner__t1 { display: flex; align-items: center; flex-wrap: wrap; column-gap: 6px; max-width: 100%; line-height: 1.3; }
+  .banner__t1 > b { font-weight: 700; }
+  .banner__q { display: inline-flex; align-items: center; gap: 1px; font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; white-space: nowrap; }
+  .banner[data-banner] .banner__q > .ico { width: 13px; height: 13px; color: currentColor; transition: transform 0.18s ease; }
+  .banner[data-banner].banner--crit .banner__q { color: var(--crit); }
+  .banner[data-banner].is-open .banner__q > .ico { transform: rotate(180deg); }
+  .banner__t2 { display: block; max-width: 100%; margin-top: 1px; font-size: 12px; line-height: 1.25; color: var(--ink-2); }
+
+  /* Clear examples: compact, 44px tall */
+  .banner[data-banner] > .btn { grid-area: act; grid-column: auto; justify-self: end; align-self: center; min-height: 44px; padding: 0 9px; margin: 0; font-size: 12.5px; white-space: nowrap; }
+
+  /* the full sentence: tucked away (but still read aloud) until asked for */
+  .banner[data-banner]:not(.is-open) > .banner__full {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
+  .banner[data-banner].is-open > .banner__full {
+    grid-area: full; flex: none; margin: 0 4px 0 0; padding: 8px 0 11px; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    font-size: 13.5px; line-height: 1.5;
+  }
+  .banner[data-banner].is-opening > .banner__full { animation: banner-in 0.2s ease both; }
+}
+@keyframes banner-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* a narrow phone: the second phrase makes way, and "What is this?" takes its line */
+@media (max-width: 379px) {
+  .banner[data-banner]:not(.banner--crit) .banner__t1 { flex-direction: column; align-items: flex-start; row-gap: 0; }
+  .banner[data-banner]:not(.banner--crit) .banner__t2 { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner[data-banner].is-opening > .banner__full { animation: none; }
+  .banner[data-banner] .banner__q > .ico { transition: none; }
+}
+
+/* ===== The brand tile in the app (the "G" at the top of the menu and in the phone top bar) =====
+   Wears the same mark as the app icon (brand/README.md). It is drawn as a mask in the text colour, so each look keeps its own tile colour
+   and its own mark colour (white on the colour tiles, dark on the pale dark-mode ones), and a palette change recolours it. The letter stays
+   in the page (the link is named by its aria-label) but takes no room. */
+/*BRAND-MASK*/
+:root { --gu-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='92 92 328 328'%3E%3Cpath d='M336.99,192.73A102.77,102.77 0 0 0 154.79,273.85L94.49,284.48A164,164 0 0 1 385.23,155.03ZM262.56,225.39H417.12A164,164 0 0 1 420,256V258.19H262.56ZM92,256L420,256A164,164 0 0 1 409.83,312.85L102.17,312.85A164,164 0 0 1 92,256ZM114.61,339.09L397.39,339.09A164,164 0 0 1 374.18,369.71L137.82,369.71A164,164 0 0 1 114.61,339.09ZM170.5,395.95L341.5,395.95A164,164 0 0 1 256,420A164,164 0 0 1 170.5,395.95Z'/%3E%3C/svg%3E"); }
+/*END-BRAND-MASK*/
+:root .rail__brand > span, :root .partbar__brand > span {
+  display: block; width: 64%; height: 64%; font-size: 0; line-height: 0; background: currentColor;
+  -webkit-mask: var(--gu-mark) center / contain no-repeat; mask: var(--gu-mark) center / contain no-repeat;
+}
+/* The same mark wherever the app still showed a plain "G" in a tile: the lock screen and the disc between the Home and Work cards.
+   The letter stays in the page (both are hidden from screen readers already); the tile keeps its own colours and size. */
+:root .lockscreen__logo, :root .doors__seam { font-size: 0 !important; line-height: 0; position: relative; }
+:root .lockscreen__logo::before, :root .doors__seam::before {
+  content: ""; position: absolute; inset: 19%; background: currentColor;
+  -webkit-mask: var(--gu-mark) center / contain no-repeat; mask: var(--gu-mark) center / contain no-repeat;
+}
+@media (max-width: 860px) {
+  .banner[data-banner] > .btn { min-height: 44px; }
+}

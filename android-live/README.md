@@ -17,7 +17,7 @@ of the dashboard and its own separate data, and cannot sync or talk to Claude (t
 | Works offline | no | yes |
 | Permissions | none | internet, network state |
 
-Both can be installed together (different package names, different labels, same icon).
+Both can be installed together (different package names; both are labelled "The Ground Up"). This app wears the new icon (a G rising out of layered ground, see `../brand/README.md`); the standalone app keeps its original G icon.
 
 ## Build it
 

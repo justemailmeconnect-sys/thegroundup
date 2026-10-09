@@ -48,7 +48,7 @@
     if (typeof w.forecastHTML === 'function') return w.forecastHTML(s, { context: 'home' });
     const b = plan.base;
     if (!b.known) {
-      return '<section class="panel"><div class="panel__body cf-empty">' + icon('bank') + '<p>Put in what’s in your accounts first, and I’ll work out when you can afford each thing.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
+      return '<section class="panel"><div class="panel__body cf-empty">' + (GU.art ? GU.art.block('money') : '') + icon('bank') + '<p>Put in what’s in your accounts first, and I’ll work out when you can afford each thing.</p><button type="button" class="btn btn--primary" data-balances>Add your balances</button></div></section>';
     }
     const mine = plan.results.filter((r) => r.part === 'home');
     const keep = b.cfg.buffer ? money(b.cfg.buffer, { whole: true }) : '£0';
@@ -94,7 +94,7 @@
     const list = groups.length
       ? groups.map((g) => (g.closed ? '<details class="wk-group"' + (ui.showDone ? ' open' : '') + '><summary>' + esc(g.title) + ' (' + g.items.length + ')</summary>' : '<h3 class="wk-group__title">' + esc(g.title) + '</h3>') +
         '<ul class="wk-rows">' + g.items.map((i) => rowHTML(s, plan, i)).join('') + '</ul>' + (g.closed ? '</details>' : '')).join('')
-      : '<div class="panel__body plans__none"><p>Nothing planned yet. Add something you’re saving up for, like a holiday, a new laptop or a sofa, and it shows here with the earliest date you can afford it.</p></div>';
+      : '<div class="panel__body plans__none">' + (GU.art ? GU.art.row('bills', '<p>Nothing planned yet. Add something you’re saving up for, like a holiday, a new laptop or a sofa, and it shows here with the earliest date you can afford it.</p>') : '<p>Nothing planned yet. Add something you’re saving up for, like a holiday, a new laptop or a sofa, and it shows here with the earliest date you can afford it.</p>') + '</div>';
 
     root.innerHTML = GU.view.head({
       eyebrow: 'Money ahead',

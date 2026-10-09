@@ -280,7 +280,7 @@
     const draw = () => {
       const list = sorted();
       root.querySelector('#rc-list').innerHTML = list.length ? listHTML(list, t)
-        : emptyState({ icon: 'receipt', title: all.length ? 'Nothing matches' : 'Nothing filed yet', text: all.length ? 'Try another filter or search.' : 'Upload your first receipt or invoice above.' });
+        : emptyState({ icon: 'receipt', art: all.length ? 'search' : 'paperwork', title: all.length ? 'Nothing matches' : 'Nothing filed yet', text: all.length ? 'Try another filter or search.' : 'Upload your first receipt or invoice above.' });
       GU.ui.hydrate(root);
     };
     draw();

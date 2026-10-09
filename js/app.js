@@ -199,20 +199,71 @@
     else document.documentElement.removeAttribute('data-theme');
   }
 
+  /* On phones the two strips at the top of the page are one slim line (css/banner.css): the first words and a small "What is this?"
+     button that opens the full sentence. The full sentence is always in the page (it is what a screen reader reads, and what the
+     computer shows), and whether it is open is remembered for this visit. */
+  const bannerOpen = {};
+  function bannerIsOpen(kind) {
+    try {
+      const v = sessionStorage.getItem('groundup.banner.' + kind);
+      if (v === '1' || v === '0') return v === '1';
+    } catch (e) {
+      /* storage blocked: the in-memory copy below still holds for this visit */
+    }
+    return !!bannerOpen[kind];
+  }
+  function bannerSetOpen(kind, open) {
+    bannerOpen[kind] = open;
+    try {
+      sessionStorage.setItem('groundup.banner.' + kind, open ? '1' : '0');
+    } catch (e) {
+      /* see above */
+    }
+  }
+  function slimBanner(kind, mod, ico, fullHTML, short1, short2, more, extra) {
+    const open = bannerIsOpen(kind);
+    const id = 'banner-full-' + kind;
+    return '<div class="banner' + (mod ? ' ' + mod : '') + (open ? ' is-open' : '') + '" data-banner="' + kind + '">' + icon(ico) +
+      '<p class="banner__full" id="' + id + '">' + fullHTML + '</p>' +
+      '<button type="button" class="banner__more" data-banner-more="' + kind + '" aria-expanded="' + open + '" aria-controls="' + id + '">' +
+      '<span class="banner__t1"><b>' + short1 + '</b><span class="banner__q">' + more + icon('down') + '</span></span>' +
+      (short2 ? '<span class="banner__t2">' + short2 + '</span>' : '') + '</button>' + (extra || '') + '</div>';
+  }
+
   function renderBanner() {
     const slot = document.querySelector('.banner-slot');
     const s = store.state;
     let html = '';
     if (!store.storageOK()) {
-      html += '<div class="banner banner--crit">' + icon('alert') + '<p><b>This browser is not saving your changes.</b> Private browsing or blocked storage can cause this. Open the app in a normal window, or export a backup from Settings before you close it.</p></div>';
+      html += slimBanner('crit', 'banner--crit', 'alert',
+        '<b>This browser is not saving your changes.</b> Private browsing or blocked storage can cause this. Open the app in a normal window, or export a backup from Settings before you close it.',
+        'This browser is not saving your changes.', '', 'What can I do?');
     }
     if (hasDemo(s)) {
-      html += '<div class="banner">' + icon('info') + '<p><b>You are looking at example data.</b> Everything marked here is made up so you can see how it works. Anything you add yourself is kept when you clear the examples.</p>' +
-        '<button type="button" class="btn btn--sm" data-clear-demo>Clear examples</button></div>';
+      html += slimBanner('demo', '', 'info',
+        '<b>You are looking at example data.</b> Everything marked here is made up so you can see how it works. Anything you add yourself is kept when you clear the examples.',
+        'Example data', 'Anything you add is kept', 'What is this?',
+        '<button type="button" class="btn btn--sm" data-clear-demo>Clear examples</button>');
     }
     slot.innerHTML = html;
     const b = slot.querySelector('[data-clear-demo]');
     if (b) b.addEventListener('click', () => GU.sample.clear());
+    slot.querySelectorAll('[data-banner-more]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const kind = btn.getAttribute('data-banner-more');
+        const box = btn.closest('.banner');
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        btn.setAttribute('aria-expanded', String(open));
+        box.classList.toggle('is-open', open);
+        // Only a tap on the button fades the sentence in; a re-render later does not replay it.
+        box.classList.remove('is-opening');
+        if (open) {
+          void box.offsetWidth;
+          box.classList.add('is-opening');
+        }
+        bannerSetOpen(kind, open);
+      });
+    });
   }
 
   function renderRail(tabId, part) {

@@ -180,12 +180,14 @@
     if (mins < 60 * 24) return plural(Math.round(mins / 60), 'hour') + ' ago';
     return plural(Math.round(mins / 1440), 'day') + ' ago';
   }
+  /* A short note with a small picture beside it, for an empty list (css/art.css). */
+  const artRow = (kind, html) => (GU.art ? GU.art.row(kind, html) : html);
   function trashHTML(s) {
     const list = s.trash || [];
     return '<section class="panel" id="deleted"><header class="panel__head"><h2>' + icon('trash') + 'Recently deleted</h2><span class="muted">kept for 30 days</span></header>' +
       (list.length ? '<ul class="rows rows--tight">' + list.slice(0, 50).map((e) => '<li class="row-item"><span class="row-item__text"><b>' + esc(e.label) + '</b><em>' +
         esc((GU.trash.KIND[e.c] || 'Item') + ' · deleted ' + ago(e.at)) + '</em></span><span class="row-item__act"><button type="button" class="btn btn--sm btn--soft" data-restore="' + esc(e.id) + '">' + icon('repeat') + 'Restore</button></span></li>').join('') + '</ul>'
-        : '<div class="panel__body"><p class="muted">Anything you delete shows up here for 30 days, so you can put it back.</p></div>') + '</section>';
+        : '<div class="panel__body">' + artRow('trash', '<p class="muted">Anything you delete shows up here for 30 days, so you can put it back.</p>') + '</div>') + '</section>';
   }
 
   /* Recent changes: what Undo would take back, newest first, each with 'Undo back to here'. Undone ones follow, to redo. */
@@ -199,7 +201,7 @@
       '<span class="row-item__act"><button type="button" class="btn btn--sm btn--soft" ' + (undone ? 'data-history-forward="' : 'data-history-back="') + esc(e.id) + '">' + icon(undone ? 'redo' : 'undo') + (undone ? 'Redo up to here' : 'Undo back to here') + '</button></span></li>';
     const empty = !h.undo.length && !h.redo.length;
     return '<section class="panel" id="recent-changes"><header class="panel__head"><h2>' + icon('undo') + 'Recent changes</h2><span class="muted">' + esc('on this device · Ctrl+Z undoes the latest') + '</span></header>' +
-      (empty ? '<div class="panel__body"><p class="muted">Changes you make show up here, so you can undo them. Changes from your other devices are never undone from here.</p></div>'
+      (empty ? '<div class="panel__body">' + artRow('history', '<p class="muted">Changes you make show up here, so you can undo them. Changes from your other devices are never undone from here.</p>') + '</div>'
         : '<ul class="rows rows--tight">' + h.redo.slice(0, 20).reverse().map((e) => row(e, true)).join('') + h.undo.slice(0, 30).map((e) => row(e, false)).join('') + '</ul>' +
           (h.undo.length > 30 ? '<p class="panel__foot muted">' + esc('Showing the latest 30 of ' + h.undo.length + '.') + '</p>' : '')) + '</section>';
   }
@@ -212,7 +214,7 @@
       (list.length ? '<ul class="rows rows--tight">' + list.map((x) => '<li class="row-item"><span class="row-item__icon">' + icon('tag') + '</span><span class="row-item__text"><b>' + esc(x.name) + '</b><em>' +
         esc((x.k === 'in' ? 'Money in' : 'Spending') + ' · ' + (x.n ? plural(x.n, 'thing') + ' in it' : 'nothing in it yet')) + '</em></span><span class="row-item__act">' +
         (x.n ? '' : '<button type="button" class="btn btn--sm btn--ghost" data-delete-category="' + esc(x.k + '|' + x.name) + '">Remove</button>') + '</span></li>').join('') + '</ul>'
-        : '<div class="panel__body"><p class="muted">Make money categories of your own, like Gym or Pets, here or in the Sorting hub (“create a Gym category for PureGym payments”). They work with budgets too.</p></div>') + '</section>';
+        : '<div class="panel__body">' + artRow('money', '<p class="muted">Make money categories of your own, like Gym or Pets, here or in the Sorting hub (“create a Gym category for PureGym payments”). They work with budgets too.</p>') + '</div>') + '</section>';
   }
 
   /* The pages you made yourself (Wedding, Visa, Klarna…): each one can be shown in the menu or hidden from it. Hidden ones
@@ -242,7 +244,7 @@
     return '<section class="panel" id="category-pages"><header class="panel__head"><h2>' + icon('star') + 'Your categories</h2><button type="button" class="btn btn--sm btn--ghost" data-new-section>' + icon('plus') + 'New category</button></header>' +
       (list.length ? '<ul class="rows rows--tight">' + list.map(row).join('') + '</ul>' +
         '<p class="panel__foot muted">Your own pages, like Wedding or Visa. Hiding one only takes it out of the menu: everything in it stays, and Search still finds it.</p>'
-        : '<div class="panel__body"><p class="muted">No categories yet. I’ll suggest one when something you send me doesn’t fit the menu.</p></div>') + '</section>';
+        : '<div class="panel__body">' + artRow('documents', '<p class="muted">No categories yet. I’ll suggest one when something you send me doesn’t fit the menu.</p>') + '</div>') + '</section>';
   }
 
   /* The Look panel: two cards, one per look. The mini previews are drawn by css/looks.css (gradients and a few boxes). Picking a
@@ -257,6 +259,7 @@
     return '<section class="panel look-panel" id="look" aria-labelledby="look-title"><header class="panel__head"><h2 id="look-title">' + L.icon() + 'Look</h2>' +
       '<span class="muted look-panel__now">Now: ' + esc(L.meta(now).label) + '</span></header>' +
       '<div class="panel__body stack"><div class="look-cards" role="radiogroup" aria-label="Look">' + L.list().map(card).join('') + '</div>' +
+      (typeof L.paletteRowHTML === 'function' ? L.paletteRowHTML() : '') +
       '<p class="muted look-panel__hint">You can also switch from the rail (or the More menu on a phone) at any time. Light and dark are separate: they\u2019re under Appearance, in About you.</p></div></section>';
   }
 

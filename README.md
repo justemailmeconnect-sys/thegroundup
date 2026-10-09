@@ -127,6 +127,8 @@ The site has two looks, and you can switch between them whenever you like. Nothi
 - **Soft Glass** is airy and frosted: a white canvas washed with lilac and aqua light, glass-like cards, a floating menu, soft shadows, rounded type and gentle, springy movement.
 - **Bold Colour** is rich and confident: ink-dark menu, big blocks of plum, magenta and teal, heavy figures for your money, and quick, snappy movement.
 
+Inside each look you can also pick the accent colours (see [Colours](#colours)).
+
 Soft Glass is what you get to start with. **Light and dark are separate**: either look works in light and in dark, and **Settings › About you › Appearance** still sets that on its own.
 
 **How to switch**
@@ -135,9 +137,19 @@ Soft Glass is what you get to start with. **Light and dark are separate**: eithe
 - **On a phone:** the **More** button (three dots) in the top bar, then **Switch look**. It shows the name of the look it will switch to. Undo and Redo are in the same menu.
 - **In Settings:** the **Look** panel at the top has a card for each look, with a small preview. Pick one.
 
-The change fades over about a fifth of a second (or happens at once if your device asks for less motion). Your choice is saved in your settings, so it syncs to your other devices on claude.ai and is picked up there straight away, and it is also kept in the browser so the right look is on from the first moment the page appears. It isn't an Undo step. The colour of your phone's status bar (and the Android app's status and navigation bars) follows the look.
+The change fades over about a fifth of a second (or happens at once if your device asks for less motion). Your choice is saved in your settings, so it syncs to your other devices on claude.ai and is picked up there straight away, and it is also kept in the browser so the right look is on from the first moment the page appears. It isn't an Undo step. The colour of your phone's status bar (and the Android app's status and navigation bars) follows the look and the colours.
 
-**How it's built.** Each look is one stylesheet that sits on top of `css/styles.css` (`css/look-glass.css`, `css/look-bold.css`), plus an optional script that adds its movement (`js/look-glass.js`, `js/look-bold.js`). Only one stylesheet is switched on at a time, so each one is complete on its own and needs no prefix. `css/looks.css` holds the look-agnostic styles for the switch itself (the buttons and the Settings cards). `js/looks.js` has the registry (`GU.looks`) and the switch (`GU.look`: `get()`, `set(id)`, `toggle()`, `onChange(fn)`, `list()`). The look is `<html data-look="glass|bold">`. A look can set `--look-bar` on `:root` to choose the browser's and the Android app's bar colour for each colour scheme (the page colour is used when it doesn't).
+### Colours
+
+Each look comes in five sets of accent colours: **the original** (lilac and aqua in Soft Glass, plum and teal in Bold Colour), **Ocean**, **Blush**, **Meadow** and **Dusk**. The sets are the same in both looks, so your pick carries over when you switch look, and light and dark still work on their own. Every set gives Home one colour and Work another (Ocean is blue for Home and sea green for Work, Blush is rose and slate, Meadow is green and heather, Dusk is indigo and plum), so you can still tell at a glance which part you are in. Everything in the app's own accent colour follows it: buttons, chips, the big cards, the menu, the little drawings on empty pages, the lock screen and the icon in your browser tab. Colours that carry a meaning (green for good, amber for a warning, red for a problem, and the orange of spending bars) stay as they are.
+
+**How to pick:** **Settings › Look › Colours**, a row of five two-tone swatches under the two look cards. Tap one (or use the arrow keys). The change fades in like the look switch does. It is saved in your settings, so it syncs to your other devices, and is also kept in the browser so the right colours are on from the first moment the page appears. It isn't an Undo step. The original colours are what you get to start with and look exactly as they always did.
+
+**How it's built.** `<html data-palette="ocean">` picks a set; no attribute means the original. Both look stylesheets start with a "palettes" section (between `/*PALETTES-START*/` and `/*PALETTES-END*/`) that holds each set's colours as variables: `--h-*` for Home, `--w-*` for Work and, in Bold Colour, `--n-*` for the tinted greys both share. The look's usual tokens (`--accent`, `--btn-a`, `--part-tint` and so on) only read those variables, so a set changes colour and nothing else: no size, no position. `js/looks.js` has `GU.look.getPalette()`, `setPalette(id)`, `palettes()`, `onPalette(fn)` and `paletteRowHTML()` (the Settings row). `js/branding.js` recolours the tab icon to match.
+
+**To add a sixth set:** add it to `PALS` in `js/looks.js`; in each look stylesheet copy one of the palette blocks (the light one and the two dark ones, `prefers-color-scheme` and `:root[data-theme]`) and change the values, and add its `.pal-sw--<id>` swatch lines; add its three tile colours to `TILES` in `js/branding.js`; then run `tests/features2/palettes.js`, which checks every look, set, colour scheme and part for contrast, for Home and Work staying apart, and for staying clear of the green, amber, red and blue that mean good, warning, critical and info.
+
+**How the looks are built.** Each look is one stylesheet that sits on top of `css/styles.css` (`css/look-glass.css`, `css/look-bold.css`), plus an optional script that adds its movement (`js/look-glass.js`, `js/look-bold.js`). Only one stylesheet is switched on at a time, so each one is complete on its own and needs no prefix. `css/looks.css` holds the look-agnostic styles for the switch itself (the buttons and the Settings cards). `js/looks.js` has the registry (`GU.looks`) and the switch (`GU.look`: `get()`, `set(id)`, `toggle()`, `onChange(fn)`, `list()`). The look is `<html data-look="glass|bold">`. A look can set `--look-bar` on `:root` to choose the browser's and the Android app's bar colour for each colour scheme (the page colour is used when it doesn't).
 
 **To add a third look**
 
@@ -147,6 +159,30 @@ The change fades over about a fifth of a second (or happens at once if your devi
 4. Give the Settings card a preview: copy the `.look-card--glass` rules in `css/looks.css` as `.look-card--<id>` (a few boxes and gradients, no images).
 5. In `index.html`, the one-line script in `<head>` that reads `localStorage` before first paint only knows `glass` and `bold`: add the new id there so its first paint is right.
 6. Run `tests/looks/switch.js` and check the new look at 320, 390, 768 and 1300 px, light and dark.
+
+## Empty and loading states
+
+A page with nothing on it yet used to show a small icon and a line. Now each one has a small drawing above its words, in the same flat, rounded style, with one accent colour: a calendar for Bills, a shield for Warranties, a card for Debts, an in-tray for the Sorting hub, a briefcase for Work and so on (18 drawings in all). The words, the buttons and what they do are exactly as before.
+
+- **Where:** every empty page and the empty lists inside Settings, the search box before you type and when nothing matches, Ask Claude before the first message, and the file viewer. A one-line quiet note inside a busy page (a lane that has nothing in it, "Nothing to chart yet") is left as a line: a drawing would be bigger than what it says.
+- **Look and colour:** the drawings use the app's own colours, so a look, a colour set and dark mode all recolour them. In Soft Glass they are translucent and pastel with a soft glow, and the main shape floats very slowly (only while it is on screen, and never if your device asks for less motion). In Bold Colour they are solid blocks of colour with white details, with one quick pop when the page opens.
+- **On a phone** the drawing is smaller (112 by 84 instead of 160 by 120) and borrows the space the old icon had, so the button that belongs to an empty page is still on the first screen.
+- **Loading:** anything that is waiting shows quiet placeholder lines with a soft shimmer sliding across: a card in the Sorting hub being read, Claude thinking (in the hub and in Ask Claude), a statement being read, a warranty file being read, a thumbnail whose file is on its way, and the file viewer. With reduced motion the lines stay still (a faint tint, no movement). A shimmer waits a moment before it starts, so something that loads at once never flashes.
+- **How it's built:** `js/illustrations.js` has `GU.art` (`svg(kind, opts)`, `block(kind, {size})`, `row(kind, html)`, `skeleton(n)`, `kinds()`); `GU.ui.emptyState({icon, title, text, action, art, size})` puts the drawing first and keeps the old icon in the page, out of sight. `css/art.css` says what each part of a drawing looks like for each look, and `--art-1`, `--art-2`, `--art-ink`, `--art-line` and `--art-paper` let a look or colour set retune them. To add a drawing, add a function to `DRAW` in `js/illustrations.js` (stay inside x 36 to 124, y 14 to 98, and give every shape a role class) and name it in `ALIAS` or `FOR_ICON` if an icon should map to it. `tests/features2/art.js` walks every empty page in both looks at 320, 390, 768 and 1300 px.
+
+## The example-data banner
+
+While the example data is showing, a strip at the top says so and offers **Clear examples**. On a computer it is the full sentence in one strip, as it always was. On a phone (600 px and narrower) it is one slim line: **Example data** with a small **What is this?** button, and **Clear examples** on the right. **What is this?** opens the full sentence underneath; the whole left side is the button (44 px tall), and it stays open or closed as you move between pages for the rest of the visit. The full sentence is always in the page, so a screen reader reads it either way. The same slim line is used for the "This browser is not saving your changes" strip, whose advice opens under **What can I do?**. It lives in `renderBanner` in `js/app.js` and `css/banner.css`.
+
+## App icon
+
+The icon is a heavy **G** whose top half is an open ring and whose bottom half is solid ground cut into layers, drawn in white on a gradient tile: lilac to aqua in Soft Glass, plum to magenta in Bold Colour, and in the colours of your pick when you choose Ocean, Blush, Meadow or Dusk. It is used as:
+
+- the **browser tab icon** and the **home-screen icon** on a phone (`index.html` carries the Soft Glass ones; `js/branding.js` swaps them as the look or colours change, including when another device changes them);
+- the little tile at the top of the menu and in the phone bar, the lock screen, and the disc between the Home and Work cards (the mark is drawn in the tile's own text colour, so every look keeps its own colours);
+- the **online Android app**'s launcher icon (`android-live/`): an adaptive icon with a white mark on the gradient, a single-colour layer for Android 13 themed icons, and plain PNGs for older phones. The **offline Android app** (`android/`) keeps its original icon.
+
+`brand/make-icons.js` draws the mark once and writes the SVGs, the PNGs, the Android files and the data inside `js/branding.js` and `css/banner.css`; `brand/README.md` has the idea, the measurements and the colours.
 
 ## Running it
 
@@ -301,16 +337,19 @@ css/styles.css        all styling (light and dark themes)
 css/looks.css         the look switch: its buttons, the Settings cards, the cross-fade
 css/warranties.css    the Warranties page: the bar, the file chips, the summary
 css/alerts.css        the Charge alerts panel: its rows, the Earlier list, the flagged Bank lines
+css/art.css           the empty-state drawings (colours per look) and the loading shimmer
+css/banner.css        the slim example-data banner on a phone, and the brand tile (the mark)
 css/calendar.css      the calendar choices (the Settings panel and its dialog)
-css/look-glass.css    the Soft Glass look (a layer over styles.css; one of the two look stylesheets is on at a time)
-css/look-bold.css     the Bold Colour look
+css/look-glass.css    the Soft Glass look (a layer over styles.css; one of the two look stylesheets is on at a time), with the five colour sets
+css/look-bold.css     the Bold Colour look, with the five colour sets
 js/util.js            dates, money, CSV parsing
 js/store.js           saving (one piece per top-level key), file storage, backup and restore
 js/history.js         Undo and redo: record-level steps, names, keyboard
 js/organise.js        the one ⋯ menu on every row, Move to…, Duplicate, Download, CSV lists
 js/sync.js            syncing records and files across your devices on claude.ai
 js/finance.js         categories, auto-categorising rules, recurring dates, totals (work money kept out)
-js/ui.js              icons, dialogs, forms, attachments, toasts, menus
+js/ui.js              icons, dialogs, forms, attachments, toasts, menus, the empty state
+js/illustrations.js   the empty-state drawings and the loading placeholders (GU.art)
 js/charts.js          monthly column chart, category bars and the balance line
 js/agenda.js          the Today timeline, attention list and tab badges (`GU.agenda.extra`: where other features add their own lines)
 js/brain.js           reading and filing: Claude, API key and offline readers
@@ -329,12 +368,16 @@ js/refile.js          the one-off Home/Work re-sort, its questions and its undo
 js/assistant.js       Ask Claude
 js/sample.js          example data (`GU.sample.extra`: where other features add their own examples)
 js/app.js             the Home | Work switch, the menu for each part, routing and redraws
-js/looks.js           the two looks: the registry they plug into and the switch between them (GU.look)
+js/looks.js           the two looks: the registry they plug into and the switch between them (GU.look), and the colour sets
+js/branding.js        the tab and home-screen icon, following the look and the colours
 js/look-glass.js      what Soft Glass adds on top of its stylesheet: page entrance, gliding pill, pops
 js/look-bold.js       what Bold Colour adds on top of its stylesheet
 js/tabs/containers.js the menu items that hold several pages (Money, Bills & debts, Paperwork, To-do, Orders & claims, Jobs) and their strip of tabs
 js/tabs/warranties.js the Warranties page (Paperwork's third tab): the list, the form, reading uploads, reminders
 js/tabs/*.js          one file per page
+brand/                the app icon: the master SVGs, the PNGs, make-icons.js, and brand/README.md
+android-live/         the online Android app (its icon, version and build script)
+android/              the offline Android app (kept as it was)
 ```
 
 No frameworks and no build step: plain HTML, CSS and JavaScript. PDF text is read with pdf.js, photo text with Tesseract.js and Claude is called through the official Anthropic SDK, all loaded from public CDNs only when needed.

@@ -1,7 +1,321 @@
 /* look-bold.css: the Bold Colour look. Loaded on top of styles.css only while Bold Colour is the active look (index.html enables
    exactly one of css/look-glass.css and this file). It is a complete override layer: every token, shell and component rule it needs is here,
    and it never relies on a class that only js/look-bold.js adds (the script only adds motion: sliding highlights, entrance, tick draw).
-   Presentation only. Light mode keeps --bg #ffffff. Dark follows prefers-color-scheme and :root[data-theme]. */
+   Presentation only. Light mode keeps --bg #ffffff. Dark follows prefers-color-scheme and :root[data-theme].
+   Colours: every colour that belongs to the Home or the Work family, and every tinted neutral and shadow, is a palette variable
+   (--h-*, --w-*, --n-*) declared once in the "palettes" section below and overridden by one block per palette
+   (:root[data-palette="..."]). Nothing further down hard-codes a family colour; semantic colours (good, warning, critical, info) never change. */
+
+/* ===================== palettes =====================
+   --h-* is the Home colour family, --w-* the Work family, --n-* the neutrals and shadow tints both parts share. The first three blocks
+   are the default palette, which is exactly the Bold Colour this file started with (Home plum and magenta, Work teal); the blocks after
+   them replace the same variables for each other palette, light and dark (both dark selectors, as everywhere in this file).
+   <html data-palette="..."> picks one; no attribute means the default. The rules below only ever read these variables.
+   The palette blocks and the swatch colours are generated (scratchpad/skin/palette/gen); the default blocks are today's literals. */
+/*PALETTES-START*/
+:root {
+  /* Home family */
+  --h-accent: #a8197f; --h-accent-2: #b01f86; --h-accent-soft: #fde8f4; --h-part-tint: #fbf1fa; --h-part-ink: #3a0d5c; --h-rail-active: #b81c8a;
+  --h-glow: rgba(184, 28, 138, 0.45); --h-btn-a: #b81c8a; --h-btn-b: #8d24c4; --h-pop: #ffd23f; --h-pop-glow: rgba(255, 210, 63, 0.16);
+  --h-tile-1a: #46107c; --h-tile-1b: #8a1fa8; --h-tile-ia: #1c1327; --h-tile-ib: #3e2658; --h-hero-r1: rgba(255, 122, 200, 0.55);
+  --h-hero-r2: rgba(100, 40, 230, 0.55); --h-hero-1: #3a0d6b; --h-hero-2: #7a1d9e; --h-hero-3: #c72a86; --h-deep: #4a1280; --h-seam: #ff5fb4;
+  /* Work family */
+  --w-accent: #086b58; --w-accent-2: #0a7f68; --w-accent-soft: #d8f5ec; --w-part-tint: #eef9f5; --w-part-ink: #03302a; --w-rail-active: #0b7f68;
+  --w-glow: rgba(11, 127, 104, 0.45); --w-btn-a: #0b7f68; --w-btn-b: #08605e; --w-pop: #7df0c4; --w-tile-1a: #04403f; --w-tile-1b: #0a6b5c;
+  --w-tile-ia: #10231f; --w-tile-ib: #20463f; --w-hero-r1: rgba(60, 230, 180, 0.5); --w-hero-r2: rgba(10, 100, 120, 0.6); --w-hero-1: #03312f;
+  --w-hero-2: #08574f; --w-hero-3: #0a7f66; --w-deep: #05423b; --w-seam: #3ee0ae;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg-2: #f8f5fc; --n-surface-2: #f3eff9; --n-line: #ebe5f3; --n-line-strong: #d3c9e2; --n-ink: #16101f; --n-ink-2: #463d57; --n-ink-3: #6b6279;
+  --n-rail: #150f1f; --n-rail-ink: #b5abc6; --n-rail-hover: #261c36; --n-k-task: #4a4570; --n-k-task-bg: #ebe8f7; --n-grid: #eee9f6;
+  --n-axis: #d3c9e2; --n-toast: #1d1626; --n-seam-fill: #15101f; --n-bar: #ffffff; --n-sh1: 34 16 60; --n-sh2: 60 20 100; --n-sh3: 22 10 40;
+  --n-sh4: 20 0 40; --n-sh5: 16 4 36; --n-sh6: 14 4 34; --n-sh7: 10 0 30; --n-sh8: 30 10 60;
+}
+:root[data-theme="dark"] {
+  /* Home family */
+  --h-accent: #ff7ccb; --h-accent-2: #ff94d4; --h-accent-soft: #3a1534; --h-part-tint: #1f1623; --h-part-ink: #ffe3f4; --h-rail-active: #b81c8a;
+  --h-glow: rgba(255, 92, 190, 0.38); --h-btn-a: #c2218f; --h-btn-b: #8d24c4; --h-pop: #ffd23f; --h-pop-glow: rgba(255, 210, 63, 0.16);
+  --h-tile-1a: #4a1285; --h-tile-1b: #8a1fa8; --h-tile-ia: #272031; --h-tile-ib: #46305f; --h-hero-r1: rgba(255, 122, 200, 0.55);
+  --h-hero-r2: rgba(100, 40, 230, 0.55); --h-hero-1: #3a0d6b; --h-hero-2: #7a1d9e; --h-hero-3: #c72a86; --h-deep: #4a1280; --h-seam: #ff5fb4;
+  --h-accent-ink: #2d0624;
+  /* Work family */
+  --w-accent: #3fe0b0; --w-accent-2: #6aedc6; --w-accent-soft: #0f3a31; --w-part-tint: #121f1d; --w-part-ink: #d6fff1; --w-rail-active: #0a7f68;
+  --w-glow: rgba(63, 224, 176, 0.32); --w-btn-a: #0a7f68; --w-btn-b: #08605e; --w-pop: #7df0c4; --w-tile-1a: #04504a; --w-tile-1b: #0a7a68;
+  --w-tile-ia: #1b2f2b; --w-tile-ib: #2c524a; --w-hero-r1: rgba(60, 230, 180, 0.5); --w-hero-r2: rgba(10, 100, 120, 0.6); --w-hero-1: #03312f;
+  --w-hero-2: #08574f; --w-hero-3: #0a7f66; --w-deep: #05423b; --w-seam: #3ee0ae; --w-accent-ink: #03241c; --w-door-bg: #04251f;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #121115; --n-bg-2: #0d0c10; --n-surface: #1b1a21; --n-surface-2: #25232d; --n-line: #2f2c3a; --n-line-strong: #46425a; --n-ink: #f5f2fa;
+  --n-ink-2: #c7c0d6; --n-ink-3: #a9a2ba; --n-rail: #0b0a0f; --n-rail-ink: #a9a1ba; --n-rail-hover: #1c1a25; --n-k-task: #c4bde4;
+  --n-k-task-bg: #29254a; --n-grid: #26242f; --n-axis: #46425a; --n-subtab-on: #34303f; --n-toast: #38334a; --n-seam-fill: #15101f; --n-bar: #121115;
+  --n-sh1: 34 16 60; --n-sh2: 60 20 100; --n-sh3: 22 10 40; --n-sh4: 20 0 40; --n-sh5: 16 4 36; --n-sh6: 14 4 34; --n-sh7: 10 0 30;
+  --n-sh8: 30 10 60;
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) {
+  /* Home family */
+  --h-accent: #ff7ccb; --h-accent-2: #ff94d4; --h-accent-soft: #3a1534; --h-part-tint: #1f1623; --h-part-ink: #ffe3f4; --h-rail-active: #b81c8a;
+  --h-glow: rgba(255, 92, 190, 0.38); --h-btn-a: #c2218f; --h-btn-b: #8d24c4; --h-pop: #ffd23f; --h-pop-glow: rgba(255, 210, 63, 0.16);
+  --h-tile-1a: #4a1285; --h-tile-1b: #8a1fa8; --h-tile-ia: #272031; --h-tile-ib: #46305f; --h-hero-r1: rgba(255, 122, 200, 0.55);
+  --h-hero-r2: rgba(100, 40, 230, 0.55); --h-hero-1: #3a0d6b; --h-hero-2: #7a1d9e; --h-hero-3: #c72a86; --h-deep: #4a1280; --h-seam: #ff5fb4;
+  --h-accent-ink: #2d0624;
+  /* Work family */
+  --w-accent: #3fe0b0; --w-accent-2: #6aedc6; --w-accent-soft: #0f3a31; --w-part-tint: #121f1d; --w-part-ink: #d6fff1; --w-rail-active: #0a7f68;
+  --w-glow: rgba(63, 224, 176, 0.32); --w-btn-a: #0a7f68; --w-btn-b: #08605e; --w-pop: #7df0c4; --w-tile-1a: #04504a; --w-tile-1b: #0a7a68;
+  --w-tile-ia: #1b2f2b; --w-tile-ib: #2c524a; --w-hero-r1: rgba(60, 230, 180, 0.5); --w-hero-r2: rgba(10, 100, 120, 0.6); --w-hero-1: #03312f;
+  --w-hero-2: #08574f; --w-hero-3: #0a7f66; --w-deep: #05423b; --w-seam: #3ee0ae; --w-accent-ink: #03241c; --w-door-bg: #04251f;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #121115; --n-bg-2: #0d0c10; --n-surface: #1b1a21; --n-surface-2: #25232d; --n-line: #2f2c3a; --n-line-strong: #46425a; --n-ink: #f5f2fa;
+  --n-ink-2: #c7c0d6; --n-ink-3: #a9a2ba; --n-rail: #0b0a0f; --n-rail-ink: #a9a1ba; --n-rail-hover: #1c1a25; --n-k-task: #c4bde4;
+  --n-k-task-bg: #29254a; --n-grid: #26242f; --n-axis: #46425a; --n-subtab-on: #34303f; --n-toast: #38334a; --n-seam-fill: #15101f; --n-bar: #121115;
+  --n-sh1: 34 16 60; --n-sh2: 60 20 100; --n-sh3: 22 10 40; --n-sh4: 20 0 40; --n-sh5: 16 4 36; --n-sh6: 14 4 34; --n-sh7: 10 0 30;
+  --n-sh8: 30 10 60;
+}
+}
+/* Ocean */
+:root[data-palette="ocean"] {
+  /* Home family */
+  --h-accent: #0058ba; --h-accent-2: #005ec3; --h-accent-soft: #e5f0ff; --h-part-tint: #edf6ff; --h-part-ink: #002a40; --h-rail-active: #0060cb;
+  --h-glow: rgba(0, 103, 216, 0.45); --h-btn-a: #0060cb; --h-btn-b: #006293; --h-pop: #e8c9ff; --h-pop-glow: rgba(232, 201, 255, 0.16);
+  --h-tile-1a: #00354d; --h-tile-1b: #005a8d; --h-tile-ia: #021927; --h-tile-ib: #00354f; --h-hero-r1: rgba(126, 177, 255, 0.55);
+  --h-hero-r2: rgba(0, 107, 141, 0.55); --h-hero-1: #002d41; --h-hero-2: #00517e; --h-hero-3: #1866e6; --h-deep: #003852; --h-seam: #6da2ff;
+  /* Work family */
+  --w-accent: #006a65; --w-accent-2: #007d78; --w-accent-soft: #c9f9f5; --w-part-tint: #e8fbf9; --w-part-ink: #00302f; --w-rail-active: #007d78;
+  --w-glow: rgba(0, 125, 120, 0.45); --w-btn-a: #007d78; --w-btn-b: #005f63; --w-pop: #00f6e5; --w-tile-1a: #004042; --w-tile-1b: #006a68;
+  --w-tile-ia: #012423; --w-tile-ib: #004746; --w-hero-r1: rgba(0, 228, 214, 0.5); --w-hero-r2: rgba(0, 101, 116, 0.6); --w-hero-1: #003132;
+  --w-hero-2: #005656; --w-hero-3: #007d77; --w-deep: #004141; --w-seam: #00dfd0;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg-2: #f2f7fd; --n-surface-2: #ebf2fb; --n-line: #dfe9f5; --n-line-strong: #bed1e6; --n-ink: #071420; --n-ink-2: #2d4458; --n-ink-3: #56687b;
+  --n-rail: #061420; --n-rail-ink: #9eb3c9; --n-rail-hover: #0c2438; --n-k-task: #1b4f6b; --n-k-task-bg: #dfecf7; --n-grid: #e3edf8;
+  --n-axis: #bed1e6; --n-toast: #0e1b28; --n-seam-fill: #071420; --n-bar: #eff7ff; --n-sh1: 0 30 54; --n-sh2: 0 48 86; --n-sh3: 0 19 37;
+  --n-sh4: 0 13 31; --n-sh5: 0 14 28; --n-sh6: 0 13 25; --n-sh7: 0 7 18; --n-sh8: 0 27 47;
+}
+:root[data-theme="dark"][data-palette="ocean"] {
+  /* Home family */
+  --h-accent: #7db3ff; --h-accent-2: #92c0ff; --h-accent-soft: #032648; --h-part-tint: #0e1c26; --h-part-ink: #e0eeff; --h-rail-active: #0061c7;
+  --h-glow: rgba(102, 164, 255, 0.38); --h-btn-a: #0067d6; --h-btn-b: #006292; --h-pop: #e7c9ff; --h-pop-glow: rgba(231, 201, 255, 0.16);
+  --h-tile-1a: #003952; --h-tile-1b: #005a8d; --h-tile-ia: #122530; --h-tile-ib: #003e5b; --h-hero-r1: rgba(124, 178, 255, 0.55);
+  --h-hero-r2: rgba(0, 107, 140, 0.55); --h-hero-1: #002d41; --h-hero-2: #00517c; --h-hero-3: #1067e6; --h-deep: #003851; --h-seam: #6ba3ff;
+  --h-accent-ink: #001836;
+  /* Work family */
+  --w-accent: #00dfd6; --w-accent-2: #00f0e9; --w-accent-soft: #003a3a; --w-part-tint: #0a2021; --w-part-ink: #d2fffc; --w-rail-active: #007d7b;
+  --w-glow: rgba(0, 222, 214, 0.32); --w-btn-a: #007d7b; --w-btn-b: #005f65; --w-pop: #00f5ea; --w-tile-1a: #004f52; --w-tile-1b: #007878;
+  --w-tile-ia: #0c3031; --w-tile-ib: #015455; --w-hero-r1: rgba(0, 228, 219, 0.5); --w-hero-r2: rgba(0, 101, 118, 0.6); --w-hero-1: #003133;
+  --w-hero-2: #005658; --w-hero-3: #007d7a; --w-deep: #004143; --w-seam: #00ded5; --w-accent-ink: #002423; --w-door-bg: #002525;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #0f1215; --n-bg-2: #0a0d10; --n-surface: #161c21; --n-surface-2: #1e252e; --n-line: #262f3b; --n-line-strong: #36485b; --n-ink: #f0f4fb;
+  --n-ink-2: #b8c5d9; --n-ink-3: #99a8bd; --n-rail: #080b0f; --n-rail-ink: #98a7bd; --n-rail-hover: #151d26; --n-k-task: #aac6e6;
+  --n-k-task-bg: #062d49; --n-grid: #1f2730; --n-axis: #36485b; --n-subtab-on: #2a3341; --n-toast: #28384c; --n-seam-fill: #0a1321; --n-bar: #0f1215;
+  --n-sh1: 0 26 65; --n-sh2: 0 40 109; --n-sh3: 2 17 43; --n-sh4: 0 8 43; --n-sh5: 0 12 34; --n-sh6: 0 11 31; --n-sh7: 0 6 23; --n-sh8: 0 24 56;
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="ocean"] {
+  /* Home family */
+  --h-accent: #7db3ff; --h-accent-2: #92c0ff; --h-accent-soft: #032648; --h-part-tint: #0e1c26; --h-part-ink: #e0eeff; --h-rail-active: #0061c7;
+  --h-glow: rgba(102, 164, 255, 0.38); --h-btn-a: #0067d6; --h-btn-b: #006292; --h-pop: #e7c9ff; --h-pop-glow: rgba(231, 201, 255, 0.16);
+  --h-tile-1a: #003952; --h-tile-1b: #005a8d; --h-tile-ia: #122530; --h-tile-ib: #003e5b; --h-hero-r1: rgba(124, 178, 255, 0.55);
+  --h-hero-r2: rgba(0, 107, 140, 0.55); --h-hero-1: #002d41; --h-hero-2: #00517c; --h-hero-3: #1067e6; --h-deep: #003851; --h-seam: #6ba3ff;
+  --h-accent-ink: #001836;
+  /* Work family */
+  --w-accent: #00dfd6; --w-accent-2: #00f0e9; --w-accent-soft: #003a3a; --w-part-tint: #0a2021; --w-part-ink: #d2fffc; --w-rail-active: #007d7b;
+  --w-glow: rgba(0, 222, 214, 0.32); --w-btn-a: #007d7b; --w-btn-b: #005f65; --w-pop: #00f5ea; --w-tile-1a: #004f52; --w-tile-1b: #007878;
+  --w-tile-ia: #0c3031; --w-tile-ib: #015455; --w-hero-r1: rgba(0, 228, 219, 0.5); --w-hero-r2: rgba(0, 101, 118, 0.6); --w-hero-1: #003133;
+  --w-hero-2: #005658; --w-hero-3: #007d7a; --w-deep: #004143; --w-seam: #00ded5; --w-accent-ink: #002423; --w-door-bg: #002525;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #0f1215; --n-bg-2: #0a0d10; --n-surface: #161c21; --n-surface-2: #1e252e; --n-line: #262f3b; --n-line-strong: #36485b; --n-ink: #f0f4fb;
+  --n-ink-2: #b8c5d9; --n-ink-3: #99a8bd; --n-rail: #080b0f; --n-rail-ink: #98a7bd; --n-rail-hover: #151d26; --n-k-task: #aac6e6;
+  --n-k-task-bg: #062d49; --n-grid: #1f2730; --n-axis: #36485b; --n-subtab-on: #2a3341; --n-toast: #28384c; --n-seam-fill: #0a1321; --n-bar: #0f1215;
+  --n-sh1: 0 26 65; --n-sh2: 0 40 109; --n-sh3: 2 17 43; --n-sh4: 0 8 43; --n-sh5: 0 12 34; --n-sh6: 0 11 31; --n-sh7: 0 6 23; --n-sh8: 0 24 56;
+}
+}
+/* Blush */
+:root[data-palette="blush"] {
+  /* Home family */
+  --h-accent: #a31e89; --h-accent-2: #ab2390; --h-accent-soft: #fce8f5; --h-part-tint: #fcf1f9; --h-part-ink: #48024b; --h-rail-active: #b32196;
+  --h-glow: rgba(179, 33, 150, 0.45); --h-btn-a: #b32196; --h-btn-b: #b21659; --h-pop: #ffc6cd; --h-pop-glow: rgba(255, 198, 205, 0.16);
+  --h-tile-1a: #511130; --h-tile-1b: #9b1959; --h-tile-ia: #221122; --h-tile-ib: #4a214c; --h-hero-r1: rgba(255, 130, 150, 0.55);
+  --h-hero-r2: rgba(170, 20, 90, 0.55); --h-hero-1: #511130; --h-hero-2: #971557; --h-hero-3: #c9305f; --h-deep: #63123b; --h-seam: #fb718c;
+  /* Work family */
+  --w-accent: #326085; --w-accent-2: #3b729d; --w-accent-soft: #dff0ff; --w-part-tint: #f0f7fd; --w-part-ink: #172a3d; --w-rail-active: #3b729d;
+  --w-glow: rgba(60, 114, 157, 0.45); --w-btn-a: #3b729d; --w-btn-b: #395577; --w-pop: #afddff; --w-tile-1a: #253851; --w-tile-1b: #366084;
+  --w-tile-ia: #16202a; --w-tile-ib: #2d4053; --w-hero-r1: rgba(143, 207, 255, 0.5); --w-hero-r2: rgba(71, 88, 131, 0.6); --w-hero-1: #1a2b3e;
+  --w-hero-2: #2f4d6c; --w-hero-3: #39729d; --w-deep: #223a53; --w-seam: #82caff;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg-2: #fcf4f8; --n-surface-2: #f8eef4; --n-line: #f2e3ec; --n-line-strong: #e0c6d5; --n-ink: #1d0e18; --n-ink-2: #52394b; --n-ink-3: #765f6e;
+  --n-rail: #1c0d18; --n-rail-ink: #c3a8b9; --n-rail-hover: #31182a; --n-k-task: #5f3e61; --n-k-task-bg: #f3e6f0; --n-grid: #f5e7ef;
+  --n-axis: #e0c6d5; --n-toast: #24141e; --n-seam-fill: #1c0e18; --n-bar: #fdf2f9; --n-sh1: 49 8 42; --n-sh2: 84 1 68; --n-sh3: 33 6 28;
+  --n-sh4: 29 0 21; --n-sh5: 27 1 24; --n-sh6: 25 1 23; --n-sh7: 18 0 16; --n-sh8: 46 2 42;
+}
+:root[data-theme="dark"][data-palette="blush"] {
+  /* Home family */
+  --h-accent: #f87ed9; --h-accent-2: #fa96df; --h-accent-soft: #3a1534; --h-part-tint: #211520; --h-part-ink: #fee3f6; --h-rail-active: #b22297;
+  --h-glow: rgba(246, 96, 209, 0.38); --h-btn-a: #bb279d; --h-btn-b: #b21659; --h-pop: #ffc6cd; --h-pop-glow: rgba(255, 198, 205, 0.16);
+  --h-tile-1a: #511130; --h-tile-1b: #9b1959; --h-tile-ia: #2c1e2c; --h-tile-ib: #522b53; --h-hero-r1: rgba(255, 130, 150, 0.55);
+  --h-hero-r2: rgba(170, 20, 90, 0.55); --h-hero-1: #511130; --h-hero-2: #971557; --h-hero-3: #c9305f; --h-deep: #63123b; --h-seam: #fb718c;
+  --h-accent-ink: #2c0625;
+  /* Work family */
+  --w-accent: #94ceff; --w-accent-2: #b3dbff; --w-accent-soft: #1f3448; --w-part-tint: #171d24; --w-part-ink: #eef7ff; --w-rail-active: #3f719e;
+  --w-glow: rgba(137, 201, 255, 0.32); --w-btn-a: #3f719e; --w-btn-b: #3b5478; --w-pop: #b2dcff; --w-tile-1a: #2d4664; --w-tile-1b: #406c97;
+  --w-tile-ia: #222c36; --w-tile-ib: #394c60; --w-hero-r1: rgba(148, 206, 255, 0.5); --w-hero-r2: rgba(74, 87, 131, 0.6); --w-hero-1: #1c2b3f;
+  --w-hero-2: #314d6d; --w-hero-3: #3d719e; --w-deep: #243a53; --w-seam: #88c9ff; --w-accent-ink: #0e1f2e; --w-door-bg: #11202f;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #151012; --n-bg-2: #100b0d; --n-surface: #20191d; --n-surface-2: #2b2127; --n-line: #382932; --n-line-strong: #553d4c; --n-ink: #faf1f4;
+  --n-ink-2: #d5bdc8; --n-ink-3: #b89eaa; --n-rail: #0e090c; --n-rail-ink: #b99daa; --n-rail-hover: #23181f; --n-k-task: #ddb6cd;
+  --n-k-task-bg: #3f1d38; --n-grid: #2d2229; --n-axis: #553d4c; --n-subtab-on: #3d2d36; --n-toast: #462f3d; --n-seam-fill: #1d0d16; --n-bar: #151012;
+  --n-sh1: 53 6 35; --n-sh2: 88 0 55; --n-sh3: 35 5 23; --n-sh4: 31 0 15; --n-sh5: 29 0 18; --n-sh6: 27 0 18; --n-sh7: 20 0 11; --n-sh8: 50 0 34;
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="blush"] {
+  /* Home family */
+  --h-accent: #f87ed9; --h-accent-2: #fa96df; --h-accent-soft: #3a1534; --h-part-tint: #211520; --h-part-ink: #fee3f6; --h-rail-active: #b22297;
+  --h-glow: rgba(246, 96, 209, 0.38); --h-btn-a: #bb279d; --h-btn-b: #b21659; --h-pop: #ffc6cd; --h-pop-glow: rgba(255, 198, 205, 0.16);
+  --h-tile-1a: #511130; --h-tile-1b: #9b1959; --h-tile-ia: #2c1e2c; --h-tile-ib: #522b53; --h-hero-r1: rgba(255, 130, 150, 0.55);
+  --h-hero-r2: rgba(170, 20, 90, 0.55); --h-hero-1: #511130; --h-hero-2: #971557; --h-hero-3: #c9305f; --h-deep: #63123b; --h-seam: #fb718c;
+  --h-accent-ink: #2c0625;
+  /* Work family */
+  --w-accent: #94ceff; --w-accent-2: #b3dbff; --w-accent-soft: #1f3448; --w-part-tint: #171d24; --w-part-ink: #eef7ff; --w-rail-active: #3f719e;
+  --w-glow: rgba(137, 201, 255, 0.32); --w-btn-a: #3f719e; --w-btn-b: #3b5478; --w-pop: #b2dcff; --w-tile-1a: #2d4664; --w-tile-1b: #406c97;
+  --w-tile-ia: #222c36; --w-tile-ib: #394c60; --w-hero-r1: rgba(148, 206, 255, 0.5); --w-hero-r2: rgba(74, 87, 131, 0.6); --w-hero-1: #1c2b3f;
+  --w-hero-2: #314d6d; --w-hero-3: #3d719e; --w-deep: #243a53; --w-seam: #88c9ff; --w-accent-ink: #0e1f2e; --w-door-bg: #11202f;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #151012; --n-bg-2: #100b0d; --n-surface: #20191d; --n-surface-2: #2b2127; --n-line: #382932; --n-line-strong: #553d4c; --n-ink: #faf1f4;
+  --n-ink-2: #d5bdc8; --n-ink-3: #b89eaa; --n-rail: #0e090c; --n-rail-ink: #b99daa; --n-rail-hover: #23181f; --n-k-task: #ddb6cd;
+  --n-k-task-bg: #3f1d38; --n-grid: #2d2229; --n-axis: #553d4c; --n-subtab-on: #3d2d36; --n-toast: #462f3d; --n-seam-fill: #1d0d16; --n-bar: #151012;
+  --n-sh1: 53 6 35; --n-sh2: 88 0 55; --n-sh3: 35 5 23; --n-sh4: 31 0 15; --n-sh5: 29 0 18; --n-sh6: 27 0 18; --n-sh7: 20 0 11; --n-sh8: 50 0 34;
+}
+}
+/* Meadow */
+:root[data-palette="meadow"] {
+  /* Home family */
+  --h-accent: #1d6a00; --h-accent-2: #1f7000; --h-accent-soft: #e7f3e4; --h-part-tint: #f1f7ed; --h-part-ink: #1d2b00; --h-rail-active: #1f7400;
+  --h-glow: rgba(36, 131, 0, 0.45); --h-btn-a: #1f7400; --h-btn-b: #456600; --h-pop: #49f6d6; --h-pop-glow: rgba(73, 246, 214, 0.16);
+  --h-tile-1a: #283600; --h-tile-1b: #3a5f00; --h-tile-ia: #121906; --h-tile-ib: #263600; --h-hero-r1: rgba(112, 201, 98, 0.55);
+  --h-hero-r2: rgba(89, 107, 0, 0.55); --h-hero-1: #212d00; --h-hero-2: #375600; --h-hero-3: #028000; --h-deep: #2a3900; --h-seam: #4ec049;
+  /* Work family */
+  --w-accent: #634f85; --w-accent-2: #755f9e; --w-accent-soft: #f0e9ff; --w-part-tint: #f7f4fe; --w-part-ink: #2d223c; --w-rail-active: #755f9e;
+  --w-glow: rgba(117, 95, 158, 0.45); --w-btn-a: #755f9e; --w-btn-b: #5f4872; --w-pop: #d9cdff; --w-tile-1a: #402f4d; --w-tile-1b: #655083;
+  --w-tile-ia: #211c29; --w-tile-ib: #433852; --w-hero-r1: rgba(205, 186, 255, 0.5); --w-hero-r2: rgba(111, 74, 117, 0.6); --w-hero-1: #30233c;
+  --w-hero-2: #54416a; --w-hero-3: #755f9f; --w-deep: #3f3051; --w-seam: #c8b3ff;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg-2: #f2f9f3; --n-surface-2: #ebf4ec; --n-line: #dfece2; --n-line-strong: #bed5c3; --n-ink: #08160b; --n-ink-2: #314733; --n-ink-3: #566b5a;
+  --n-rail: #08170a; --n-rail-ink: #a0b8a3; --n-rail-hover: #102814; --n-k-task: #375129; --n-k-task-bg: #e3eee2; --n-grid: #e4efe6;
+  --n-axis: #bed5c3; --n-toast: #0e1e12; --n-seam-fill: #0a170b; --n-bar: #f0f9f1; --n-sh1: 0 36 5; --n-sh2: 0 58 19; --n-sh3: 0 24 2;
+  --n-sh4: 0 17 3; --n-sh5: 0 18 0; --n-sh6: 0 16 0; --n-sh7: 0 10 0; --n-sh8: 0 32 1;
+}
+:root[data-theme="dark"][data-palette="meadow"] {
+  /* Home family */
+  --h-accent: #74ca61; --h-accent-2: #8ed27e; --h-accent-soft: #152c08; --h-part-tint: #161c10; --h-part-ink: #e1f2dc; --h-rail-active: #237400;
+  --h-glow: rgba(81, 192, 60, 0.38); --h-btn-a: #237b00; --h-btn-b: #476600; --h-pop: #4af6d5; --h-pop-glow: rgba(74, 246, 213, 0.16);
+  --h-tile-1a: #2c3a00; --h-tile-1b: #3c5f00; --h-tile-ia: #1f2516; --h-tile-ib: #303f0f; --h-hero-r1: rgba(114, 201, 96, 0.55);
+  --h-hero-r2: rgba(90, 106, 0, 0.55); --h-hero-1: #212d00; --h-hero-2: #385600; --h-hero-3: #0f8000; --h-deep: #2a3900; --h-seam: #51c047;
+  --h-accent-ink: #071f00;
+  /* Work family */
+  --w-accent: #d4beff; --w-accent-2: #e0d0ff; --w-accent-soft: #372b46; --w-part-tint: #1e1a23; --w-part-ink: #f7f3ff; --w-rail-active: #785e9c;
+  --w-glow: rgba(205, 178, 255, 0.32); --w-btn-a: #785e9c; --w-btn-b: #614771; --w-pop: #dcccff; --w-tile-1a: #4f3a60; --w-tile-1b: #755a94;
+  --w-tile-ia: #2e2735; --w-tile-ib: #50445e; --w-hero-r1: rgba(209, 184, 255, 0.5); --w-hero-r2: rgba(113, 73, 115, 0.6); --w-hero-1: #31233b;
+  --w-hero-2: #554068; --w-hero-3: #785e9d; --w-deep: #413050; --w-seam: #ccb2ff; --w-accent-ink: #22192e; --w-door-bg: #231a2e;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #0f1310; --n-bg-2: #0a0e0b; --n-surface: #171d18; --n-surface-2: #1e2720; --n-line: #253228; --n-line-strong: #364c3b; --n-ink: #eef6f1;
+  --n-ink-2: #b4cbbd; --n-ink-3: #95ae9e; --n-rail: #080c09; --n-rail-ink: #93ad9e; --n-rail-hover: #141f17; --n-k-task: #aaceb2;
+  --n-k-task-bg: #123315; --n-grid: #1e2921; --n-axis: #364c3b; --n-subtab-on: #28372d; --n-toast: #263d2d; --n-seam-fill: #06170e; --n-bar: #0f1310;
+  --n-sh1: 0 35 18; --n-sh2: 0 57 35; --n-sh3: 0 24 10; --n-sh4: 0 17 8; --n-sh5: 0 17 5; --n-sh6: 0 16 4; --n-sh7: 0 10 3; --n-sh8: 0 32 13;
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="meadow"] {
+  /* Home family */
+  --h-accent: #74ca61; --h-accent-2: #8ed27e; --h-accent-soft: #152c08; --h-part-tint: #161c10; --h-part-ink: #e1f2dc; --h-rail-active: #237400;
+  --h-glow: rgba(81, 192, 60, 0.38); --h-btn-a: #237b00; --h-btn-b: #476600; --h-pop: #4af6d5; --h-pop-glow: rgba(74, 246, 213, 0.16);
+  --h-tile-1a: #2c3a00; --h-tile-1b: #3c5f00; --h-tile-ia: #1f2516; --h-tile-ib: #303f0f; --h-hero-r1: rgba(114, 201, 96, 0.55);
+  --h-hero-r2: rgba(90, 106, 0, 0.55); --h-hero-1: #212d00; --h-hero-2: #385600; --h-hero-3: #0f8000; --h-deep: #2a3900; --h-seam: #51c047;
+  --h-accent-ink: #071f00;
+  /* Work family */
+  --w-accent: #d4beff; --w-accent-2: #e0d0ff; --w-accent-soft: #372b46; --w-part-tint: #1e1a23; --w-part-ink: #f7f3ff; --w-rail-active: #785e9c;
+  --w-glow: rgba(205, 178, 255, 0.32); --w-btn-a: #785e9c; --w-btn-b: #614771; --w-pop: #dcccff; --w-tile-1a: #4f3a60; --w-tile-1b: #755a94;
+  --w-tile-ia: #2e2735; --w-tile-ib: #50445e; --w-hero-r1: rgba(209, 184, 255, 0.5); --w-hero-r2: rgba(113, 73, 115, 0.6); --w-hero-1: #31233b;
+  --w-hero-2: #554068; --w-hero-3: #785e9d; --w-deep: #413050; --w-seam: #ccb2ff; --w-accent-ink: #22192e; --w-door-bg: #231a2e;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #0f1310; --n-bg-2: #0a0e0b; --n-surface: #171d18; --n-surface-2: #1e2720; --n-line: #253228; --n-line-strong: #364c3b; --n-ink: #eef6f1;
+  --n-ink-2: #b4cbbd; --n-ink-3: #95ae9e; --n-rail: #080c09; --n-rail-ink: #93ad9e; --n-rail-hover: #141f17; --n-k-task: #aaceb2;
+  --n-k-task-bg: #123315; --n-grid: #1e2921; --n-axis: #364c3b; --n-subtab-on: #28372d; --n-toast: #263d2d; --n-seam-fill: #06170e; --n-bar: #0f1310;
+  --n-sh1: 0 35 18; --n-sh2: 0 57 35; --n-sh3: 0 24 10; --n-sh4: 0 17 8; --n-sh5: 0 17 5; --n-sh6: 0 16 4; --n-sh7: 0 10 3; --n-sh8: 0 32 13;
+}
+}
+/* Dusk */
+:root[data-palette="dusk"] {
+  /* Home family */
+  --h-accent: #5645cb; --h-accent-2: #5b4ad4; --h-accent-soft: #ecedff; --h-part-tint: #f1f4ff; --h-part-ink: #021f67; --h-rail-active: #5f4cde;
+  --h-glow: rgba(97, 79, 224, 0.45); --h-btn-a: #5f4cde; --h-btn-b: #214ce1; --h-pop: #ffc0ef; --h-pop-glow: rgba(255, 192, 239, 0.16);
+  --h-tile-1a: #002c74; --h-tile-1b: #2e45cc; --h-tile-ia: #0d172a; --h-tile-ib: #18305e; --h-hero-r1: rgba(165, 164, 255, 0.55);
+  --h-hero-r2: rgba(0, 97, 183, 0.55); --h-hero-1: #002561; --h-hero-2: #233fbb; --h-hero-3: #6e55e5; --h-deep: #002e7c; --h-seam: #9c93ff;
+  /* Work family */
+  --w-accent: #7b476c; --w-accent-2: #915581; --w-accent-soft: #fde5f5; --w-part-tint: #fcf3f9; --w-part-ink: #381f2f; --w-rail-active: #915581;
+  --w-glow: rgba(145, 85, 129, 0.45); --w-btn-a: #915581; --w-btn-b: #71425b; --w-pop: #ffbef1; --w-tile-1a: #4c2b3d; --w-tile-1b: #7b486b;
+  --w-tile-ia: #271a23; --w-tile-ib: #4f3545; --w-hero-r1: rgba(255, 162, 235, 0.5); --w-hero-r2: rgba(126, 69, 88, 0.6); --w-hero-1: #3a202f;
+  --w-hero-2: #653b55; --w-hero-3: #915582; --w-deep: #4d2c41; --w-seam: #fc9be9;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg-2: #f4f6fd; --n-surface-2: #edf1fb; --n-line: #e3e8f6; --n-line-strong: #c4cee7; --n-ink: #0d1221; --n-ink-2: #36415a; --n-ink-3: #5d667d;
+  --n-rail: #0c1221; --n-rail-ink: #a5b0ca; --n-rail-hover: #17213a; --n-k-task: #2e4c70; --n-k-task-bg: #e3ebf8; --n-grid: #e6ecf8;
+  --n-axis: #c4cee7; --n-toast: #141929; --n-seam-fill: #0c1321; --n-bar: #f2f6ff; --n-sh1: 7 25 65; --n-sh2: 17 37 111; --n-sh3: 5 16 44;
+  --n-sh4: 2 5 46; --n-sh5: 0 9 39; --n-sh6: 0 9 37; --n-sh7: 0 5 29; --n-sh8: 1 20 65;
+}
+:root[data-theme="dark"][data-palette="dusk"] {
+  /* Home family */
+  --h-accent: #bc9cff; --h-accent-2: #c6adff; --h-accent-soft: #271d46; --h-part-tint: #181827; --h-part-ink: #ede8ff; --h-rail-active: #7d41d3;
+  --h-glow: rgba(179, 136, 255, 0.38); --h-btn-a: #8546dc; --h-btn-b: #553fe0; --h-pop: #ffc3dd; --h-pop-glow: rgba(255, 195, 221, 0.16);
+  --h-tile-1a: #272290; --h-tile-1b: #563ac9; --h-tile-ia: #202234; --h-tile-ib: #313665; --h-hero-r1: rgba(188, 154, 255, 0.55);
+  --h-hero-r2: rgba(47, 64, 238, 0.55); --h-hero-1: #1e1a73; --h-hero-2: #4b34b9; --h-hero-3: #8b4bd9; --h-deep: #28228b; --h-seam: #b786ff;
+  --h-accent-ink: #1c0e37;
+  /* Work family */
+  --w-accent: #ffafe7; --w-accent-2: #ffc7ec; --w-accent-soft: #432739; --w-part-tint: #23191e; --w-part-ink: #fff2fa; --w-rail-active: #93547e;
+  --w-glow: rgba(255, 155, 227, 0.32); --w-btn-a: #93547e; --w-btn-b: #724259; --w-pop: #ffbfed; --w-tile-1a: #5e354c; --w-tile-1b: #8d5277;
+  --w-tile-ia: #34252e; --w-tile-ib: #5c4050; --w-hero-r1: rgba(255, 164, 229, 0.5); --w-hero-r2: rgba(127, 69, 85, 0.6); --w-hero-1: #3b202d;
+  --w-hero-2: #663b53; --w-hero-3: #93547f; --w-deep: #4e2c3f; --w-seam: #ff9ae4; --w-accent-ink: #2b1624; --w-door-bg: #2c1724;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #101215; --n-bg-2: #0b0d10; --n-surface: #181b22; --n-surface-2: #21242e; --n-line: #2a2e3b; --n-line-strong: #3d455c; --n-ink: #f2f3fb;
+  --n-ink-2: #bec3d9; --n-ink-3: #a0a5bd; --n-rail: #090b0f; --n-rail-ink: #9fa4bd; --n-rail-hover: #181b26; --n-k-task: #b6c3e8;
+  --n-k-task-bg: #192a4c; --n-grid: #222530; --n-axis: #3d455c; --n-subtab-on: #2e3241; --n-toast: #2f364c; --n-seam-fill: #0f1221; --n-bar: #101215;
+  --n-sh1: 19 22 65; --n-sh2: 37 31 110; --n-sh3: 12 14 43; --n-sh4: 9 3 46; --n-sh5: 6 7 39; --n-sh6: 4 7 37; --n-sh7: 3 2 33; --n-sh8: 13 17 65;
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"])[data-palette="dusk"] {
+  /* Home family */
+  --h-accent: #bc9cff; --h-accent-2: #c6adff; --h-accent-soft: #271d46; --h-part-tint: #181827; --h-part-ink: #ede8ff; --h-rail-active: #7d41d3;
+  --h-glow: rgba(179, 136, 255, 0.38); --h-btn-a: #8546dc; --h-btn-b: #553fe0; --h-pop: #ffc3dd; --h-pop-glow: rgba(255, 195, 221, 0.16);
+  --h-tile-1a: #272290; --h-tile-1b: #563ac9; --h-tile-ia: #202234; --h-tile-ib: #313665; --h-hero-r1: rgba(188, 154, 255, 0.55);
+  --h-hero-r2: rgba(47, 64, 238, 0.55); --h-hero-1: #1e1a73; --h-hero-2: #4b34b9; --h-hero-3: #8b4bd9; --h-deep: #28228b; --h-seam: #b786ff;
+  --h-accent-ink: #1c0e37;
+  /* Work family */
+  --w-accent: #ffafe7; --w-accent-2: #ffc7ec; --w-accent-soft: #432739; --w-part-tint: #23191e; --w-part-ink: #fff2fa; --w-rail-active: #93547e;
+  --w-glow: rgba(255, 155, 227, 0.32); --w-btn-a: #93547e; --w-btn-b: #724259; --w-pop: #ffbfed; --w-tile-1a: #5e354c; --w-tile-1b: #8d5277;
+  --w-tile-ia: #34252e; --w-tile-ib: #5c4050; --w-hero-r1: rgba(255, 164, 229, 0.5); --w-hero-r2: rgba(127, 69, 85, 0.6); --w-hero-1: #3b202d;
+  --w-hero-2: #663b53; --w-hero-3: #93547f; --w-deep: #4e2c3f; --w-seam: #ff9ae4; --w-accent-ink: #2b1624; --w-door-bg: #2c1724;
+  /* Neutrals and shade tints (the same in both parts) */
+  --n-bg: #101215; --n-bg-2: #0b0d10; --n-surface: #181b22; --n-surface-2: #21242e; --n-line: #2a2e3b; --n-line-strong: #3d455c; --n-ink: #f2f3fb;
+  --n-ink-2: #bec3d9; --n-ink-3: #a0a5bd; --n-rail: #090b0f; --n-rail-ink: #9fa4bd; --n-rail-hover: #181b26; --n-k-task: #b6c3e8;
+  --n-k-task-bg: #192a4c; --n-grid: #222530; --n-axis: #3d455c; --n-subtab-on: #2e3241; --n-toast: #2f364c; --n-seam-fill: #0f1221; --n-bar: #101215;
+  --n-sh1: 19 22 65; --n-sh2: 37 31 110; --n-sh3: 12 14 43; --n-sh4: 9 3 46; --n-sh5: 6 7 39; --n-sh6: 4 7 37; --n-sh7: 3 2 33; --n-sh8: 13 17 65;
+}
+}
+/*PALETTES-END*/
+
+/* the swatches in Settings > Look > Colours: each palette's Home and Work colours as this look draws them (two stops each) */
+/*SWATCHES-START*/
+.pal-sw--default { --sw-h1: #b81c8a; --sw-h2: #8d24c4; --sw-w1: #0b7f68; --sw-w2: #08605e; }
+.pal-sw--ocean { --sw-h1: #0060cb; --sw-h2: #006293; --sw-w1: #007d78; --sw-w2: #005f63; }
+.pal-sw--blush { --sw-h1: #b32196; --sw-h2: #b21659; --sw-w1: #3b729d; --sw-w2: #395577; }
+.pal-sw--meadow { --sw-h1: #1f7400; --sw-h2: #456600; --sw-w1: #755f9e; --sw-w2: #5f4872; }
+.pal-sw--dusk { --sw-h1: #5f4cde; --sw-h2: #214ce1; --sw-w1: #915581; --sw-w2: #71425b; }
+:root[data-theme="dark"] .pal-sw--default { --sw-h1: #c2218f; --sw-h2: #8d24c4; --sw-w1: #0a7f68; --sw-w2: #08605e; }
+:root[data-theme="dark"] .pal-sw--ocean { --sw-h1: #0067d6; --sw-h2: #006292; --sw-w1: #007d7b; --sw-w2: #005f65; }
+:root[data-theme="dark"] .pal-sw--blush { --sw-h1: #bb279d; --sw-h2: #b21659; --sw-w1: #3f719e; --sw-w2: #3b5478; }
+:root[data-theme="dark"] .pal-sw--meadow { --sw-h1: #237b00; --sw-h2: #476600; --sw-w1: #785e9c; --sw-w2: #614771; }
+:root[data-theme="dark"] .pal-sw--dusk { --sw-h1: #8546dc; --sw-h2: #553fe0; --sw-w1: #93547e; --sw-w2: #724259; }
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) .pal-sw--default { --sw-h1: #c2218f; --sw-h2: #8d24c4; --sw-w1: #0a7f68; --sw-w2: #08605e; }
+:root:not([data-theme="light"]) .pal-sw--ocean { --sw-h1: #0067d6; --sw-h2: #006292; --sw-w1: #007d7b; --sw-w2: #005f65; }
+:root:not([data-theme="light"]) .pal-sw--blush { --sw-h1: #bb279d; --sw-h2: #b21659; --sw-w1: #3f719e; --sw-w2: #3b5478; }
+:root:not([data-theme="light"]) .pal-sw--meadow { --sw-h1: #237b00; --sw-h2: #476600; --sw-w1: #785e9c; --sw-w2: #614771; }
+:root:not([data-theme="light"]) .pal-sw--dusk { --sw-h1: #8546dc; --sw-h2: #553fe0; --sw-w1: #93547e; --sw-w2: #724259; }
+}
+/*SWATCHES-END*/
 
 :root {
   --font-display: "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
@@ -13,167 +327,172 @@
   --radius: 20px; --radius-md: 16px; --radius-sm: 12px;
   --rail-w: 88px;
   /* the two parts' big colour blocks, the same in either part */
-  --hero-home: radial-gradient(70% 100% at 108% -8%, rgba(255, 122, 200, 0.55), transparent 62%), radial-gradient(60% 80% at -6% 112%, rgba(100, 40, 230, 0.55), transparent 66%), linear-gradient(135deg, #3a0d6b 0%, #7a1d9e 48%, #c72a86 100%);
-  --hero-work: radial-gradient(70% 100% at 108% -8%, rgba(60, 230, 180, 0.5), transparent 62%), radial-gradient(60% 80% at -6% 112%, rgba(10, 100, 120, 0.6), transparent 66%), linear-gradient(135deg, #03312f 0%, #08574f 46%, #0a7f66 100%);
-  --deep-home: #4a1280; --deep-work: #05423b;
+  --hero-home: radial-gradient(70% 100% at 108% -8%, var(--h-hero-r1), transparent 62%), radial-gradient(60% 80% at -6% 112%, var(--h-hero-r2), transparent 66%), linear-gradient(135deg, var(--h-hero-1) 0%, var(--h-hero-2) 48%, var(--h-hero-3) 100%);
+  --hero-work: radial-gradient(70% 100% at 108% -8%, var(--w-hero-r1), transparent 62%), radial-gradient(60% 80% at -6% 112%, var(--w-hero-r2), transparent 66%), linear-gradient(135deg, var(--w-hero-1) 0%, var(--w-hero-2) 46%, var(--w-hero-3) 100%);
+  --deep-home: var(--h-deep); --deep-work: var(--w-deep);
   /* motion: lively and snappy */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-page: 260ms; --dur-micro: 180ms; --dur-overlay: 240ms; --stagger: 38ms;
 }
-:root { --btn-grad: linear-gradient(135deg, var(--btn-a), var(--btn-b)); --shadow-sm: 0 1px 2px rgba(34, 16, 60, 0.05), 0 8px 18px -12px rgba(60, 20, 100, 0.2); --partbar-h: 60px; }
+:root { --btn-grad: linear-gradient(135deg, var(--btn-a), var(--btn-b)); --shadow-sm: 0 1px 2px rgb(var(--n-sh1) / 0.05), 0 8px 18px -12px rgb(var(--n-sh2) / 0.2); --partbar-h: 60px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 18px -12px rgba(0, 0, 0, 0.7); } }
 :root[data-theme="dark"] { --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 18px -12px rgba(0, 0, 0, 0.7); }
 
 :root {
-  --bg: #ffffff; --bg-2: #f8f5fc; --surface: #ffffff; --surface-2: #f3eff9; --line: #ebe5f3; --line-strong: #d3c9e2;
-  --ink: #16101f; --ink-2: #463d57; --ink-3: #6b6279;
-  --rail: #150f1f; --rail-ink: #b5abc6; --rail-hover: #261c36; --rail-ink-hover: #ffffff; --rail-ink-active: #ffffff;
+  --bg: #ffffff; --bg-2: var(--n-bg-2); --surface: #ffffff; --surface-2: var(--n-surface-2); --line: var(--n-line); --line-strong: var(--n-line-strong);
+  --ink: var(--n-ink); --ink-2: var(--n-ink-2); --ink-3: var(--n-ink-3);
+  --rail: var(--n-rail); --rail-ink: var(--n-rail-ink); --rail-hover: var(--n-rail-hover); --rail-ink-hover: #ffffff; --rail-ink-active: #ffffff;
   --rail-badge: #d4153f; --rail-badge-ink: #ffffff;
   --good: #0a6f45; --good-soft: #dcf6e8;
   --warn: #8f5200; --warn-soft: #fff0c9;
   --crit: #c81e3a; --crit-soft: #ffe4e9;
   --info: #3a3fd1; --info-soft: #e7e9ff;
-  --k-task: #4a4570; --k-task-bg: #ebe8f7;
+  --k-task: var(--n-k-task); --k-task-bg: var(--n-k-task-bg);
   --k-money: #a8410a; --k-money-bg: #ffe8d6;
   --k-in: #0b5fb0; --k-in-bg: #dcebff;
   --k-doc: #55650a; --k-doc-bg: #eef5c9;
-  --series-in: #2b6cf6; --series-out: #f2562b; --grid: #eee9f6; --axis: #d3c9e2;
-  --home-door-bg: #ffffff; --home-door-ink: #ffffff; --home-door-accent: #a8197f;
-  --work-door-bg: #ffffff; --work-door-ink: #ffffff; --work-door-accent: #086b58; --work-door-grid: #ffffff;
-  --backdrop: rgba(22, 10, 40, 0.5);
-  --shadow: 0 1px 2px rgba(34, 16, 60, 0.05), 0 14px 32px -14px rgba(60, 20, 100, 0.24);
-  --shadow-lg: 0 2px 4px rgba(34, 16, 60, 0.06), 0 26px 50px -18px rgba(60, 20, 100, 0.34);
+  --series-in: #2b6cf6; --series-out: #f2562b; --grid: var(--n-grid); --axis: var(--n-axis);
+  --home-door-bg: #ffffff; --home-door-ink: #ffffff; --home-door-accent: var(--h-accent);
+  --work-door-bg: #ffffff; --work-door-ink: #ffffff; --work-door-accent: var(--w-accent); --work-door-grid: #ffffff;
+  --backdrop: rgb(var(--n-sh3) / 0.5);
+  --shadow: 0 1px 2px rgb(var(--n-sh1) / 0.05), 0 14px 32px -14px rgb(var(--n-sh2) / 0.24);
+  --shadow-lg: 0 2px 4px rgb(var(--n-sh1) / 0.06), 0 26px 50px -18px rgb(var(--n-sh2) / 0.34);
   --subtab-on: #ffffff;
-  --hairline: rgba(22, 10, 40, 0.06);
+  --hairline: rgb(var(--n-sh3) / 0.06);
+  --look-bar: var(--n-bar);
+  /* the illustrations (css/art.css) take the part's colour and its soft tint, so a palette recolours them too */
+  --art-1: var(--accent); --art-2: var(--accent-soft);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-  --bg: #121115; --bg-2: #0d0c10; --surface: #1b1a21; --surface-2: #25232d; --line: #2f2c3a; --line-strong: #46425a;
-  --ink: #f5f2fa; --ink-2: #c7c0d6; --ink-3: #a9a2ba;
-  --rail: #0b0a0f; --rail-ink: #a9a1ba; --rail-hover: #1c1a25; --rail-ink-hover: #ffffff; --rail-ink-active: #ffffff;
+  --bg: var(--n-bg); --bg-2: var(--n-bg-2); --surface: var(--n-surface); --surface-2: var(--n-surface-2); --line: var(--n-line); --line-strong: var(--n-line-strong);
+  --ink: var(--n-ink); --ink-2: var(--n-ink-2); --ink-3: var(--n-ink-3);
+  --rail: var(--n-rail); --rail-ink: var(--n-rail-ink); --rail-hover: var(--n-rail-hover); --rail-ink-hover: #ffffff; --rail-ink-active: #ffffff;
   --rail-badge: #e0264d; --rail-badge-ink: #ffffff;
   --good: #5fd69a; --good-soft: #10281d;
   --warn: #ffc857; --warn-soft: #2e2410;
   --crit: #ff7183; --crit-soft: #3a141b;
   --info: #a3abff; --info-soft: #1d2040;
-  --k-task: #c4bde4; --k-task-bg: #29254a;
+  --k-task: var(--n-k-task); --k-task-bg: var(--n-k-task-bg);
   --k-money: #ffb98a; --k-money-bg: #3a2312;
   --k-in: #8fc2ff; --k-in-bg: #14284a;
   --k-doc: #d4e57e; --k-doc-bg: #29300f;
-  --series-in: #5b8dff; --series-out: #ff7448; --grid: #26242f; --axis: #46425a;
-  --home-door-bg: #ffffff; --home-door-ink: #ffffff; --home-door-accent: #ff7ccb;
-  --work-door-bg: #04251f; --work-door-ink: #ffffff; --work-door-accent: #3fe0b0; --work-door-grid: #ffffff;
+  --series-in: #5b8dff; --series-out: #ff7448; --grid: var(--n-grid); --axis: var(--n-axis);
+  --home-door-bg: #ffffff; --home-door-ink: #ffffff; --home-door-accent: var(--h-accent);
+  --work-door-bg: var(--w-door-bg); --work-door-ink: #ffffff; --work-door-accent: var(--w-accent); --work-door-grid: #ffffff;
   --backdrop: rgba(0, 0, 0, 0.66);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 16px 34px -14px rgba(0, 0, 0, 0.7);
   --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 28px 54px -18px rgba(0, 0, 0, 0.8);
-  --subtab-on: #34303f;
+  --subtab-on: var(--n-subtab-on);
   --hairline: rgba(255, 255, 255, 0.07);
   color-scheme: dark;
-  }
+  --look-bar: var(--n-bar);
+}
 }
 
 :root[data-theme="dark"] {
-  --bg: #121115; --bg-2: #0d0c10; --surface: #1b1a21; --surface-2: #25232d; --line: #2f2c3a; --line-strong: #46425a;
-  --ink: #f5f2fa; --ink-2: #c7c0d6; --ink-3: #a9a2ba;
-  --rail: #0b0a0f; --rail-ink: #a9a1ba; --rail-hover: #1c1a25; --rail-ink-hover: #ffffff; --rail-ink-active: #ffffff;
+  --bg: var(--n-bg); --bg-2: var(--n-bg-2); --surface: var(--n-surface); --surface-2: var(--n-surface-2); --line: var(--n-line); --line-strong: var(--n-line-strong);
+  --ink: var(--n-ink); --ink-2: var(--n-ink-2); --ink-3: var(--n-ink-3);
+  --rail: var(--n-rail); --rail-ink: var(--n-rail-ink); --rail-hover: var(--n-rail-hover); --rail-ink-hover: #ffffff; --rail-ink-active: #ffffff;
   --rail-badge: #e0264d; --rail-badge-ink: #ffffff;
   --good: #5fd69a; --good-soft: #10281d;
   --warn: #ffc857; --warn-soft: #2e2410;
   --crit: #ff7183; --crit-soft: #3a141b;
   --info: #a3abff; --info-soft: #1d2040;
-  --k-task: #c4bde4; --k-task-bg: #29254a;
+  --k-task: var(--n-k-task); --k-task-bg: var(--n-k-task-bg);
   --k-money: #ffb98a; --k-money-bg: #3a2312;
   --k-in: #8fc2ff; --k-in-bg: #14284a;
   --k-doc: #d4e57e; --k-doc-bg: #29300f;
-  --series-in: #5b8dff; --series-out: #ff7448; --grid: #26242f; --axis: #46425a;
-  --home-door-bg: #ffffff; --home-door-ink: #ffffff; --home-door-accent: #ff7ccb;
-  --work-door-bg: #04251f; --work-door-ink: #ffffff; --work-door-accent: #3fe0b0; --work-door-grid: #ffffff;
+  --series-in: #5b8dff; --series-out: #ff7448; --grid: var(--n-grid); --axis: var(--n-axis);
+  --home-door-bg: #ffffff; --home-door-ink: #ffffff; --home-door-accent: var(--h-accent);
+  --work-door-bg: var(--w-door-bg); --work-door-ink: #ffffff; --work-door-accent: var(--w-accent); --work-door-grid: #ffffff;
   --backdrop: rgba(0, 0, 0, 0.66);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 16px 34px -14px rgba(0, 0, 0, 0.7);
   --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 28px 54px -18px rgba(0, 0, 0, 0.8);
-  --subtab-on: #34303f;
+  --subtab-on: var(--n-subtab-on);
   --hairline: rgba(255, 255, 255, 0.07);
   color-scheme: dark;
+  --look-bar: var(--n-bar);
 }
 
 :root[data-part="home"] {
-  --accent: #a8197f; --accent-2: #b01f86; --accent-ink: #ffffff; --accent-soft: #fde8f4;
-  --part-tint: #fbf1fa; --part-ink: #3a0d5c; --rail-active: #b81c8a; --glow: rgba(184, 28, 138, 0.45);
-  --btn-a: #b81c8a; --btn-b: #8d24c4; --btn-ink: #ffffff; --pop: #ffd23f;
-  --tile-1: linear-gradient(140deg, #46107c 0%, #8a1fa8 100%);
-  --tile-ink: linear-gradient(140deg, #1c1327 0%, #3e2658 100%);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: #ffffff; --accent-soft: var(--h-accent-soft);
+  --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink); --rail-active: var(--h-rail-active); --glow: var(--h-glow);
+  --btn-a: var(--h-btn-a); --btn-b: var(--h-btn-b); --btn-ink: #ffffff; --pop: var(--h-pop);
+  --tile-1: linear-gradient(140deg, var(--h-tile-1a) 0%, var(--h-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--h-tile-ia) 0%, var(--h-tile-ib) 100%);
 }
 
 :root[data-part="work"] {
-  --accent: #086b58; --accent-2: #0a7f68; --accent-ink: #ffffff; --accent-soft: #d8f5ec;
-  --part-tint: #eef9f5; --part-ink: #03302a; --rail-active: #0b7f68; --glow: rgba(11, 127, 104, 0.45);
-  --btn-a: #0b7f68; --btn-b: #08605e; --btn-ink: #ffffff; --pop: #7df0c4;
-  --tile-1: linear-gradient(140deg, #04403f 0%, #0a6b5c 100%);
-  --tile-ink: linear-gradient(140deg, #10231f 0%, #20463f 100%);
+  --accent: var(--w-accent); --accent-2: var(--w-accent-2); --accent-ink: #ffffff; --accent-soft: var(--w-accent-soft);
+  --part-tint: var(--w-part-tint); --part-ink: var(--w-part-ink); --rail-active: var(--w-rail-active); --glow: var(--w-glow);
+  --btn-a: var(--w-btn-a); --btn-b: var(--w-btn-b); --btn-ink: #ffffff; --pop: var(--w-pop);
+  --tile-1: linear-gradient(140deg, var(--w-tile-1a) 0%, var(--w-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--w-tile-ia) 0%, var(--w-tile-ib) 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"])[data-part="home"] {
-  --accent: #ff7ccb; --accent-2: #ff94d4; --accent-ink: #2d0624; --accent-soft: #3a1534;
-  --part-tint: #1f1623; --part-ink: #ffe3f4; --rail-active: #b81c8a; --glow: rgba(255, 92, 190, 0.38);
-  --btn-a: #c2218f; --btn-b: #8d24c4; --btn-ink: #ffffff; --pop: #ffd23f;
-  --tile-1: linear-gradient(140deg, #4a1285 0%, #8a1fa8 100%);
-  --tile-ink: linear-gradient(140deg, #272031 0%, #46305f 100%);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft);
+  --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink); --rail-active: var(--h-rail-active); --glow: var(--h-glow);
+  --btn-a: var(--h-btn-a); --btn-b: var(--h-btn-b); --btn-ink: #ffffff; --pop: var(--h-pop);
+  --tile-1: linear-gradient(140deg, var(--h-tile-1a) 0%, var(--h-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--h-tile-ia) 0%, var(--h-tile-ib) 100%);
   }
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"])[data-part="work"] {
-  --accent: #3fe0b0; --accent-2: #6aedc6; --accent-ink: #03241c; --accent-soft: #0f3a31;
-  --part-tint: #121f1d; --part-ink: #d6fff1; --rail-active: #0a7f68; --glow: rgba(63, 224, 176, 0.32);
-  --btn-a: #0a7f68; --btn-b: #08605e; --btn-ink: #ffffff; --pop: #7df0c4;
-  --tile-1: linear-gradient(140deg, #04504a 0%, #0a7a68 100%);
-  --tile-ink: linear-gradient(140deg, #1b2f2b 0%, #2c524a 100%);
+  --accent: var(--w-accent); --accent-2: var(--w-accent-2); --accent-ink: var(--w-accent-ink); --accent-soft: var(--w-accent-soft);
+  --part-tint: var(--w-part-tint); --part-ink: var(--w-part-ink); --rail-active: var(--w-rail-active); --glow: var(--w-glow);
+  --btn-a: var(--w-btn-a); --btn-b: var(--w-btn-b); --btn-ink: #ffffff; --pop: var(--w-pop);
+  --tile-1: linear-gradient(140deg, var(--w-tile-1a) 0%, var(--w-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--w-tile-ia) 0%, var(--w-tile-ib) 100%);
   }
 }
 
 :root[data-theme="dark"][data-part="home"] {
-  --accent: #ff7ccb; --accent-2: #ff94d4; --accent-ink: #2d0624; --accent-soft: #3a1534;
-  --part-tint: #1f1623; --part-ink: #ffe3f4; --rail-active: #b81c8a; --glow: rgba(255, 92, 190, 0.38);
-  --btn-a: #c2218f; --btn-b: #8d24c4; --btn-ink: #ffffff; --pop: #ffd23f;
-  --tile-1: linear-gradient(140deg, #4a1285 0%, #8a1fa8 100%);
-  --tile-ink: linear-gradient(140deg, #272031 0%, #46305f 100%);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft);
+  --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink); --rail-active: var(--h-rail-active); --glow: var(--h-glow);
+  --btn-a: var(--h-btn-a); --btn-b: var(--h-btn-b); --btn-ink: #ffffff; --pop: var(--h-pop);
+  --tile-1: linear-gradient(140deg, var(--h-tile-1a) 0%, var(--h-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--h-tile-ia) 0%, var(--h-tile-ib) 100%);
 }
 
 :root[data-theme="dark"][data-part="work"] {
-  --accent: #3fe0b0; --accent-2: #6aedc6; --accent-ink: #03241c; --accent-soft: #0f3a31;
-  --part-tint: #121f1d; --part-ink: #d6fff1; --rail-active: #0a7f68; --glow: rgba(63, 224, 176, 0.32);
-  --btn-a: #0a7f68; --btn-b: #08605e; --btn-ink: #ffffff; --pop: #7df0c4;
-  --tile-1: linear-gradient(140deg, #04504a 0%, #0a7a68 100%);
-  --tile-ink: linear-gradient(140deg, #1b2f2b 0%, #2c524a 100%);
+  --accent: var(--w-accent); --accent-2: var(--w-accent-2); --accent-ink: var(--w-accent-ink); --accent-soft: var(--w-accent-soft);
+  --part-tint: var(--w-part-tint); --part-ink: var(--w-part-ink); --rail-active: var(--w-rail-active); --glow: var(--w-glow);
+  --btn-a: var(--w-btn-a); --btn-b: var(--w-btn-b); --btn-ink: #ffffff; --pop: var(--w-pop);
+  --tile-1: linear-gradient(140deg, var(--w-tile-1a) 0%, var(--w-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--w-tile-ia) 0%, var(--w-tile-ib) 100%);
 }
 
 :root:not([data-part]) {
-  --accent: #a8197f; --accent-2: #b01f86; --accent-ink: #ffffff; --accent-soft: #fde8f4;
-  --part-tint: #fbf1fa; --part-ink: #3a0d5c; --rail-active: #b81c8a; --glow: rgba(184, 28, 138, 0.45);
-  --btn-a: #b81c8a; --btn-b: #8d24c4; --btn-ink: #ffffff; --pop: #ffd23f;
-  --tile-1: linear-gradient(140deg, #46107c 0%, #8a1fa8 100%);
-  --tile-ink: linear-gradient(140deg, #1c1327 0%, #3e2658 100%);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: #ffffff; --accent-soft: var(--h-accent-soft);
+  --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink); --rail-active: var(--h-rail-active); --glow: var(--h-glow);
+  --btn-a: var(--h-btn-a); --btn-b: var(--h-btn-b); --btn-ink: #ffffff; --pop: var(--h-pop);
+  --tile-1: linear-gradient(140deg, var(--h-tile-1a) 0%, var(--h-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--h-tile-ia) 0%, var(--h-tile-ib) 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-part]) {
-  --accent: #ff7ccb; --accent-2: #ff94d4; --accent-ink: #2d0624; --accent-soft: #3a1534;
-  --part-tint: #1f1623; --part-ink: #ffe3f4; --rail-active: #b81c8a; --glow: rgba(255, 92, 190, 0.38);
-  --btn-a: #c2218f; --btn-b: #8d24c4; --btn-ink: #ffffff; --pop: #ffd23f;
-  --tile-1: linear-gradient(140deg, #4a1285 0%, #8a1fa8 100%);
-  --tile-ink: linear-gradient(140deg, #272031 0%, #46305f 100%);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft);
+  --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink); --rail-active: var(--h-rail-active); --glow: var(--h-glow);
+  --btn-a: var(--h-btn-a); --btn-b: var(--h-btn-b); --btn-ink: #ffffff; --pop: var(--h-pop);
+  --tile-1: linear-gradient(140deg, var(--h-tile-1a) 0%, var(--h-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--h-tile-ia) 0%, var(--h-tile-ib) 100%);
   }
 }
 
 :root[data-theme="dark"]:not([data-part]) {
-  --accent: #ff7ccb; --accent-2: #ff94d4; --accent-ink: #2d0624; --accent-soft: #3a1534;
-  --part-tint: #1f1623; --part-ink: #ffe3f4; --rail-active: #b81c8a; --glow: rgba(255, 92, 190, 0.38);
-  --btn-a: #c2218f; --btn-b: #8d24c4; --btn-ink: #ffffff; --pop: #ffd23f;
-  --tile-1: linear-gradient(140deg, #4a1285 0%, #8a1fa8 100%);
-  --tile-ink: linear-gradient(140deg, #272031 0%, #46305f 100%);
+  --accent: var(--h-accent); --accent-2: var(--h-accent-2); --accent-ink: var(--h-accent-ink); --accent-soft: var(--h-accent-soft);
+  --part-tint: var(--h-part-tint); --part-ink: var(--h-part-ink); --rail-active: var(--h-rail-active); --glow: var(--h-glow);
+  --btn-a: var(--h-btn-a); --btn-b: var(--h-btn-b); --btn-ink: #ffffff; --pop: var(--h-pop);
+  --tile-1: linear-gradient(140deg, var(--h-tile-1a) 0%, var(--h-tile-1b) 100%);
+  --tile-ink: linear-gradient(140deg, var(--h-tile-ia) 0%, var(--h-tile-ib) 100%);
 }
 
 /* ===================== shell: the ink rail, the dock, the Home | Work switch ===================== */
@@ -252,7 +571,7 @@ body { font-weight: 500; font-variant-numeric: tabular-nums; }
   .page-head__text { position: relative; isolation: isolate; overflow: hidden; max-width: none; padding: 18px 18px 20px; border-radius: 26px; background: var(--hero); color: #fff; box-shadow: var(--shadow-lg); }
   .page-head__text::before { content: ""; position: absolute; z-index: -1; right: -64px; top: -84px; width: 230px; height: 230px; border-radius: 50%; border: 36px solid rgba(255, 255, 255, 0.075); }
   .page-head .eyebrow { background: rgba(255, 255, 255, 0.18); color: #fff; margin-bottom: 10px; }
-  .page-head h1 { color: #fff; font-size: 30px; text-shadow: 0 2px 18px rgba(20, 0, 40, 0.18); }
+  .page-head h1 { color: #fff; font-size: 30px; text-shadow: 0 2px 18px rgb(var(--n-sh4) / 0.18); }
   .page-head__sub { color: rgba(255, 255, 255, 0.95); margin-top: 8px; font-size: 14.5px; line-height: 1.5; }
   .page-head__sub a, .page-head__sub .link { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
   .page-head__sub .pill { background: rgba(255, 255, 255, 0.18); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55); }
@@ -278,7 +597,7 @@ body { font-weight: 500; font-variant-numeric: tabular-nums; }
   .partbar [data-look-toggle]:hover { background: var(--accent-soft); color: var(--accent); }
 
   /* the dock: a dark floating bar with one colour tile for the page you're on */
-  .rail { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); padding: 7px 6px; border-radius: 28px; background: color-mix(in srgb, var(--rail) 97%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 22px 44px -14px rgba(16, 4, 36, 0.65), inset 0 0 0 1px rgba(255, 255, 255, 0.07); overflow: visible; }
+  .rail { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); padding: 7px 6px; border-radius: 28px; background: color-mix(in srgb, var(--rail) 97%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 22px 44px -14px rgb(var(--n-sh5) / 0.65), inset 0 0 0 1px rgba(255, 255, 255, 0.07); overflow: visible; }
   .rail::before { display: none; }
   .rail__items { gap: 0; justify-content: space-around; }
   .rail__item { width: min(96px, calc((100vw - 32px) / 6)); padding: 4px 0 3px; border-radius: 18px; }
@@ -335,7 +654,7 @@ a { color: var(--accent); }
 
 .btn { position: relative; min-height: 42px; padding: 0 18px; border-radius: 14px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); font: 700 14px/1 var(--font-body); gap: 8px;
   transition: transform var(--dur-micro) var(--ease-spring), box-shadow 0.18s, background 0.15s, border-color 0.15s, filter 0.15s; }
-.btn:hover { background: var(--surface); border-color: var(--accent-2); transform: translateY(-1px); box-shadow: 0 8px 16px -10px rgba(60, 20, 100, 0.4); }
+.btn:hover { background: var(--surface); border-color: var(--accent-2); transform: translateY(-1px); box-shadow: 0 8px 16px -10px rgb(var(--n-sh2) / 0.4); }
 .btn:active { transform: scale(0.95); box-shadow: none; transition-duration: 80ms; }
 .btn .ico { width: 17px; height: 17px; }
 .btn--primary { background: var(--btn-grad); border-color: transparent; color: var(--btn-ink); box-shadow: 0 10px 20px -10px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.24); }
@@ -571,11 +890,9 @@ dialog.dlg::backdrop { background: var(--backdrop); -webkit-backdrop-filter: blu
 .popover button .ico { width: 20px; height: 20px; padding: 0; color: var(--accent); }
 .popover b { font-weight: 700; }
 .popover button:hover, .popover button:focus-visible { background: var(--accent-soft); }
-.toast { border-radius: 18px; padding: 13px 18px; font-weight: 600; background: #1d1626; color: #fff; box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.toast { border-radius: 18px; padding: 13px 18px; font-weight: 600; background: var(--n-toast); color: #fff; box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.08); }
 .toast button { color: var(--pop); }
-.tooltip { border-radius: 10px; font-weight: 600; background: #1d1626; color: #fff; }
-:root[data-theme="dark"] .toast, :root[data-theme="dark"] .tooltip { background: #38334a; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toast, :root:not([data-theme="light"]) .tooltip { background: #38334a; } }
+.tooltip { border-radius: 10px; font-weight: 600; background: var(--n-toast); color: #fff; }
 @media (max-width: 560px) {
   dialog.dlg { margin: auto 0 0; width: 100vw; max-width: 100vw; border-radius: 28px 28px 0 0; max-height: calc(100dvh - 24px); }
   dialog.dlg--wide { width: 100vw; }
@@ -605,28 +922,28 @@ dialog.dlg::backdrop { background: var(--backdrop); -webkit-backdrop-filter: blu
 /* ===================== Overview: the two big colour doors, stat tiles, the day ===================== */
 .doors { gap: 12px; margin-bottom: 24px; }
 .door { --door-ink: #fff; --door-accent: var(--pop); padding: 22px 28px 24px; border-radius: 28px; color: #fff; box-shadow: var(--shadow-lg); transition: flex-grow 0.35s var(--ease-out), box-shadow 0.25s; align-content: flex-start; gap: 10px 12px; }
-.door--home { background: var(--hero-home); --deep: var(--deep-home); --door-accent: #ffd23f; }
-.door--work { background: var(--hero-work); --deep: var(--deep-work); --door-accent: #7df0c4; }
+.door--home { background: var(--hero-home); --deep: var(--deep-home); --door-accent: var(--h-pop); }
+.door--work { background: var(--hero-work); --deep: var(--deep-work); --door-accent: var(--w-pop); }
 .door--active { box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.12) inset; }
 /* decoration: a big soft ring on each, a dotted grid on Work */
 .door--home::before, .door--work::before { content: ""; position: absolute; z-index: -1; inset: auto; right: -70px; top: -90px; width: 300px; height: 300px; border-radius: 50%; border: 44px solid rgba(255, 255, 255, 0.075); background: none; -webkit-mask-image: none; mask-image: none; }
-.door--home::after { content: ""; position: absolute; z-index: -1; right: 22%; bottom: -70px; width: 150px; height: 150px; border-radius: 50%; background: rgba(255, 210, 63, 0.16); filter: blur(2px); }
+.door--home::after { content: ""; position: absolute; z-index: -1; right: 22%; bottom: -70px; width: 150px; height: 150px; border-radius: 50%; background: var(--h-pop-glow); filter: blur(2px); }
 .door--work::after { content: ""; position: absolute; z-index: -1; right: 0; bottom: 0; width: 70%; height: 80%; background-image: radial-gradient(rgba(255, 255, 255, 0.2) 1.2px, transparent 1.6px); background-size: 18px 18px; -webkit-mask-image: radial-gradient(90% 90% at 100% 100%, #000, transparent 75%); mask-image: radial-gradient(90% 90% at 100% 100%, #000, transparent 75%); }
 .door__eyebrow { font: 700 11px/1.35 var(--font-body); letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.82); }
-.door__word, .door--home .door__word, .door--work .door__word { font-family: var(--font-display); font-style: normal; font-weight: 800; letter-spacing: -0.05em; font-size: clamp(52px, 5.2vw, 70px); line-height: 0.92; color: #fff; font-variation-settings: normal; text-shadow: 0 2px 18px rgba(20, 0, 40, 0.18); }
+.door__word, .door--home .door__word, .door--work .door__word { font-family: var(--font-display); font-style: normal; font-weight: 800; letter-spacing: -0.05em; font-size: clamp(52px, 5.2vw, 70px); line-height: 0.92; color: #fff; font-variation-settings: normal; text-shadow: 0 2px 18px rgb(var(--n-sh4) / 0.18); }
 .door:not(.door--active) .door__word { font-size: clamp(44px, 4.6vw, 62px); }
 .door--active { flex-grow: 1.3; }
 @media (max-width: 1100px) { .door--active { flex-grow: 1.15; } }
 .door__dot, .door--home .door__dot { color: var(--door-accent); font-family: inherit; font-weight: 800; margin-left: 0; }
 .door__line { font-size: 15.5px; font-weight: 500; line-height: 1.5; color: rgba(255, 255, 255, 0.96); }
-.door__btn { min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 700; background: rgba(14, 4, 34, 0.28); border: 1.5px solid rgba(255, 255, 255, 0.42); color: #fff; box-shadow: none; }
-.door__btn:hover { background: rgba(14, 4, 34, 0.4); border-color: rgba(255, 255, 255, 0.7); color: #fff; box-shadow: none; }
-.door__btn.btn--primary { background: #fff; border-color: #fff; color: var(--deep); box-shadow: 0 12px 24px -10px rgba(10, 0, 30, 0.5); filter: none; }
-.door__btn.btn--primary:hover { background: #fff; filter: none; transform: translateY(-2px); box-shadow: 0 16px 28px -10px rgba(10, 0, 30, 0.55); }
-.door__chips .chip { background: rgba(14, 4, 34, 0.26); border: 1.5px solid rgba(255, 255, 255, 0.34); color: #fff; font-weight: 600; min-height: 36px; padding: 6px 13px; }
-.door__chips .chip:hover { background: rgba(14, 4, 34, 0.38); border-color: rgba(255, 255, 255, 0.62); color: #fff; }
+.door__btn { min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 700; background: rgb(var(--n-sh6) / 0.28); border: 1.5px solid rgba(255, 255, 255, 0.42); color: #fff; box-shadow: none; }
+.door__btn:hover { background: rgb(var(--n-sh6) / 0.4); border-color: rgba(255, 255, 255, 0.7); color: #fff; box-shadow: none; }
+.door__btn.btn--primary { background: #fff; border-color: #fff; color: var(--deep); box-shadow: 0 12px 24px -10px rgb(var(--n-sh7) / 0.5); filter: none; }
+.door__btn.btn--primary:hover { background: #fff; filter: none; transform: translateY(-2px); box-shadow: 0 16px 28px -10px rgb(var(--n-sh7) / 0.55); }
+.door__chips .chip { background: rgb(var(--n-sh6) / 0.26); border: 1.5px solid rgba(255, 255, 255, 0.34); color: #fff; font-weight: 600; min-height: 36px; padding: 6px 13px; }
+.door__chips .chip:hover { background: rgb(var(--n-sh6) / 0.38); border-color: rgba(255, 255, 255, 0.62); color: #fff; }
 .doors__seam { width: 52px; height: 52px; margin: 0 -32px; border: 3px solid transparent; font: 800 23px/1 var(--font-display); letter-spacing: -0.04em;
-  background: linear-gradient(#15101f, #15101f) padding-box, linear-gradient(135deg, #ff5fb4, #ffd23f 45%, #3ee0ae) border-box; box-shadow: 0 0 0 6px var(--bg), var(--shadow); }
+  background: linear-gradient(var(--n-seam-fill), var(--n-seam-fill)) padding-box, linear-gradient(135deg, var(--h-seam), var(--h-pop) 45%, var(--w-seam)) border-box; box-shadow: 0 0 0 6px var(--bg), var(--shadow); }
 @media (max-width: 720px) {
   .doors { margin-bottom: 22px; }
   .door { padding: 22px 22px 24px; border-radius: 26px; }
@@ -823,7 +1140,7 @@ dialog.dlg::backdrop { background: var(--backdrop); -webkit-backdrop-filter: blu
 .legend i { border-radius: 4px; }
 
 /* Ask Claude */
-.chat { box-shadow: -24px 0 50px -20px rgba(30, 10, 60, 0.35); border-left: 0; }
+.chat { box-shadow: -24px 0 50px -20px rgb(var(--n-sh8) / 0.35); border-left: 0; }
 .chat__head { padding: 16px 16px 14px 18px; }
 .chat__head h2 { font-size: 18px; font-weight: 800; }
 .chat__mark, .chat__avatar { background: var(--btn-grad); color: #fff; border-radius: 12px; }

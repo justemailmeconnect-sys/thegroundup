@@ -154,7 +154,7 @@
       '<span class="muted">' + esc(all ? 'oldest first · tick what to send' : 'nothing to send') + '</span>' +
       (all > 1 ? '<button type="button" class="btn btn--sm btn--ghost" data-tick-all>' + (on.length === all ? 'Untick all' : 'Tick all') + '</button>' : '') + '</header>';
     if (!all && !unpaid.length) {
-      return '<section class="panel pb-lane" id="pb-send">' + head + emptyState({ icon: 'coin', title: 'Nothing to send', text: esc('When you pay for something for ' + e.label + ' with your own money, add the receipt here, or pick the payment from your bank.') }) + '</section>';
+      return '<section class="panel pb-lane" id="pb-send">' + head + emptyState({ icon: 'coin', art: 'payback', title: 'Nothing to send', text: esc('When you pay for something for ' + e.label + ' with your own money, add the receipt here, or pick the payment from your bank.') }) + '</section>';
     }
     return '<section class="panel pb-lane" id="pb-send">' + head +
       (all ? '<ol class="pb-rows">' + rows.join('') + '</ol>' : '') +

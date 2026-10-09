@@ -963,7 +963,7 @@
   function words(t) {
     const note = noteOf(t);
     return (t.content ? md(t.content) : '') + (note ? '<p class="chat__note' + (t.error ? ' is-error' : '') + '">' + esc(note) + '</p>' : '') +
-      (busy && busy.reply === t ? '<p class="chat__thinking"><span class="spinner" aria-hidden="true"></span><span class="chat__progress">' + esc(busy.status) + '</span></p>' : '');
+      (busy && busy.reply === t ? '<p class="chat__thinking"><span class="spinner" aria-hidden="true"></span><span class="chat__progress">' + esc(busy.status) + '</span></p>' + (GU.art && !t.content ? GU.art.skeleton(2) : '') : '');
   }
   /* The changes an answer made, each with its Undo (or what became of it). */
   function changes(t, i) {
@@ -1142,8 +1142,9 @@
     const name = clip(store.state.settings.name, 40);
     // Until it's known how Claude is reached here, assume it can make changes; once known, say only what it can do.
     const writes = conn === undefined || (!!conn && TOOLS.slice(0, conn.tools).some((t) => WRITES.test(t.name)));
-    const html = none ? '<p class="chat__hello">' + (off ? esc(COPY[off]) : 'Claude isn’t connected here. Open your dashboard in the Claude app, or <a href="#settings" data-chat-settings>add an Anthropic API key in Settings → How your assistant reads things</a>.') + '</p>'
-      : turns.length ? '' : '<p class="chat__hello">Hi' + (name ? ' ' + esc(name) : '') + '. I can see your accounts, bills, instalments, debts, receipts, documents and work. Try:</p>' +
+    const pic = GU.art ? GU.art.block('chat', { size: 'compact' }) : '';
+    const html = none ? pic + '<p class="chat__hello">' + (off ? esc(COPY[off]) : 'Claude isn’t connected here. Open your dashboard in the Claude app, or <a href="#settings" data-chat-settings>add an Anthropic API key in Settings → How your assistant reads things</a>.') + '</p>'
+      : turns.length ? '' : pic + '<p class="chat__hello">Hi' + (name ? ' ' + esc(name) : '') + '. I can see your accounts, bills, instalments, debts, receipts, documents and work. Try:</p>' +
         '<div class="chat__suggest">' + SUGGEST.filter((x) => writes || !x.write).map((x) => '<button type="button" class="chip" data-suggest="' + esc(x.q) + '">' + esc(x.q) + '</button>').join('') + '</div>';
     empty.hidden = !html;
     if (html !== emptyHTML) {

@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A white "G" drawn as one stroked path (an open ring plus the crossbar), kept inside the 66dp adaptive-icon safe zone. -->
+<!-- The mark in white: a G whose top is an open ring and whose base is solid ground cut into layers. Kept inside the 66dp safe zone of the 108dp layer. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M70.85,39.86 A22,22 0 1 0 76,54 L56,54"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="butt"
-        android:strokeLineJoin="miter"
-        android:strokeWidth="11" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M65.39,45.1A14.45,14.45 0 0 0 39.77,56.51L31.29,58A23.06,23.06 0 0 1 72.17,39.8Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54.92,49.7H76.66A23.06,23.06 0 0 1 77.06,54V54.31H54.92Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M30.94,54L77.06,54A23.06,23.06 0 0 1 76.14,60.46L31.86,60.46A23.06,23.06 0 0 1 30.94,54Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M32.43,62.15L75.57,62.15A23.06,23.06 0 0 1 73.7,65.99L34.3,65.99A23.06,23.06 0 0 1 32.43,62.15Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M35.44,67.68L72.56,67.68A23.06,23.06 0 0 1 68.99,71.53L39.01,71.53A23.06,23.06 0 0 1 35.44,67.68Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M41.25,73.22L66.75,73.22A23.06,23.06 0 0 1 54,77.06A23.06,23.06 0 0 1 41.25,73.22Z" />
 </vector>

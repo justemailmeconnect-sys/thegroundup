@@ -82,7 +82,7 @@
     const overdue = items.filter((i) => i.overdue && i.kind !== 'income');
     const upcoming = items.filter((i) => !i.overdue);
     if (!overdue.length && !upcoming.length) {
-      return emptyState({ icon: 'check', title: 'Nothing due in the next ' + horizon + ' days', text: 'Add a task above, or set up your bills so they show up here.' });
+      return emptyState({ icon: 'check', art: 'bills', title: 'Nothing due in the next ' + horizon + ' days', text: 'Add a task above, or set up your bills so they show up here.' });
     }
     const groups = [];
     if (overdue.length) groups.push({ label: 'Overdue', key: 'overdue', items: overdue });
@@ -235,7 +235,7 @@
         items.map((e) => '<li class="flow-row' + (e.amount > 0 ? ' is-in' : '') + (e.review || e.rough || e.soft ? ' is-soft' : '') + '"><span class="kind kind--' + (e.kind === 'income' || e.kind === 'owed' || e.kind === 'reclaim' ? 'income' : e.kind === 'debt' ? 'debt' : 'bill') + '">' + esc(KIND_LABEL[e.kind] || '') + '</span>' +
           '<button type="button" class="flow-row__main" ' + (e.kind === 'reclaim' && e.tab ? 'data-go="' + esc(e.tab) + '"' : 'data-open="' + esc(e.ref.c + ':' + e.ref.id) + '"') + '><b>' + esc(e.label) + '</b><em>' + esc((e.overdue ? 'Overdue · ' : '') + (e.sub || '')) + '</em></button>' +
           '<span class="flow-row__amt">' + esc(money(e.amount, { sign: true })) + '</span><span class="flow-row__after' + (e.after < 0 ? ' is-neg' : '') + '">' + esc(money(e.after)) + '</span></li>').join('') + '</ul></li>').join('') + '</ol>'
-        : '<div class="panel__body"><p class="muted">Nothing expected in this period yet. Add your income, bills and payment schedules and I’ll plan around them.</p></div>') +
+        : '<div class="panel__body">' + (GU.art ? GU.art.row('money', '<p class="muted">Nothing expected in this period yet. Add your income, bills and payment schedules and I’ll plan around them.</p>') : '<p class="muted">Nothing expected in this period yet. Add your income, bills and payment schedules and I’ll plan around them.</p>') + '</div>') +
       (ev.length > AHEAD_FIRST ? '<div class="ahead__more"><button type="button" class="btn btn--sm btn--ghost" data-ahead-all aria-expanded="' + aheadAll + '">' + (aheadAll ? 'Show the first ' + AHEAD_FIRST : 'Show all ' + ev.length) + '</button></div>' : '') +
       '<footer class="panel__foot ahead__add"><button type="button" class="btn btn--sm btn--ghost" data-add-income>' + icon('in') + 'Expected income</button>' +
       '<button type="button" class="btn btn--sm btn--ghost" data-add-bill>' + icon('bills') + 'A bill</button>' +

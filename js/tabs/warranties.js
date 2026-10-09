@@ -436,6 +436,7 @@
     note.className = 'assist-note';
     note.setAttribute('role', 'status');
     note.innerHTML = icon('clock') + '<span>Reading your file…</span>';
+    note.classList.add('shimmer'); // a soft moving highlight while it reads (css/art.css); taken off again below
     d.body.insertBefore(note, d.body.firstChild);
     try {
       const r = await GU.brain.analyseWarranty({ files });
@@ -457,6 +458,8 @@
       }
     } catch (e) {
       note.innerHTML = icon('info') + '<span>I couldn’t read this file automatically. Fill in the details below.</span>';
+    } finally {
+      note.classList.remove('shimmer');
     }
   }
 

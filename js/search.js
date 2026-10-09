@@ -342,7 +342,7 @@
     st.rows = [];
     if (!clean) {
       const rec = recents();
-      html = '<div class="gs-empty"><p><b>Search everything in Home and Work.</b></p>' +
+      html = '<div class="gs-empty">' + (GU.art ? GU.art.block('search', { size: 'compact' }) : '') + '<p><b>Search everything in Home and Work.</b></p>' +
         '<p class="muted">Bank lines, receipts and invoices, bills, debts, documents, tasks, notes and the Sorting hub. Try a name, an amount like £42, or a month like oct.</p></div>';
       if (rec.length) {
         html += '<div class="gs-group" role="group" aria-label="Recent searches"><h3 class="gs-group__head"><span>Recent searches</span><button type="button" class="link link--btn" data-gs-clear>Clear</button></h3>' +
@@ -362,7 +362,7 @@
       st.groups = r;
       const toks = parse(q);
       if (!r.total) {
-        html = '<div class="gs-empty"><p><b>No results for “' + esc(q.trim()) + '”.</b></p>' +
+        html = '<div class="gs-empty">' + (GU.art ? GU.art.block('search', { size: 'compact' }) : '') + '<p><b>No results for “' + esc(q.trim()) + '”.</b></p>' +
           '<p class="muted">Try fewer words, or part of a word. If it’s something you haven’t filed yet, drop it in the Sorting hub and I’ll sort it.</p>' +
           '<p><button type="button" class="btn btn--sm" data-gs-hub>' + icon('funnel') + 'Open the Sorting hub</button></p></div>';
         st.status.textContent = 'No results';
