@@ -176,6 +176,13 @@
     return '<p class="note-line note-line--signpost">' + icon('briefcase') + '<span>' + text + '</span></p>';
   }
 
+  /* One line pointing to the Warranties page, where what's under warranty is kept with when it runs out. */
+  function warrantyLineHTML(s) {
+    if (!GU.tabs || !GU.tabs.warranties) return '';
+    const n = s.paperwork.filter((p) => !isWork(p) && (p.kind === 'warranty' || p.warrantyUntil)).length;
+    return '<p class="note-line note-line--signpost">' + icon('shield') + '<span>Warranties have a page of their own: <a class="link" href="#warranties">' + esc(at('warranties', 'Home › Paperwork › Warranties')) + (n ? ' (' + n + ')' : '') + '</a>, with when each one runs out.</span></p>';
+  }
+
   /* Marks things you paid for as sent to the business, in one pack, with Undo. */
   function markClaimed(ids) {
     if (wm()) return wm().markSent(ids);
@@ -262,6 +269,7 @@
       actions: '<button type="button" class="btn" data-import-orders>' + icon('download') + 'Import Amazon orders</button>' + GU.organise.listButton('receipts') + '<button type="button" class="btn btn--primary" data-upload>' + icon('camera') + 'Upload</button>',
     }) +
       workLineHTML(s) +
+      warrantyLineHTML(s) +
       GU.ui.dropbar('Drop receipts, invoices or warranties here, or a whole folder', 'Photos and PDFs both work. Subfolders like Warranties or Paid are used.') +
       ledgerHTML() +
       '<div class="toolbar">' + chips('filter', filterOpts, ui.filter) + '<span class="toolbar__gap"></span>' +

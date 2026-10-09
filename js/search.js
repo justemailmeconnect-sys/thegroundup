@@ -11,6 +11,7 @@
   const KINDS = [
     { id: 'bank', label: 'Bank: money in and out', icon: 'bank' },
     { id: 'paper', label: 'Receipts and invoices', icon: 'receipt' },
+    { id: 'warranty', label: 'Warranties', icon: 'shield' },
     { id: 'workpaper', label: 'Work receipts', icon: 'coin' },
     { id: 'bill', label: 'Bills', icon: 'bills' },
     { id: 'debt', label: 'Debts', icon: 'card' },
@@ -62,7 +63,7 @@
     const today0 = toDays(today());
     /* o: k (kind), c (collection), rec, title, f1 (names, parties), f2 (notes, references, file names), date, amount,
        part ('home', 'work' or ''), tab (the page it lives on), where (that page's name), tail (ending of the context line),
-       signed (show the sign of the amount), open (a GU.view.open editor exists) */
+       signed (show the sign of the amount), open (a GU.view.open editor exists), page (go to its page first, then open it) */
     const add = (o) => {
       const rec = o.rec;
       const title = String(o.title == null || o.title === '' ? 'Untitled' : o.title).replace(/\s+/g, ' ').trim();
@@ -71,7 +72,7 @@
       const ctx = [(o.part ? label(o.part) + ' › ' : '') + (o.where || ''), shortDate(date) ? (o.dateLead || '') + shortDate(date) : '', amount != null ? money(o.signed ? amount : Math.abs(amount)) : '', o.tail || '']
         .filter(Boolean).join(' · ');
       out.push({
-        k: o.k, c: o.c, id: rec.id, part: o.part || '', tab: o.tab || '', open: o.open !== false,
+        k: o.k, c: o.c, id: rec.id, part: o.part || '', tab: o.tab || '', open: o.open !== false, page: !!o.page,
         title, ctx, date,
         t: low(title), p: low(join(o.f1 || [])), n: low(join(o.f2 || [])).slice(0, 6000), d: dateHay(date),
         a: amount != null ? Math.abs(amount).toFixed(2) : '',
@@ -90,6 +91,12 @@
       if (work) {
         const l = wm && wm.lane ? wm.lane(p, 'paperwork') : 'unsorted';
         tab = pickTab(l === 'back' && p.kind !== 'invoice-out' ? 'work-back' : l === 'ktk' || l === 'unsorted' ? 'work-ktk' : 'work', 'work');
+      }
+      // A warranty of your own is found on the Warranties page: its item, the shop and the serial number, and it opens there.
+      if (!work && p.kind === 'warranty' && tabs.warranties) {
+        add({ k: 'warranty', c: 'paperwork', rec: p, title: p.title || p.party, f1: [p.party], f2: [p.reference, p.notes, 'warranty guarantee', ...fileNames(p)],
+          date: p.warrantyUntil || p.date, dateLead: p.warrantyUntil ? 'ends ' : '', amount: p.amount, part: 'home', tab: 'warranties', where: 'Warranties', page: true });
+        continue;
       }
       add({ k: work ? 'workpaper' : 'paper', c: 'paperwork', rec: p, title: p.title || p.party, f1: [p.party, p.category], f2: [p.reference, p.notes, p.kind === 'warranty' ? 'warranty' : '', ...fileNames(p)],
         date: p.date || p.dueDate, amount: p.amount, part: work ? 'work' : 'home', tab, where: tabName(tab) || 'Receipts' });
@@ -440,7 +447,7 @@
     const tab = e.tab && tabs[e.tab] ? e.tab : '';
     const flip = !!(e.part && GU.parts && e.part !== GU.parts.get());
     let moved = false;
-    if (tab && here !== tab && (flip || !e.open)) {
+    if (tab && here !== tab && (flip || !e.open || e.page)) {
       GU.view.go(tab);
       moved = true;
     }

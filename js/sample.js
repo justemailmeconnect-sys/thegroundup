@@ -188,7 +188,14 @@
       // Your own side work: invoices you send are Home (Owed to you), not Work.
       P({ kind: 'invoice-out', context: 'home', title: 'Website redesign', party: 'Bloom Bakery', amount: 650, date: d(-40), dueDate: d(-10), status: 'unpaid', reference: 'INV-0042' }),
       P({ kind: 'invoice-out', context: 'home', title: 'Logo refresh', party: 'Kite Cycles', amount: 300, date: d(-48), dueDate: d(-18), status: 'paid', paidDate: d(-20), reference: 'INV-0041' }),
-      P({ kind: 'warranty', context: 'home', title: 'Dyson V11 vacuum', party: 'Dyson', amount: 399.99, date: d(-710), warrantyUntil: d(20), reference: 'DY-V11-55821', notes: 'Two-year guarantee, registered online.' }),
+      P({ kind: 'warranty', context: 'home', title: 'Dyson V11 vacuum', party: 'Dyson', amount: 399.99, date: d(-710), warrantyUntil: d(20), warrantyMonths: 24, reference: 'DY-V11-55821', notes: 'Two-year guarantee, registered online.' }),
+      // More warranties, so the Warranties page shows every state: ends in about four months, in about two years, ended last month, and no end date yet.
+      P({ kind: 'warranty', context: 'home', title: 'Bosch dishwasher', party: 'AO.com', amount: 429, date: addMonths(d(122), -24), warrantyUntil: addMonths(addMonths(d(122), -24), 24), warrantyMonths: 24, reference: 'SMS4HVI45G-FD2210', notes: 'Two-year parts and labour.',
+        files: await attach('bosch-warranty-card.svg', { kind: 'WARRANTY CARD', shop: 'BOSCH', sub: 'Home appliances guarantee', date: GU.util.fmtDate(addMonths(d(122), -24)), lines: [['SMS4HVI45G dishwasher', '429.00'], ['Parts and labour', '2 YEARS']], total: '£429.00', foot: 'Keep with your proof of purchase' }) }),
+      P({ kind: 'warranty', context: 'home', title: 'Worcester Bosch boiler', party: 'Hart & Sons Plumbing', amount: 2450, date: addMonths(d(730), -60), warrantyUntil: addMonths(addMonths(d(730), -60), 60), warrantyMonths: 60, reference: 'WB-GR-0042', notes: 'Five-year guarantee, registered with the maker. Needs a service every year to stay valid.',
+        files: await attach('boiler-guarantee.svg', { kind: 'GUARANTEE', shop: 'WORCESTER BOSCH', sub: 'Greenstar boiler', date: GU.util.fmtDate(addMonths(d(730), -60)), lines: [['Greenstar 4000', '2450.00'], ['Guarantee', '5 YEARS']], total: '£2,450.00', foot: 'Annual service required' }) }),
+      P({ kind: 'warranty', context: 'home', title: 'AirPods Pro', party: 'Apple', amount: 229, date: addMonths(d(-35), -12), warrantyUntil: addMonths(addMonths(d(-35), -12), 12), warrantyMonths: 12, reference: 'GX7K2LQ9N7' }),
+      P({ kind: 'warranty', context: 'home', title: 'Kenwood stand mixer', party: 'John Lewis', amount: 189, date: d(-95), notes: 'The guarantee card is in the box. I haven’t found the end date yet.' }),
       P({ kind: 'warranty', context: 'work', payer: 'company', title: 'Work laptop (AppleCare+)', party: 'Apple', amount: 1199, date: d(-300), warrantyUntil: d(430) }),
     ];
 
@@ -326,6 +333,14 @@
       // The examples are already sorted into Home and Work, so the one-off re-sort has nothing to do. Cleared
       // with the examples, so it can still sort your own records later.
       if (!s.meta.refileV1) s.meta.refileV1 = { at: t, skipped: true, demo: true };
+      // Other features add their own example records: GU.sample.extra.push(function (state, ctx) { ...state.xyz.push({ ...ctx.demo }) }).
+      for (const fn of GU.sample.extra) {
+        try {
+          fn(s, { today: t, demo: D, addDays });
+        } catch (e) {
+          console.error(e);
+        }
+      }
     }, { history: false });
   }
 
@@ -360,5 +375,5 @@
     }
   }
 
-  GU.sample = { load, clear };
+  GU.sample = { load, clear, extra: [] };
 })();

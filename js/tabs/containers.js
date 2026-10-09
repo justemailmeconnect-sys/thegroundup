@@ -24,8 +24,8 @@
     },
     paperwork: {
       part: 'home', label: 'Paperwork', icon: 'folder', question: 'Where’s that receipt or document?',
-      subs: ['receipts', 'documents'],
-      names: { receipts: 'Receipts', documents: 'Documents' },
+      subs: ['receipts', 'documents', 'warranties'],
+      names: { receipts: 'Receipts', documents: 'Documents', warranties: 'Warranties' },
     },
     todo: {
       part: 'home', label: 'To-do', icon: 'todo', question: 'What do I need to do?',

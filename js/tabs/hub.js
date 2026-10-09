@@ -532,6 +532,10 @@
       });
     };
     const kinds = { receipt: 'receipt', invoice_to_pay: 'invoice-in', invoice_owed_to_me: 'invoice-out', warranty: 'warranty' };
+    // A warranty of your own opens the Warranties form, with what was read in it (the length and the end date included).
+    if (r.destination === 'warranty' && !work && GU.tabs.warranties && GU.tabs.warranties.create) {
+      return GU.tabs.warranties.create({ files, read: r, values: { notes: r.notes || item.note || '' }, onSaved: done });
+    }
     switch (r.destination) {
       case 'receipt': case 'invoice_to_pay': case 'invoice_owed_to_me': case 'warranty':
         return GU.tabs.receipts.create({ values: Object.assign({ kind: kinds[r.destination], context: r.context, title: r.title, party: r.party, amount: r.amount, date: r.date || today(), dueDate: r.due_date,
@@ -1074,11 +1078,15 @@
   /* The facts on one line: £65.00 · 1 Oct · Vets4Pets. */
   function factsOf(r) {
     const out = [];
+    const warranty = r.destination === 'warranty';
     if (r.amount != null) out.push((r.destination === 'debt' ? 'balance ' : '') + money(r.amount));
-    if (r.date) out.push(fmtDate(r.date, { short: true }));
+    if (r.date) out.push((warranty ? 'bought ' : '') + fmtDate(r.date, { short: true }));
     if (r.party && r.party !== r.title) out.push(r.party);
     if (r.due_date) out.push('due ' + fmtDate(r.due_date, { short: true }));
-    if (r.expiry_date) out.push((r.destination === 'warranty' ? 'covered until ' : 'expires ') + fmtDate(r.expiry_date, { short: true }));
+    // A warranty shows how long it lasts and when it ends, which is what you check before filing it.
+    if (warranty && r.warranty_lifetime) out.push('lifetime warranty');
+    else if (warranty && r.warranty_months) out.push((r.warranty_months % 12 === 0 ? r.warranty_months / 12 + '-year' : r.warranty_months + '-month') + ' warranty');
+    if (r.expiry_date) out.push((warranty ? 'ends ' : 'expires ') + fmtDate(r.expiry_date, { short: true }));
     if (r.monthly_payment != null) out.push(money(r.monthly_payment) + ' a month');
     if (r.reference) out.push('ref ' + r.reference);
     return out;

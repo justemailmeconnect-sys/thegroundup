@@ -1,0 +1,45 @@
+/* calendar.css: styles for the calendar download. Loaded after styles.css and before the looks, so it uses the same tokens and both looks restyle it. */
+
+/* The choices (Settings › Calendar, and the dialog): a checklist for Home and one for Work, side by side when there's room. */
+.cal-body { min-width: 0; }
+.cal-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+.cal-group { min-width: 0; padding: 4px 14px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.cal-group__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-group h3 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 0 4px; font-size: 14px; font-weight: 700; color: var(--ink); }
+.cal-group h3 .ico { width: 16px; height: 16px; color: var(--accent-2); }
+.cal-all { min-height: 44px; padding: 0 2px; font-size: 13px; white-space: nowrap; }
+.cal-none { padding: 6px 0 10px; font-size: 13.5px; }
+
+/* Each row is the whole tap target: 44px tall, the count on the end of the words. */
+.cal-check { display: flex; align-items: center; width: 100%; min-height: 44px; padding: 2px 0; gap: 10px; }
+.cal-check input { width: 18px; height: 18px; margin: 0; }
+.cal-check > span { min-width: 0; line-height: 1.35; }
+.cal-n { font-weight: 500; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.cal-body select { min-height: 44px; }
+.cal-body .seg span { min-height: 44px; padding: 0 22px; }
+
+/* The live line: how many dates the file will hold. */
+.cal-count { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); font-size: 14.5px; line-height: 1.4; }
+.cal-count b { font-weight: 700; }
+.cal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* The looks set their own .btn height, so these say it twice over. */
+.btn.cal-download, .dlg--cal .dlg__foot .btn { min-height: 44px; }
+
+/* How to add it, and the honest note that it's a snapshot. */
+.cal-how h3 { margin: 0 0 8px; font-size: 14.5px; font-weight: 700; }
+.cal-how summary { display: flex; align-items: center; min-height: 44px; font-weight: 600; cursor: pointer; color: var(--ink); }
+.cal-steps { display: grid; gap: 8px; margin: 0 0 10px; padding-left: 20px; color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.cal-steps b { color: var(--ink); font-weight: 600; }
+.cal-tip { margin: 0 0 10px; font-size: 13.5px; }
+.cal-snapshot { margin: 0 0 8px; }
+
+/* Today's Needs attention card: a small link underneath. */
+.cal-link-row { margin: 0; }
+.cal-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; font-size: 13.5px; text-align: left; line-height: 1.3; }
+.cal-link .ico { width: 16px; height: 16px; flex: none; }
+
+@media (max-width: 480px) {
+  .cal-actions .cal-download { width: 100%; }
+  .dlg--cal .dlg__foot .cal-download { flex: 1 1 auto; }
+}

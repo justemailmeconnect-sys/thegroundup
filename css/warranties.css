@@ -1,0 +1,72 @@
+/* warranties.css: styles for the warranties page. Loaded after styles.css and before the looks, so it uses the same tokens and both looks restyle it.
+   The page is made of the app's own pieces (panel, doc-row, pill, chips, ledger, dropbar, note-line), so this file only adds what they don't have:
+   the thin bar for how much of a warranty has gone, the file chips under a card, and a compact three-up summary on a phone. */
+
+/* ---------- a warranty: the usual row, with a strip under it for the bar and the files ---------- */
+.wr-row { row-gap: 8px; }
+.wr-extra { grid-column: 2 / -1; display: grid; gap: 8px; min-width: 0; }
+.wr-count { font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.wr-row--soon .wr-count { color: var(--warn); font-weight: 600; }
+.wr-row--soon.is-crit .wr-count { color: var(--crit); }
+.wr-row--ended .doc-row__main > b { color: var(--ink-2); }
+
+/* the bar: how much of the cover has gone */
+.wr-bar { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wr-bar__track { flex: 1 1 auto; height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; min-width: 0; }
+.wr-bar__track i { display: block; height: 100%; min-width: 3px; border-radius: inherit; background: var(--good); }
+.wr-row--soon .wr-bar__track i { background: var(--warn); }
+.wr-row--soon.is-crit .wr-bar__track i { background: var(--crit); }
+.wr-row--ended .wr-bar__track i { background: var(--ink-3); }
+.wr-bar__txt { flex: none; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 6ch; text-align: right; }
+
+/* the files: chips that open the original, and a way to add another */
+.wr-files { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.wr-file, .wr-add { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; max-width: 100%; border-radius: 999px; font-size: 12.5px; cursor: pointer; }
+.wr-file { padding: 3px 12px 3px 4px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); }
+.wr-file:hover { border-color: var(--accent-2); color: var(--ink); }
+.wr-file img, .wr-file > .ico { flex: none; width: 28px; height: 28px; border-radius: 999px; object-fit: cover; background: var(--surface-2); }
+.wr-file > .ico { padding: 6px; color: var(--ink-3); }
+.wr-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
+.wr-file--more { padding-left: 12px; }
+.wr-add { padding: 3px 12px 3px 8px; border: 1px dashed var(--line-strong); background: none; color: var(--accent); font-weight: 500; }
+.wr-add:hover { border-color: var(--accent-2); background: var(--accent-soft); }
+.wr-add .ico { width: 14px; height: 14px; }
+
+/* the summary: three figures that stay in a row on a phone */
+.wr-ledger em { overflow-wrap: anywhere; }
+.wr-ledger b.is-crit { color: var(--crit); }
+
+/* the line under the list */
+.wr-foot { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; margin: 12px 2px 0; }
+.wr-foot > .ico { width: 15px; height: 15px; margin-top: 3px; }
+.wr-foot > span { flex: 1 1 auto; min-width: 0; line-height: 1.9; }
+.wr-warn { width: auto; min-height: 30px; padding: 2px 8px; font-size: 12.5px; display: inline-block; }
+
+/* a read, with its button to add the file to a warranty you already have */
+.assist-note [data-wr-attach] { margin-top: 6px; }
+
+/* Paperwork's strip now has three pages, each with a count. On a phone they take a little less room each, so the three stay on one row from 360px up (the looks give a tab more padding than that). */
+@media (max-width: 560px) {
+  .subtabs:has(> .subtab[data-subtab="warranties"]) .subtab { padding: 0 8px; gap: 5px; }
+}
+@media (max-width: 380px) {
+  .subtabs:has(> .subtab[data-subtab="warranties"]) .subtab { padding: 0 5px; gap: 4px; font-size: 13px; }
+}
+@media (max-width: 860px) {
+  .wr-ledger.ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wr-ledger.ledger > div { padding: 12px 10px; gap: 1px; }
+  .wr-ledger.ledger span { font-size: 12px; line-height: 1.25; }
+  .wr-ledger.ledger b { font-size: 22px; }
+  .wr-ledger.ledger em { display: none; }
+  .wr-file, .wr-add { min-height: 44px; }
+  .wr-toolbar .chip { min-height: 44px; }
+  .wr-warn { min-height: 44px; }
+  .wr-bar__txt { min-width: 5.5ch; }
+}
+@media (max-width: 380px) {
+  .wr-ledger.ledger > div { padding: 10px 8px; }
+  .wr-ledger.ledger span { font-size: 11.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wr-bar__track i { transition: none; }
+}

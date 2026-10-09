@@ -265,5 +265,5 @@
     for (const b of st.bills || []) if (b.foundKey && latest[b.foundKey]) b.account = latest[b.foundKey].account;
   }
 
-  GU.recurring = { find, scan, addAsBills, keyOf, accountEnds, reassignBills };
+  GU.recurring = { find, scan, addAsBills, keyOf, accountEnds, reassignBills, SKIP_CATEGORIES, BILL_CATEGORIES };
 })();

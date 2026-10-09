@@ -50,6 +50,7 @@
     const p = pays();
     return [
       { id: 'home-receipts', kind: 'page', part: 'home', label: pth('receipts', 'Home › Receipts'), tab: 'receipts', words: ['receipts', 'home receipts', 'my receipts', 'receipts and invoices'] },
+      { id: 'home-warranties', kind: 'page', part: 'home', label: pth('warranties', 'Home › Paperwork › Warranties'), tab: 'warranties', words: ['warranties', 'warranty', 'guarantees', 'my warranties', 'items under warranty'] },
       { id: 'home-bills', kind: 'page', part: 'home', label: pth('bills', 'Home › Bills'), tab: 'bills', words: ['bills', 'home bills', 'my bills'] },
       { id: 'home-documents', kind: 'page', part: 'home', label: pth('documents', 'Home › Documents'), tab: 'documents', words: ['documents', 'important documents', 'my documents', 'home documents'] },
       { id: 'home-todos', kind: 'page', part: 'home', label: pth('todos', 'Home › To-do'), tab: 'todos', words: ['to-do', 'to do', 'todo', 'to-do list', 'my to-do', 'my tasks', 'home tasks'] },
@@ -146,7 +147,8 @@
       case 'work-bills': work(payerIn(extra.payer) || payerIn(r.payer)); r.destination = 'bill'; break;
       case 'work-tasks': work(null); r.destination = 'task'; break;
       case 'work-docs': work(null); r.destination = 'document'; if (!r.document_type || r.document_type === 'Other') r.document_type = (GU.work && GU.work.CONTRACT) || 'Other'; break;
-      case 'home-receipts': home(); r.destination = paperOr('receipt', true); break;
+      case 'home-receipts': home(); r.destination = paperOr('receipt', true); if (r.destination === 'warranty') r.destination = 'receipt'; break;
+      case 'home-warranties': home(); r.destination = 'warranty'; break;
       case 'home-bills': home(); r.destination = 'bill'; break;
       case 'home-documents': home(); r.destination = 'document'; if (!r.document_type) r.document_type = 'Other'; break;
       case 'home-todos': home(); r.destination = 'task'; break;
@@ -192,7 +194,7 @@
     const cat = r.category && F.isCustom(store.state, r.category) ? 'category:' + r.category : '';
     if (d === 'section') return r.section_id ? 'section:' + r.section_id : null;
     if (PAPER.includes(d)) {
-      if (!work) return cat || 'home-receipts';
+      if (!work) return cat || (d === 'warranty' ? 'home-warranties' : 'home-receipts');
       if (r.payer === 'me') return 'work-back';
       if (r.payer === 'company' || d === 'warranty') return folder || 'work-ktk';
       return null;
@@ -213,6 +215,7 @@
       if (lane === 'back') return { label: pth('work-back', 'Work › Get paid back'), tab: 'work-back' };
       if (lane === 'ktk') return { label: pth('work-ktk', 'Work › ' + pays()), tab: 'work-ktk' };
       if (lane === 'unsorted') return { label: 'Work › Who paid?', tab: 'work-ktk' };
+      if (rec.kind === 'warranty' && GU.tabs && GU.tabs.warranties) return { label: pth('warranties', 'Home › Paperwork › Warranties'), tab: 'warranties' };
       return { label: pth('receipts', 'Home › Receipts'), tab: 'receipts' };
     }
     if (c === 'sectionItems') {
@@ -375,6 +378,18 @@
         return done(res.undo);
       }
       if (pid === 'home-receipts') return done(quiet(() => W.moveToHome('paperwork', rec.id)).undo);
+      if (pid === 'home-warranties') {
+        // Brought home if it was for work, then it's a warranty (a receipt that has a warranty end date shows there too).
+        const undos = [];
+        if (rec.context === 'work') undos.push(quiet(() => W.moveToHome('paperwork', rec.id)).undo);
+        undos.push(snapshotChange([['paperwork', rec.id]], (s) => {
+          const x = s.paperwork.find((y) => y.id === rec.id);
+          x.kind = 'warranty';
+          x.status = '';
+          x.dueDate = '';
+        }));
+        return done(() => undos.reverse().forEach((u) => u()));
+      }
       if (pid === 'folder' && place.area === 'invoices') {
         const undos = [];
         if (W.lane(rec, 'paperwork') !== 'ktk') undos.push(quiet(() => W.setPayer('paperwork', rec.id, 'company')).undo);
@@ -1125,7 +1140,7 @@
       },
       {
         name: 'move_record',
-        description: 'Move a record that is already filed (ids from find_records) to another place: a receipt to work-back (Get paid back), work-ktk or home-receipts; a bill to work-bills (give payer) or home-bills; a document to work-docs or home-documents; a task to a list; a section item to another section; a bank line to a category.',
+        description: 'Move a record that is already filed (ids from find_records) to another place: a receipt to work-back (Get paid back), work-ktk, home-receipts or home-warranties (the Warranties page); a bill to work-bills (give payer) or home-bills; a document to work-docs or home-documents; a task to a list; a section item to another section; a bank line to a category.',
         inputSchema: { type: 'object', properties: { collection: { type: 'string', enum: ['receipts', 'bills', 'documents', 'tasks', 'section_items', 'transactions'] }, id: { type: 'string' }, to: { type: 'string', description: PLACE_DESC }, payer: { type: 'string', enum: ['me', 'company'] } }, required: ['collection', 'id', 'to'] },
         execute(i) {
           ctx.progress('Moving things…');

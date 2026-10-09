@@ -29,7 +29,7 @@
     owed: { label: 'Owed to you', tab: 'receipts' },
     income: { label: 'Income', tab: 'incomings' },
     document: { label: 'Document', tab: 'documents' },
-    warranty: { label: 'Warranty', tab: 'receipts' },
+    warranty: { label: 'Warranty', tab: 'warranties' },
     return: { label: 'Return', tab: 'receipts' },
     debt: { label: 'Debt', tab: 'debts' },
     project: { label: 'Work project', tab: 'work-projects' },
@@ -93,7 +93,7 @@
       }
       if (p.warrantyUntil && p.warrantyUntil >= t && p.warrantyUntil <= to) {
         push(Object.assign({ kind: 'warranty', date: p.warrantyUntil, title: 'Warranty ends: ' + p.title, meta: 'Make any claims before this date', ref },
-          lane === 'home' ? null : work(lane === 'back' ? 'work-back' : 'work-ktk')));
+          lane === 'home' ? { tab: 'warranties' } : work(lane === 'back' ? 'work-back' : 'work-ktk')));
       }
       // The last day to take something back: it stays for a few days after, for you to say what happened.
       if (p.returnBy && !p.returned && p.returnBy <= to && p.returnBy >= addDays(t, GU.returns ? -GU.returns.NAG_PAST : -7)) {
@@ -174,6 +174,14 @@
     for (const row of spent) {
       const b = state.settings.budgets[row.category];
       if (b && row.total > b) out.push({ level: 'warn', tab: 'outgoings', title: row.category + ' is ' + money(row.total - b) + ' over budget', detail: money(row.total) + ' spent of ' + money(b) + ' this month' });
+    }
+    // Other features add their own lines here (they show under Needs attention, and the ones that aren't 'info' count in the badges): GU.agenda.extra.push(function (state) { return [{ level, tab, title, detail, ref }]; }).
+    for (const src of GU.agenda.extra) {
+      try {
+        for (const a of src(state) || []) out.push(a);
+      } catch (e) {
+        console.error(e);
+      }
     }
     const rank = { crit: 0, warn: 1, info: 2 };
     for (const a of out) a.part = 'home';
@@ -277,5 +285,5 @@
     return counts;
   }
 
-  GU.agenda = { KINDS, WORK_TABS, timeline, attention, waiting, badges };
+  GU.agenda = { KINDS, WORK_TABS, timeline, attention, waiting, badges, extra: [] };
 })();

@@ -260,6 +260,9 @@
       '<p class="muted look-panel__hint">You can also switch from the rail (or the More menu on a phone) at any time. Light and dark are separate: they\u2019re under Appearance, in About you.</p></div></section>';
   }
 
+  /* What "Now using" said last time: Settings redraws after every change, and the reader is found a moment later, so the heading is
+     drawn with the old words at once. Without it the panel was a line shorter for a moment and the page jumped under your finger. */
+  let modeText = '';
   function render(root) {
     const s = store.state;
     const st = s.settings;
@@ -281,7 +284,7 @@
 
       (GU.refile && GU.refile.tidyHTML ? GU.refile.tidyHTML(s) : '') +
 
-      '<section class="panel" id="assistant"><header class="panel__head"><h2>How your assistant reads things</h2><span data-mode class="muted"></span></header><form class="panel__body form-grid" data-form="brain">' +
+      '<section class="panel" id="assistant"><header class="panel__head"><h2>How your assistant reads things</h2><span data-mode class="muted">' + esc(modeText) + '</span></header><form class="panel__body form-grid" data-form="brain">' +
       '<div class="field"><p class="tip">' + icon('info') + '<span>When you open this app inside the Claude app, I use Claude through your Claude account automatically. Anywhere else, you can add an Anthropic API key below. Without either, I read files offline on this device using text in PDFs, photo text recognition and keyword rules. That works for clear receipts and letters but is less accurate.</span></p></div>' +
       '<div class="field field--half"><label class="field__label" for="set-key">Anthropic API key <span class="opt">optional</span></label><input id="set-key" name="apiKey" type="password" autocomplete="off" value="' + esc(st.apiKey || '') + '" placeholder="sk-ant-…"><p class="field__help">Stored only in this browser and sent only to Anthropic when I read an item. Get one at console.anthropic.com. Each item costs about a penny or two.</p></div>' +
       '<div class="field field--half"><label class="field__label" for="set-model">Claude model</label><input id="set-model" name="model" type="text" value="' + esc(st.model || '') + '" placeholder="claude-opus-5-5"><p class="field__help">Leave empty to use the recommended model.</p></div>' +
@@ -318,6 +321,8 @@
 
       (GU.lock ? GU.lock.panel() : '') +
 
+      (GU.calendar ? GU.calendar.panelHTML() : '') +
+
       '<section class="panel"><header class="panel__head"><h2>Backup and restore</h2><span class="muted" data-usage></span></header><div class="panel__body stack">' +
       '<p class="tip">' + icon('lock') + '<span>Your data lives only in this browser on this device. Nothing is sent to a server. Export a backup regularly (it includes your uploaded files) and keep it somewhere safe, so you can restore it on another device or if this browser is cleared.</span></p>' +
       '<div class="field--row"><button type="button" class="btn btn--primary" data-export>' + icon('download') + 'Export backup</button>' +
@@ -329,9 +334,11 @@
       '</div>';
 
     if (GU.lock) GU.lock.wirePanel(root);
+    if (GU.calendar) GU.calendar.wirePanel(root);
     GU.brain.mode().then((m) => {
       const el = root.querySelector('[data-mode]');
-      if (el) el.textContent = 'Now using: ' + GU.brain.modeLabel(m);
+      modeText = 'Now using: ' + GU.brain.modeLabel(m);
+      if (el) el.textContent = modeText;
     });
     if (navigator.storage && navigator.storage.estimate) {
       navigator.storage.estimate().then((est) => {

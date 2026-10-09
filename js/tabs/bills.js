@@ -153,6 +153,7 @@
       actions: (s.transactions.some((x) => !x.demo) ? '<button type="button" class="btn" data-scan>' + icon('search') + 'Find bills in my statements</button>' : '') +
         GU.organise.listButton('bills') + '<button type="button" class="btn btn--primary" data-add>' + icon('plus') + 'Add bill</button>',
     }) +
+      (GU.alerts ? GU.alerts.panelHTML(s) : '') +
       signpostHTML(work) +
       GU.ui.dropbar('Drop bills and contracts here, or a whole folder', 'Each new company becomes a bill. Letters from a company you already have are added to its bill, not duplicated.') +
       reviewHTML(review) +
@@ -172,6 +173,7 @@
       '</div>';
 
     GU.ui.wireDropbar(root, (files) => GU.inbox.add({ files, scope: { kind: 'bills', name: 'Bills' } }));
+    if (GU.alerts) GU.alerts.wire(root);
     root.querySelectorAll('details[data-fold]').forEach((d) => d.addEventListener('toggle', () => {
       if (d.dataset.fold === 'stopped') showStopped = d.open;
       else showWhere = d.open;

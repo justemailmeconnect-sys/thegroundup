@@ -14,11 +14,11 @@ Six items, then your own categories (Wedding, Visa and so on), then Settings and
 
 | Menu item | The question it answers | What's inside |
 | --- | --- | --- |
-| **Today** | What needs my attention, and what's coming? | Where you stand and where you're heading: what's in each account now, what's due back from work, then every payment coming in and going out (income, bills, debt payments, Klarna and PayPal instalments, invoices to pay, and invoices owed to you on their due date; late ones aren't counted until they're paid) day by day with the balance after each, the lowest point, the month-end figure and a warning before any account goes past its overdraft. Switch between the rest of this month, the next 30 days and next month. Tasks and deadlines follow, and you can type a note or drop a file straight into the **Add anything** box. Two doors at the top lead into Home and Work. |
+| **Today** | What needs my attention, and what's coming? | Where you stand and where you're heading: what's in each account now, what's due back from work, then every payment coming in and going out (income, bills, debt payments, Klarna and PayPal instalments, invoices to pay, and invoices owed to you on their due date; late ones aren't counted until they're paid) day by day with the balance after each, the lowest point, the month-end figure and a warning before any account goes past its overdraft. Switch between the rest of this month, the next 30 days and next month. Tasks and deadlines follow, and you can type a note or drop a file straight into the **Add anything** box. **Needs attention** also lists warranties about to run out and charge alerts, with a link to put your dates in your phone's calendar. Two doors at the top lead into Home and Work. |
 | **Sorting hub** | I have something. Where does it go? | Shared by Home and Work. See [The Sorting hub](#the-sorting-hub). |
 | **Money** | Where did my money go, and what came in? | **Bank**: every transaction across your accounts, with each account's current balance and a balance-over-time chart; import statements from any UK bank, categories are filled in automatically and learn from your corrections; work money is marked on each line. **Spending**: spending by category, monthly budgets with warnings and your biggest payments, with work money left out (one line says how much). **Income**: the money you expect (salary, benefits, anything regular) with its next dates, and your wages from your employer as your own income. **Tax year**: what came in for each tax year or Universal Credit month, with CSV and printable downloads, and an **evidence pack** (a zip of statements, payslips and a wages summary) for an application such as a mortgage, tenancy or visa. |
-| **Bills & debts** | What do I owe, and what's due? | **Bills**: your own regular payments with next due dates; direct debits roll on by themselves, bills you pay by hand wait for you to mark them paid, and bills are found in your bank statements for you. **Debts**: credit cards, loans, car finance, Klarna, PayPal Pay in 3, Monzo Flex, overdrafts and money owed to people, with what's left to pay, the monthly cost and the debt-free date kept up to date from your statements. **Plans**: things you're saving up for, with the earliest date each one fits without your accounts dropping below what you want to keep. At the bottom of Debts, a line says **Records from your lenders** and links to the categories that hold them (Klarna, PayPal). |
-| **Paperwork** | Where's that receipt or document? | **Receipts**: receipts, invoices you need to pay, invoices someone owes you, paid invoices and warranties, each with its photo or PDF; **Owed to you** keeps a running total of unpaid invoices you've sent for your own side work. **Documents**: passports, licences, visa and immigration papers, certificates, contracts and policies, with scans and reminders before anything expires; payslips and tax papers stay here because they're about your own pay. |
+| **Bills & debts** | What do I owe, and what's due? | **Bills**: your own regular payments with next due dates; direct debits roll on by themselves, bills you pay by hand wait for you to mark them paid, and bills are found in your bank statements for you; a **Charge alerts** panel at the top says when a regular payment went up or the same payment was taken twice. **Debts**: credit cards, loans, car finance, Klarna, PayPal Pay in 3, Monzo Flex, overdrafts and money owed to people, with what's left to pay, the monthly cost and the debt-free date kept up to date from your statements. **Plans**: things you're saving up for, with the earliest date each one fits without your accounts dropping below what you want to keep. At the bottom of Debts, a line says **Records from your lenders** and links to the categories that hold them (Klarna, PayPal). |
+| **Paperwork** | Where's that receipt or document? | **Receipts**: receipts, invoices you need to pay, invoices someone owes you and paid invoices, each with its photo or PDF; **Owed to you** keeps a running total of unpaid invoices you've sent for your own side work. **Documents**: passports, licences, visa and immigration papers, certificates, contracts and policies, with scans and reminders before anything expires; payslips and tax papers stay here because they're about your own pay. **Warranties**: what's under warranty, with its receipt or warranty card, and when each one runs out (see [Warranties](#warranties)). |
 | **To-do** | What do I need to do? | **Tasks**: your own lists, Today and Upcoming views, and quick add that understands "tomorrow", "on Friday" or "14 Nov". **Projects**: jobs you've been asked to do outside the business (by your dad, say) and your own, with who asked, where it's at, dates, a budget, files and notes. A project can move to Work from its ⋯ menu. |
 
 **Your categories** are pages you make yourself (Car, Pets, Wedding), made by you or by the assistant when something doesn't fit anywhere else. Each one can be moved to Work from **Rename or move**. A category named after a lender whose payment schedule Debts reads (Klarna, PayPal) starts out hidden from the menu, since it holds records rather than something you open every day; it's still there, linked from Debts and found by Search. **Settings › Your categories** lists every category with an **In the menu / Hidden** switch, so you can show or hide any of them.
@@ -42,7 +42,7 @@ Every Work page keeps folders, search and notes (a small **+ Note** button until
 - **Add** (top of the menu on a computer, **+** in the top bar on a phone) is short. In Home: **Add anything**, **A receipt or expense**, **A to-do**, **More…** (bill, debt, bank statement, document, project, something to save for, new category). In Work: **Add anything**, **I paid for something (get it back)**, **Something … wants me to get**, **A job**, **More…** (something the business is paying, a regular work cost, a project, a contract or document, a note, a folder). **Add anything** opens the Sorting hub with its box ready: drop a photo or PDF, paste an email or type a few words, and it works out where it goes.
 - **Search** (`/` or the magnifier) looks across every page, Home and Work, including everything in a category that's hidden from the menu.
 - **Claude** is a chat with Claude from any page. It can look things up across the site or make changes you can undo.
-- **Settings** is for you, the business you work for, how the assistant reads things, reminders, accounts, category rules, your categories, the Home/Work tidy-up, backup and restore, and one **Help** row with a guide to where things go.
+- **Settings** is for you, the business you work for, how the assistant reads things, reminders, accounts, category rules, your categories, the Home/Work tidy-up, the **Calendar** file of your dates, backup and restore, and one **Help** row with a guide to where things go.
 
 ## Home and Work
 
@@ -195,6 +195,18 @@ Online order invoices are filed as **paid invoices**, never as bills to pay, and
 - **The invoice PDFs:** Amazon has no "download all" for personal accounts. Claude in Chrome can work through your orders while you're signed in and download each invoice. Drop all the PDFs into the Sorting hub in one go: each becomes its own record, or is attached to its order if you've already imported it.
 - **A pasted list:** paste a table that starts with `Order Date,Order ID,Items,Total` into the Sorting hub and it imports the same way.
 
+## Warranties
+
+**Home › Paperwork › Warranties** (the third tab beside Receipts and Documents; the address `#warranties` opens it). It keeps what's under warranty with the receipt or warranty card, and tells you when each one runs out, so you can claim before it does.
+
+- **Adding one.** Drop a receipt, a warranty card or a photo of the item (or **Choose files**), or press **Add a warranty**. Everything you drop makes one warranty, and nothing is saved until you press **Save**. With Claude, the item, the shop, the day you bought it, how long it lasts, the price and the serial number are read into the form; without Claude, a reader on your device finds what a PDF or text file says ("2 year warranty", "24 months guarantee", "valid until 03/2028", "lifetime guarantee", "serial number …") and the file's name gives a title when it says something. A serial number you already have offers **Add the file to it instead**.
+- **How the end is worked out.** Pick how long it lasts (1, 2, 3, 5 or 10 years, lifetime, or your own length in months or years) and the day you bought it, and the end date follows (31 January plus 1 month is 28 February; 29 February plus 1 year is 28 February). Type a different date if the paperwork says one. Nothing is made up: with no purchase date, no length or no end date, the card says **Add the end date** and no reminder is possible.
+- **What each card says.** **Covered**, **Ending soon** (within 60 days, red inside 14; change the 60 under the list, from 14 to 180 days), **Ended**, **Lifetime**, or **Add the end date**, with "ends in 3 weeks" and a bar showing how much of the cover has gone. Above the list: how many are covered, how many end soon and how many have ended; filters and search below. Each card has its files (open, **Add a file**) and the usual ⋯ menu, with **Add another file**. **Download list (CSV)** saves the list.
+- **Reminders.** A warranty ending within your warning time is a line under **Needs attention** on Today (and counts on the Paperwork badge); one that ended in the last 14 days is mentioned for information. There's nothing for a lifetime one, one with no end date or one that belongs to Work. **Add end dates to my calendar** puts them in your phone's calendar (see [Calendar file](#calendar-file)).
+- **Elsewhere.** A receipt that has a warranty end date shows here too (with a **Receipt** pill), so what you already have needs no moving. A warranty the Sorting hub reads is filed here (**Check details** opens this form with what was read). A warranty that's for Work stays in Work. Search finds warranties by item, shop or serial number.
+
+Dates are as you entered them or as they were read from the document, so check the paperwork for the exact terms. The offline reader can't always tell the item from the shop's name.
+
 ## Importing bank statements
 
 Use **Money › Bank › Import statements**, drop statements on the Bank page, or drop them in the Sorting hub. You can import one file, several, or a whole folder at once; each statement is matched to an account by its bank.
@@ -211,6 +223,16 @@ PDF statements are read on your device: the transaction table is found by its co
 Anything you've already imported is skipped, money moved between your own accounts (for example Santander to Monzo) is marked as a transfer rather than spending, and a copy of each PDF can be kept in Important documents.
 
 Live bank connections (Open Banking) need a small server and an account with a provider such as GoCardless Bank Account Data or TrueLayer, so they're not built in yet.
+
+## Calendar file
+
+A web page can't ring your phone, but your calendar app can. **Settings › Calendar** makes a `.ics` file of the dates that matter, with an alert on each, that Android, iPhone and Google Calendar all open. The same choices open from **Add dates to my calendar** under Needs attention on Today, and **Add end dates to my calendar** on the Warranties page (which starts with only warranties ticked).
+
+- **What's in it.** The dates Today already knows, taken from the same list: bills and direct debits (every date for the next 12 months), debt payments, invoices to pay, money owed to you, documents expiring, warranties ending, return-by dates, to-dos with a date, Home and Work projects, things to buy, Get paid back (when to send or chase), things you're saving for, the tax year end (and the 31 January Self Assessment deadline if you do side work), and the dates on your own categories. Tick the kinds you want, for Home and for Work. Pay days are off until you tick them. Warranties go in however far off they end (up to 10 years), since each is one date.
+- **Alerts.** Each date rings at 9am. **The usual for each kind** is 30 days and 7 days before for documents and warranties, 2 days before for returns, on the day for to-dos and the day before for everything else; or pick no alerts, on the day, 1 day before or 1 week before. An alert whose time has already passed is left out, so importing never sets off a burst of old ones.
+- **What isn't.** Anything in the past, done or paid, a bill only guessed from your statements, the Sorting hub's suggestions, and anything with no date. Amounts are off unless you turn them on (your calendar app may sync the file to its own cloud), and reference numbers, account details and sort codes never go in.
+- **Downloading again.** It's a snapshot, so download it again after you change things. Each date has a lasting name (the record, and the day for things that come round again), so in most calendar apps dates that moved replace the old ones instead of adding a second copy. Anything you delete or finish here is not taken out of your calendar for you, which is why it helps to give the file a calendar of its own.
+- **In the Claude app** downloads only take a few file types, so the `.ics` comes inside a `.zip`; open the zip, then the file.
 
 ## Planning ahead
 
@@ -243,6 +265,18 @@ After you import statements (and the first time there's a history to look at), I
 
 Each one has **Keep**, **Not a bill** (removed and never suggested again), and under **⋯**, **It was a one-off**, **I've cancelled it** or **Change the details**. **Find bills in my statements** looks again at any time.
 
+## Charge alerts
+
+**Bills & debts › Bills** starts with a **Charge alerts** panel when there's something to look at. It reads the statements you've imported, and nothing leaves your device. It would rather say nothing than cry wolf, so both alerts are strict.
+
+- **A regular payment that went up.** At least three payments from the same company in a steady rhythm (weekly, every 2 or 4 weeks, monthly, every 3 months or yearly), the last two or more at the same old price and most of the earlier ones too, then a higher price: up by at least 50p and at least 3%, and by less than double (more than double is a trial ending or a plan change). It's mentioned while the new price is still new, and says about how much more that is a year. Energy, phone usage, shopping and fuel vary, so they never count, and neither do everyday categories (groceries, eating out, travel…) or anything you told Bills was **Not a bill**.
+- **The same payment taken twice.** The same company, the same amount to the penny (at least £5), taken twice or three times within 3 days, written identically by the bank and in the same account. A daily coffee, a weekly habit, rent paid in two halves or two regular payments for the same thing don't count. A monthly subscription taken twice does.
+- **Left out of both.** Work money, transfers (including the other half of a move between your own accounts), money in, pending or declined lines and anything dated in the future.
+- **What you can do.** **Looks right** stops it being mentioned. **Ask for a refund** (double charges) adds a to-do to ask the company and shows **Following up**; tapping it again still makes only one. **See the payments** opens Money › Bank on that account, searching for the company, with the lines marked. When money comes back from the same company for the same amount within 30 days, the alert says **Refunded**. Anything you've dealt with is under **Earlier**, each with **Undo**.
+- **Where else.** Open alerts are lines under **Needs attention** on Today and count on the Bills badge. What you tell it is saved with everything else, syncs between devices and is in your backups, but it isn't a step in Undo (**Undo** after Ask for a refund takes the to-do back, and the alert is open again). **Clear examples** takes the example alerts, and what you did to them, away.
+
+It only knows what you've imported, so it's no better than your statements. A double charge more than about two months old is quietly forgotten unless you'd already dealt with it.
+
 ## Uploading folders
 
 Every page that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts, Documents, Bills, Bank, each of your own categories and every Work page. On Get paid back, files dropped are always things you paid for; on the business's own page, they're always its money. Files uploaded there stay on that page; the assistant only reads them to fill in the details. Subfolders are kept as groups.
@@ -265,6 +299,9 @@ In the Sorting hub, your own folder organisation is used: upload a folder such a
 index.html            page shell and script order
 css/styles.css        all styling (light and dark themes)
 css/looks.css         the look switch: its buttons, the Settings cards, the cross-fade
+css/warranties.css    the Warranties page: the bar, the file chips, the summary
+css/alerts.css        the Charge alerts panel: its rows, the Earlier list, the flagged Bank lines
+css/calendar.css      the calendar choices (the Settings panel and its dialog)
 css/look-glass.css    the Soft Glass look (a layer over styles.css; one of the two look stylesheets is on at a time)
 css/look-bold.css     the Bold Colour look
 js/util.js            dates, money, CSV parsing
@@ -275,24 +312,28 @@ js/sync.js            syncing records and files across your devices on claude.ai
 js/finance.js         categories, auto-categorising rules, recurring dates, totals (work money kept out)
 js/ui.js              icons, dialogs, forms, attachments, toasts, menus
 js/charts.js          monthly column chart, category bars and the balance line
-js/agenda.js          the Today timeline, attention list and tab badges
+js/agenda.js          the Today timeline, attention list and tab badges (`GU.agenda.extra`: where other features add their own lines)
 js/brain.js           reading and filing: Claude, API key and offline readers
 js/statements.js      bank statements: PDF, CSV, Excel, Santander .txt, QIF and OFX
 js/folders.js         using your own folder names to decide where files go
 js/debts.js           account balances (and setting them: GU.money.setBalances), lenders, matching debt payments, payoff maths
 js/recurring.js       finding regular bills in your bank statements
+js/alerts.js          charge alerts: a payment that went up, the same payment taken twice, what you told it
+js/sample-alerts.js   the example transactions that show the two alerts
+js/calendar.js        the calendar file (.ics) and its choices
 js/forecast.js        money ahead: income, bills, debts and instalments from today, per account
 js/costs.js           cost forecast for Home › Plans: when your own ideas fit, given money ahead and everyday spending
 js/parts.js           Home and Work: the menu for each, which records belong where, the doors, the Add menus, the help guide
 js/workmoney.js       work money: the employer, whose money paid, Get paid back, bank matching, the claim pack
 js/refile.js          the one-off Home/Work re-sort, its questions and its undo
 js/assistant.js       Ask Claude
-js/sample.js          example data
+js/sample.js          example data (`GU.sample.extra`: where other features add their own examples)
 js/app.js             the Home | Work switch, the menu for each part, routing and redraws
 js/looks.js           the two looks: the registry they plug into and the switch between them (GU.look)
 js/look-glass.js      what Soft Glass adds on top of its stylesheet: page entrance, gliding pill, pops
 js/look-bold.js       what Bold Colour adds on top of its stylesheet
 js/tabs/containers.js the menu items that hold several pages (Money, Bills & debts, Paperwork, To-do, Orders & claims, Jobs) and their strip of tabs
+js/tabs/warranties.js the Warranties page (Paperwork's third tab): the list, the form, reading uploads, reminders
 js/tabs/*.js          one file per page
 ```
 

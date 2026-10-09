@@ -421,7 +421,8 @@
     const home = [
       row('My wages from ' + c, 'nothing to do', 'They show in ' + pathOf('incomings') + ' by themselves.'),
       row('A payslip, P60 or tax summary from ' + c, to('documents'), 'Under Employment and payslips. It’s about your pay, so it’s yours.'),
-      row('A receipt, order or warranty for me or the house', to('receipts')),
+      row('A receipt or order for me or the house', to('receipts')),
+      row('Something under warranty or guarantee', to('warranties'), 'Upload the receipt or warranty card and I’ll keep track of when it runs out.'),
       row('An invoice I have to pay myself', to('receipts'), 'Under To pay.'),
       row('An invoice I sent someone for my own side work (not ' + c + ')', to('receipts'), 'Under Owed to you.'),
       row('My own regular bill or subscription', to('bills')),

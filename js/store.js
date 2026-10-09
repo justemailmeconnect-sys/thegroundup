@@ -56,6 +56,9 @@
       // The Sorting hub's 'Always put <match> in <place>' rules: {id, match, destination, context, payer, …, created}.
       sortRules: [],
       filedLog: [],
+      // What you told the charge alerts (js/alerts.js): {id (the alert's own id), status: 'dismissed' | 'following' | 'reopened', at, taskId, demo}.
+      // Kept out of Undo; syncs record by record like the lists above.
+      alertStates: [],
       remoteFiles: {},
       trash: [],
     };
@@ -68,6 +71,7 @@
     s.settings = Object.assign({}, b.settings, s.settings);
     s.settings.budgets = s.settings.budgets || {};
     if (!Array.isArray(s.sortRules)) s.sortRules = [];
+    if (!Array.isArray(s.alertStates)) s.alertStates = [];
     return s;
   }
 

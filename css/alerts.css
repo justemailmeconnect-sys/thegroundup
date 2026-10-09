@@ -1,0 +1,56 @@
+/* alerts.css: styles for the charge alerts. Loaded after styles.css and before the looks, so it uses the same tokens and both looks restyle it.
+   The panel is made of the app's own pieces (panel--spotted, spot rows, pill, btn), so this file only adds what they don't have:
+   the line of tags under a row, the collapsed 'Earlier' list, and the mark on the Bank page's rows. */
+
+.al-panel { margin-bottom: 18px; }
+
+/* a row: the usual spot row, with a line of tags under the words */
+.al-row { align-items: start; }
+.al-row .row-item__icon { margin-top: 2px; }
+.al-row__text { gap: 2px; }
+.al-row .spot__amt { margin-left: 0; }
+.al-row__text em { overflow-wrap: anywhere; line-height: 1.45; }
+.al-row__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.al-row__act { align-items: center; align-self: center; }
+.al-row.is-past .al-row__text b { color: var(--ink-2); }
+.al-row.is-past .spot__amt { color: var(--ink-3); }
+
+/* the buttons drop under the words where the page is not wide enough for both */
+@media (max-width: 1180px) {
+  .al-row { grid-template-columns: auto minmax(0, 1fr); }
+  .al-row__act { grid-column: 2; justify-content: flex-start; align-self: start; }
+}
+
+/* Earlier: dismissed, refunded and followed-up alerts, collapsed */
+.al-earlier summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 18px; cursor: pointer; list-style: none; font-size: 14px; font-weight: 600; color: var(--ink-2); border-top: 1px solid var(--line); }
+.al-earlier summary::-webkit-details-marker { display: none; }
+.al-earlier summary .muted { font-size: 12.5px; font-weight: 500; }
+.al-earlier summary .ico { margin-left: auto; width: 15px; height: 15px; flex: none; transition: transform 0.15s; }
+.al-earlier[open] summary .ico { transform: rotate(90deg); }
+.al-earlier summary:hover { color: var(--ink); }
+.al-earlier[open] > .rows { border-top: 1px solid var(--line); }
+.al-panel--quiet { border-color: var(--line); }
+.al-panel--quiet .al-earlier summary { border-top: 0; }
+
+/* the lines on the Bank page that an alert's 'See the payments' points at */
+tr.al-flag td { background: var(--warn-soft); }
+tr.al-flag td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+
+@media (max-width: 860px) {
+  .al-row__act .btn { min-height: 44px; padding: 0 14px; }
+  .al-row__act .icon-btn { width: 44px; height: 44px; }
+  .al-earlier summary { padding: 8px 14px; }
+}
+@media (max-width: 560px) {
+  /* on a phone the buttons take the whole row under the words: the main one on its own line, the others sharing the next */
+  .al-row__act { grid-column: 1 / -1; gap: 6px; }
+  .al-row__act .btn { flex: 1 1 auto; }
+  .al-row__act [data-al-refund] { flex-basis: 100%; }
+  /* the ⋯ menu sits at the top right of the row, so it doesn't take a line of its own */
+  .al-row { position: relative; }
+  .al-row__text { padding-right: 36px; }
+  .al-row__act .icon-btn { position: absolute; top: 6px; right: 6px; margin: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .al-earlier summary .ico { transition: none; }
+}

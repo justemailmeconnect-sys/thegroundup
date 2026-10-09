@@ -23,7 +23,7 @@
     receipt: 'Receipts',
     invoice_to_pay: 'Receipts',
     invoice_owed_to_me: 'Receipts',
-    warranty: 'Receipts',
+    warranty: 'Warranties',
     bill: 'Bills',
     debt: 'Debts',
     document: 'Documents',
@@ -172,7 +172,7 @@
     type: 'object',
     additionalProperties: false,
     required: ['destination', 'confidence', 'why', 'summary', 'title', 'party', 'amount', 'date', 'due_date', 'expiry_date', 'reference', 'context', 'payer', 'category',
-      'document_type', 'frequency', 'paid', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes', 'monthly_payment', 'interest_rate', 'debt_type', 'term_months', 'borrowed_amount', 'balances', 'as_of'],
+      'document_type', 'frequency', 'paid', 'section_id', 'new_section_name', 'task_title', 'task_due', 'notes', 'monthly_payment', 'interest_rate', 'debt_type', 'term_months', 'borrowed_amount', 'balances', 'as_of', 'warranty_months', 'warranty_lifetime'],
     properties: {
       destination: { type: 'string', enum: Object.keys(DESTINATIONS) },
       confidence: { type: 'number' },
@@ -206,6 +206,9 @@
         properties: { provider: { type: 'string' }, name: { type: 'string' }, type: { type: 'string', enum: ['current', 'savings', 'credit', 'joint', 'business'] }, amount: { type: 'number' },
           overdraft_limit: NULLABLE('number'), uncertain: { type: 'boolean' } } } }, { type: 'null' }] },
       as_of: NULLABLE('string'),
+      // Only for destination "warranty": how long the cover lasts in whole months, and whether it is for life.
+      warranty_months: NULLABLE('number'),
+      warranty_lifetime: { type: 'boolean' },
     },
   };
 
@@ -237,7 +240,7 @@
       '- receipt: proof of something already bought or paid for (till receipt, card slip, order confirmation, e-receipt).',
       '- invoice_to_pay: an invoice or one-off bill the user has to pay. If it shows it has already been paid, still use this and set paid to true. Invoices for online orders (Amazon, eBay and similar) are already paid: set paid to true and put the order number in reference.',
       '- invoice_owed_to_me: an invoice the user (or their own business) sent to someone else, so someone owes the user money.',
-      '- warranty: a warranty, guarantee or protection plan. Put the cover end date in expiry_date (work it out from the purchase date and length if needed).',
+      '- warranty: a warranty, guarantee or protection plan, or the receipt or photo that goes with one. Put the item in title, the shop or brand in party, the purchase date in date, the length of cover in warranty_months (whole months, so 2 years is 24; null if it is not stated), warranty_lifetime true only for a lifetime warranty, the price in amount and the serial or order number in reference. Put the cover end date in expiry_date only when the document gives it, or when you can work it out from a purchase date and a length that are both stated. Never guess a date: use null.',
       '- debt: money the user owes and is paying off: a credit card or store card statement, loan or car finance agreement or statement, Klarna, PayPal Pay in 3, Clearpay or Monzo Flex plans and screenshots, overdraft letters, or money owed to a person. Put the balance still owed in amount (null if it only shows what was first borrowed, as a new agreement does), the date of that balance or of the agreement in date, the lender in party, the minimum or monthly payment in monthly_payment, the interest rate (APR) as a number in interest_rate, the number of monthly payments in term_months, the amount first borrowed in borrowed_amount, the next payment due date in due_date, and the account or agreement number in reference. Set debt_type to one of: ' + GU.debts.TYPES.join('; ') + '. A credit card statement is a debt, not a bank_statement.',
       '- bill: a regular payment being set up or changed (direct debit notice, subscription, contract with a monthly cost). Set frequency and put the next payment date in due_date.',
       '- document: an important document to keep: passport, ID, driving licence, visa or immigration papers (UKVI, Home Office, eVisa, biometrics, Certificate of Sponsorship, embassy letters: use the document type for residence permits and eVisas), certificates, contracts, tenancy, insurance policy, payslip, P60, tax letters, medical letters, pension or bank letters. Set document_type to one of: ' + ctx.documentTypes.join('; ') + '. Put any expiry or renewal date in expiry_date and the issue date in date.',
@@ -262,6 +265,7 @@
       '- why: one short reason for the destination and who paid, under 12 words, for example "Invoice addressed to the business, paid on your card".',
       '- notes: anything else worth keeping (policy numbers, what is covered, account numbers). null if nothing.',
       '- monthly_payment, interest_rate, debt_type, term_months and borrowed_amount: only for debts. null otherwise.',
+      '- warranty_months and warranty_lifetime: only for warranties. null and false otherwise.',
       '- balances: only for destination "balances", otherwise null. One entry for each account shown, in the order shown, at most 12: provider (the bank or app, such as HSBC, Santander or Monzo), name (the account\'s name as the app shows it, such as "Monzo Flex", or just the bank\'s name when the app shows only its logo), type ("current", "savings", "credit" for a credit card, store card or Monzo Flex, "joint" or "business"), amount (its balance as a signed plain number: a minus sign or the word overdrawn means negative, so −£12.34 is -12.34; for a credit account give the amount OWED as a negative number, and 0 when nothing is owed), overdraft_limit (a number when the screen shows an arranged overdraft limit for that account, such as "£250 overdraft limit", otherwise null) and uncertain (true when you cannot read that balance, its sign or which account it is).',
       '- as_of: for balances, YYYY-MM-DD if the screenshot shows a date for these balances, otherwise null (meaning today).',
       '',
@@ -274,7 +278,7 @@
   function blankResult() {
     return { destination: 'unsure', confidence: 0.3, why: '', summary: '', title: '', party: null, amount: null, date: null, due_date: null, expiry_date: null, reference: null,
       context: 'home', payer: null, category: null, document_type: null, frequency: null, paid: false, section_id: null, new_section_name: null, task_title: null, task_due: null, notes: null,
-      monthly_payment: null, interest_rate: null, debt_type: null, term_months: null, borrowed_amount: null, balances: null, as_of: null };
+      monthly_payment: null, interest_rate: null, debt_type: null, term_months: null, borrowed_amount: null, balances: null, as_of: null, warranty_months: null, warranty_lifetime: false };
   }
   /* ---------- balances: checking what was read ---------- */
   const BAL_TYPES = ['current', 'savings', 'credit', 'joint', 'business'];
@@ -365,6 +369,17 @@
       out[k] = out[k] != null && !isNaN(out[k]) ? Math.abs(round2(out[k])) : null;
     }
     if (out.term_months != null) out.term_months = Math.round(out.term_months) || null;
+    // A warranty's length is whole months from 1 to 1200. The end date is worked out only when the document gave a
+    // purchase date and a length; with either missing it stays empty for you to fill in.
+    out.warranty_months = Number.isFinite(Number(out.warranty_months)) && Number(out.warranty_months) >= 1 && Number(out.warranty_months) <= 1200 ? Math.round(Number(out.warranty_months)) : null;
+    out.warranty_lifetime = out.warranty_lifetime === true;
+    if (out.destination === 'warranty') {
+      if (out.warranty_lifetime) out.warranty_months = null;
+      else if (!out.expiry_date && out.date && out.warranty_months) out.expiry_date = addMonths(out.date, out.warranty_months);
+    } else {
+      out.warranty_months = null;
+      out.warranty_lifetime = false;
+    }
     if (out.debt_type && !GU.debts.TYPES.includes(out.debt_type)) out.debt_type = 'Other';
     out.title = (out.title || '').trim() || (out.party || DEST_LABEL[out.destination]);
     if (out.destination === 'balances') {
@@ -654,6 +669,42 @@
     if (from) return from[1].trim();
     const first = raw.split(/\n/).map((x) => x.trim()).find((x) => /[a-z]{3}/i.test(x) && x.length <= 40 && !/receipt|invoice|tax|vat|date|total/i.test(x));
     return first || null;
+  }
+
+  /* ---------- warranties: how long, until when, which serial, from the words on a receipt or card ---------- */
+  const NUM_WORDS = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12, fifteen: 15, twenty: 20 };
+  const MONTH_NAMES = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+  const lastOfMonth = (y, m) => addDays(addMonths(y + '-' + String(m).padStart(2, '0') + '-01', 1), -1);
+  /* What the text says about cover: {months, lifetime, until, serial}, each null or false when it says nothing. Phrases
+     like '2 year warranty', '24 months guarantee', 'warranty period: 5 years', 'lifetime guarantee' and 'valid until
+     03/2028' (the end of that month). A date is only returned when the text gives it; nothing is worked out from today. */
+  function parseWarrantyText(raw) {
+    const t = String(raw || '').replace(/\s+/g, ' ');
+    const out = { months: null, lifetime: false, until: null, serial: null };
+    const cover = '(?:warranty|guarantee|guaranty|cover|protection|care plan|care\\+?)';
+    const num = '(\\d{1,2}(?:\\.5)?|' + Object.keys(NUM_WORDS).join('|') + ')';
+    const months = (n, unit) => {
+      const v = NUM_WORDS[String(n).toLowerCase()] || parseFloat(n);
+      const m = /^y/i.test(unit) ? v * 12 : /^d/i.test(unit) ? ({ 30: 1, 60: 2, 90: 3, 180: 6, 365: 12 }[v] || 0) : v;
+      return Number.isFinite(m) && m >= 1 && m <= 600 ? Math.round(m) : null;
+    };
+    if (/\blifetime (?:limited )?(?:warranty|guarantee|guaranty)|\b(?:warranty|guarantee|guaranty)\b[^.]{0,25}\b(?:for life|lifetime)\b/i.test(t)) out.lifetime = true;
+    const fwd = t.match(new RegExp('\\b' + num + '[\\s-]*(year|yr|month|mth|day)s?\\b[^.\\d]{0,30}?\\b' + cover, 'i'));
+    const back = t.match(new RegExp('\\b' + cover + '\\b[^.\\d]{0,30}?\\b' + num + '[\\s-]*(year|yr|month|mth|day)s?\\b', 'i'));
+    // '30 day money-back guarantee' is a returns promise, not a warranty.
+    const sane = (m) => (m && !/money.?back|refund|returns?\b|satisf/i.test(m[0]) ? m : null);
+    const hit = sane(fwd) || sane(back);
+    if (hit && !out.lifetime) out.months = months(hit[1], hit[2]);
+    const lead = '(?:valid (?:until|to|through|till)|expires?(?: on)?|expiry(?: date)?|ends?(?: on)?|cover(?:ed)? (?:until|to|ends?)|until|till|good until)\\s*:?\\s*(?:the end of\\s+)?';
+    const my = t.match(new RegExp('\\b' + lead + '(?:(\\d{1,2})[/.-](\\d{4})|(' + MONTH_NAMES + ')[a-z]*\\.?,?\\s+(\\d{4}))\\b', 'i'));
+    if (my) {
+      const y = +(my[2] || my[4]);
+      const m = my[1] ? +my[1] : MONTH_NAMES.split('|').indexOf(my[3].toLowerCase()) + 1;
+      if (m >= 1 && m <= 12 && y >= 2000 && y <= 2100) out.until = lastOfMonth(y, m);
+    }
+    const sn = t.match(/\b(?:serial(?:\s*(?:no|number|num|#))?\.?|s\/n|sn)\s*[:#.-]?\s*((?=[A-Z0-9\-/]*\d)[A-Z0-9][A-Z0-9\-/]{5,24})\b/i);
+    if (sn) out.serial = sn[1].toUpperCase();
+    return out;
   }
 
   /* ---------- balances: the offline reader ----------
@@ -958,9 +1009,14 @@
       Object.assign(r, { destination: 'document', confidence: 0.75, document_type: docType || IMMIGRATION_DOC, why: 'It mentions visa or Home Office words', title: 'Visa or immigration letter',
         summary: 'A visa or immigration paper. I’ll keep it with your documents.' });
     } else if (sc.warranty >= 3 && sc.warranty >= sc.invoice && !(sc.receipt >= 2.6 && sc.warranty < 6)) {
-      const until = r.expiry_date || (warrantyYears && (r.date || today()) ? addMonths(r.date || today(), 12 * +warrantyYears[1]) : null);
-      Object.assign(r, { destination: 'warranty', confidence: 0.78, why: 'It mentions a warranty or guarantee', expiry_date: until, title: r.party ? r.party + ' warranty' : 'Warranty',
-        summary: 'A warranty' + (r.party ? ' from ' + r.party : '') + (until ? ', covered until ' + fmtDate(until) : '') + '.' });
+      // The length and end as the words say them. With no purchase date on it, an end date is left empty rather than counted from today.
+      const w = parseWarrantyText(raw);
+      const months = w.months || (warrantyYears ? 12 * +warrantyYears[1] : null);
+      if (w.until && r.expiry_date && r.expiry_date !== w.until && !r.date) r.date = r.expiry_date;
+      const until = w.until || r.expiry_date || (months && r.date ? addMonths(r.date, months) : null);
+      Object.assign(r, { destination: 'warranty', confidence: 0.78, why: 'It mentions a warranty or guarantee', expiry_date: until, warranty_months: months, warranty_lifetime: w.lifetime,
+        reference: w.serial || r.reference, title: r.party ? r.party + ' warranty' : 'Warranty',
+        summary: 'A warranty' + (r.party ? ' from ' + r.party : '') + (until ? ', covered until ' + fmtDate(until) : w.lifetime ? ', for life' : '') + '.' });
     } else if (sc.invoice >= 4 || (sc.invoice >= 2 && (sc.invoice > sc.receipt || onlineOrder))) {
       const dest = fromMe ? 'invoice_owed_to_me' : 'invoice_to_pay';
       Object.assign(r, { destination: dest, confidence: 0.72 + Math.min(0.15, sc.invoice / 40), paid: !fromMe && paidWords > 0,
@@ -1031,8 +1087,8 @@
     return { 'claude-app': 'Claude (in the Claude app)', 'claude-api': 'Claude (your API key)', offline: 'Offline reader' }[m] || m;
   }
 
-  /* input: {files: File[]|Blob[], note: string} -> result with .via */
-  async function analyse(input) {
+  /* input: {files: File[]|Blob[], note: string} -> result with .via. sink: an object that gets .text, the text read from the files. */
+  async function analyse(input, sink) {
     const files = input.files || [];
     const hint = String(input.hint || '').trim().slice(0, 500);
     input = { files, note: (input.note || '').trim(), hint, text: '', paths: input.paths || files.map((f) => GU.ui.pathOf(f)) };
@@ -1055,6 +1111,7 @@
       }
       input.text = parts.join('\n\n');
     }
+    if (sink) sink.text = input.text;
     // Bank statements are spotted on this device and read by the statement importer (credit card statements are debts).
     if (looksLikeStatement(input.text) && !looksLikeDebt(input.text)) {
       return Object.assign(blankResult(), { destination: 'bank_statement', confidence: 0.9, why: 'It lists bank transactions', title: 'Bank statement', via: 'offline',
@@ -1080,6 +1137,31 @@
       }
     }
     return Object.assign(await viaRules(input), { via: 'offline' });
+  }
+
+  /* ---------- public: read a file as a warranty ---------- */
+  const WARRANTY_HINT = 'This is a warranty, guarantee or protection plan for something the user bought, or the receipt or a photo that goes with one. File it as a warranty. ' +
+    'Read the item as the title, the shop or brand as party, the purchase date as date, the length as warranty_months (or warranty_lifetime), the end date as expiry_date only if the document gives it, the price as amount and the serial number as reference. Leave anything it does not say as null and never guess a date.';
+  /* A reading turned into a warranty, topped up from the words in the file (a photo goes to Claude as a picture, so there may be no text). */
+  function asWarranty(r, text) {
+    const w = parseWarrantyText(text);
+    const out = Object.assign({}, r, { destination: 'warranty', confidence: 1, balances: null, as_of: null });
+    if (out.warranty_months == null && w.months) out.warranty_months = w.months;
+    if (w.lifetime) out.warranty_lifetime = true;
+    // 'valid until 03/2028' next to 'bought 02/03/2025': the generic date reader can take the purchase date for the end.
+    if (w.until && out.expiry_date !== w.until) {
+      if (!out.date && out.via === 'offline') out.date = out.expiry_date;
+      if (out.via === 'offline' || !out.expiry_date) out.expiry_date = w.until;
+    }
+    if (w.serial && (out.via === 'offline' || !out.reference)) out.reference = w.serial;
+    return clean(out);
+  }
+  /* The same reading as analyse (Claude when it's there, else this device), but forced to be a warranty: the item, the
+     shop, the purchase date, the length, the end, the price and the serial, each empty when the file doesn't say. */
+  async function analyseWarranty(input) {
+    const sink = {};
+    const r = await analyse(Object.assign({}, input, { hint: String((input && input.hint) || '').trim() || WARRANTY_HINT }), sink);
+    return asWarranty(r, sink.text || '');
   }
 
   /* ---------- public: file a result ---------- */
@@ -1143,6 +1225,7 @@
       return { tab: null, label: partName(newSectionPart(r)) + ' › ' + (name ? name + ' (new category)' : 'A new category'), fresh: true };
     }
     if (PAPER.includes(d)) {
+      if (!work && d === 'warranty' && GU.tabs && GU.tabs.warranties) return { tab: 'warranties', label: homePage('warranties', 'Warranties') };
       if (!work) return { tab: 'receipts', label: withCategory(homePage('receipts', 'Receipts') + (d === 'invoice_owed_to_me' ? ' › Owed to you' : ''), r) };
       if (d !== 'warranty' && r.payer === 'me') return { tab: tabOr('work-back', 'work'), label: workPage('back', 'Get paid back') };
       if (d === 'warranty' || r.payer === 'company') return inFolder({ tab: tabOr('work-ktk', 'work'), label: workPage('invoices', paysLabel()) });
@@ -1242,10 +1325,15 @@
           }
           // Whose money paid: what it said, or yours when your bank shows the payment.
           const payer = asksPayer(r) ? payerFor(r, st) : work && kind !== 'invoice-out' && payerOk(r.payer) ? r.payer : null;
-          const rec = { id: 'p-' + uid(), created: t, kind, context: work ? 'work' : 'home', title: r.title, party: r.party || '', amount: r.amount, date: r.date || t,
+          const rec = { id: 'p-' + uid(), created: t, kind, context: work ? 'work' : 'home', title: r.title, party: r.party || '', amount: r.amount, date: r.date || (kind === 'warranty' ? '' : t),
             dueDate: inv ? r.due_date || '' : '', status: inv ? (r.paid ? 'paid' : 'unpaid') : '', paidDate: inv && r.paid ? r.date || t : '',
             warrantyUntil: r.destination === 'warranty' || r.expiry_date ? r.expiry_date || '' : '', reference: r.reference || '', category: work ? WORK_OUT : r.category || '', notes, files: metas, via: r.via, folder: r.folder || '' };
           if (work && payer) rec.payer = payer;
+          // A warranty keeps how long it lasts (the Warranties page works the end from it). No purchase date is made up.
+          if (kind === 'warranty') {
+            if (r.warranty_lifetime) rec.warrantyLifetime = true;
+            else if (r.warranty_months) rec.warrantyMonths = r.warranty_months;
+          }
           if (wm()) {
             wm().normalise(rec);
             // The payment of a monthly work bill you pay yourself already has its claim: this invoice's files go on that
@@ -1539,6 +1627,6 @@
     return { lender: null, payments: GU.debts.parseSchedule(all), via: 'offline' };
   }
 
-  GU.brain = { readSchedule, readStatement, quick, analyse, file, where, placeOf, asksPayer, payerFor, workSense, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS,
+  GU.brain = { readSchedule, readStatement, quick, analyse, analyseWarranty, parseWarrantyText, file, where, placeOf, asksPayer, payerFor, workSense, mode, modeLabel, prefillForm, DEST_LABEL, DESTINATIONS, getSample, TOPICS,
     blank: blankResult, clean, PAPER, MONEY, balancesResult, balancesFromTyped, balancesFromText, balanceNumber, guessType, prettyName, MAX_BAL };
 })();
