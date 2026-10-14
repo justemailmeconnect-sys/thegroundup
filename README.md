@@ -329,6 +329,30 @@ In the Sorting hub, your own folder organisation is used: upload a folder such a
 - **Anywhere else** (opened as a file or from your own web host) data stays in that browser only. Use **Settings → Export backup** to move it: the backup is a single JSON file that includes your uploaded files, and **Restore from backup** brings everything back on any device.
 - Clearing your browser's site data deletes everything, so keep a recent backup somewhere safe.
 
+### Sync safety and safety copies
+
+Why this exists: once, a brand-new device whose first look at the server came back empty saved empty values over every part of the saved data, and every other device then adopted the empty copy. The data had to be put back by hand. Nothing in `js/sync.js` may ever let a device that has not seen your data replace it again. The stored format (the `k.<part>.<n>` and `meta` documents) is unchanged, so old and new versions can run side by side.
+
+**The guards** (all in `js/sync.js`):
+
+- **A device that has never held your data saves nothing.** A part this device has never synced is not saved while it holds only what the app writes by itself: the default lists and settings, the start-up markers in `meta` (`created`, `refileV1` when it only says nothing needed sorting, `hubFreshV1` when it moved nothing), the example records and their companions, and the look, colours and theme (a choice of look is kept on the device and goes up with everything else once there is something real). Nothing goes up until you add something real.
+- **An empty-looking server is looked at again.** If the first live answer has no saved data at all, or fewer parts than this device has ever seen there, nothing is decided and nothing is saved: the server is read again about 2 and 6 seconds later, and only if it still has nothing is it treated as a new account (a blank device then simply waits; a device with real data does its genuine first sync). Data that turns up meanwhile is used straight away.
+- **Merge before you write.** Before a part is saved, its first piece on the server is read directly. If another session saved a version this device has not merged, that is merged first and only what still differs is written. A part is also never saved as empty over a non-empty server version by a device that has not itself held that data since its last merge. Deliberate deletions on an up-to-date device (even of everything in a list) still sync. A version that cannot be read in full (a save somebody never finished) is not allowed to block a part for ever: after a few tries it is replaced, but only by something real.
+- **A calm message.** If a save is held back by any of these, the status says "Waiting to see your saved data before saving anything." and the console gets one `[sync]` warning for the visit. Nothing on the server is changed.
+
+**Safety copies.** Once a day, when this device holds real data, is in step with the server and has been quiet for a few seconds (only while the page is showing), a whole copy of your data is written to `data/users/<you>/backups/<yyyy-mm-dd>/` (documents named, chunked and hashed like the live ones), with a small note in `data/users/<you>/backups/index/<yyyy-mm-dd>` (when, from which device, size, record counts, the hash of each part). They sit in their own sub-collections, so the live listing never loads them and nothing reads them on start-up. One document at a time, waiting for ordinary saves. The 7 newest are kept. A copy under 60% of the size of the latest one is not written and nothing is deleted: the attempt is only noted (and Settings says so, with **Save a copy now** if the data really is smaller). A blank device never writes a copy.
+
+**Restoring.** **Settings → Backup and restore → Safety copies** lists the copies (date, number of records, "Transactions 2,251 · Paperwork 508") and has **Restore this copy** on each. It asks first. Then the server's latest is brought in and your current data is written as a "Before restore" copy (kept until three newer copies exist); the chosen copy is read back and every part checked against its recorded hash (anything that does not check out is refused and nothing changes); the copy replaces everything here, is not an Undo step, and syncs to every device. To undo a restore, restore the "Before restore" copy. It works from a device that is showing an empty site. For tests: `GU.sync.backups.list()`, `.makeNow()`, `.restore(id)`.
+
+**The limits, plainly:**
+
+- **Every device needs this version.** An older copy of the app, open anywhere, has none of these guards and can still do what caused the incident. Reload every open tab and device.
+- **Last writer wins.** The database has no transactions. Reading a part just before writing it makes two devices saving the same part within a fraction of a second very unlikely to collide, but it cannot rule it out; whichever write lands last stands until the next merge.
+- **If the server answers every read, direct ones included, with "nothing" for longer than the waits above, and you add something real in that time,** the new device saves its own records for the parts it has no memory of. The safety copies are what protect you then.
+- **Copies are daily and live in the same database as your data.** Changes since the last copy are not in it, copies share the database's size and document limits, and they go if the artifact is deleted. **Export backup** is still the copy that lives somewhere else; keep making one now and then. Restoring a backup file and **Erase everything** are deliberate, and do not make a safety copy first.
+- **Two tabs of one browser share one sync memory** and one set of local records. They merge through the server, but a tab left open for a long time should be reloaded.
+- A deletion made just before the tab is closed, before it was saved, can come back: a part that is empty here is treated as not yet held when the page next starts, so what the server has is taken in rather than risk saving nothing over it.
+
 ## Project layout
 
 ```

@@ -36,6 +36,77 @@
     if (el) el.innerHTML = syncHTML();
   });
 
+  /* ---------- Safety copies (in Backup and restore): a whole copy of your data, kept once a day by js/sync.js ---------- */
+  const COPY_NAMES = { transactions: 'Transactions', paperwork: 'Paperwork', bills: 'Bills', debts: 'Debts', documents: 'Documents', tasks: 'Tasks', incomeSources: 'Income', sectionItems: 'Items in your categories',
+    sections: 'Categories', projects: 'Work projects', workNotes: 'Work notes', workFolders: 'Work folders', requests: 'Things to get', costIdeas: 'Cost ideas', rules: 'Category rules', inbox: 'Sorting hub', sortRules: 'Sorting rules', visas: 'Visas' };
+  const NOT_RECORDS = ['trash', 'filedLog', 'alertStates', 'remoteFiles', 'accounts', 'todoLists'];
+  let copiesAt = 0; // when the list of copies was last read
+  const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  /* '1,234 records · Transactions 2,251 · Paperwork 508' */
+  function copyText(e) {
+    const rows = Object.entries(e.counts || {}).filter(([k]) => !NOT_RECORDS.includes(k)).sort((a, b) => b[1] - a[1]);
+    const records = rows.reduce((n, r) => n + r[1], 0);
+    return [records.toLocaleString('en-GB') + (records === 1 ? ' record' : ' records')].concat(rows.slice(0, 3).map(([k, n]) => (COPY_NAMES[k] || k) + ' ' + n.toLocaleString('en-GB'))).join(' · ');
+  }
+  function safetyHTML() {
+    const B = GU.sync.backups;
+    const head = '<div class="panel__body stack" style="border-top:1px solid var(--line)"><b>Safety copies</b>';
+    if (!GU.sync.possible() || GU.sync.status().mode === 'off') return head + '<p class="muted">Safety copies need the online app. Open this dashboard from claude.ai while signed in, and a whole copy of your data is kept there once a day.</p></div>';
+    if (!B.available()) return head + '<p class="muted">Safety copies will show here once sync has connected.</p></div>';
+    const list = B.cached();
+    if (!list) return head + '<p class="muted">Looking for your safety copies…</p></div>';
+    const copies = list.filter((e) => !e.flagged);
+    const last = copies.find((e) => e.kind === 'daily') || copies[0];
+    const flag = list.find((e) => e.flagged);
+    const showFlag = flag && (!last || flag.at > last.at);
+    const row = (e) => {
+      const before = e.kind === 'before-restore';
+      return '<li class="row-item row-item--hist"><span class="row-item__text"><b>' + esc(fmtDate(e.day) + (before ? ', ' + clock(e.at) : '')) + (before ? ' ' + GU.ui.pill('Before restore', 'muted') : '') + '</b><em>' + esc(copyText(e)) + '</em></span>' +
+        '<span class="row-item__act"><button type="button" class="btn btn--soft" style="min-height:44px" data-safety-restore="' + esc(e.id) + '" aria-label="Restore this copy, from ' + esc(fmtDate(e.day) + (before ? ' at ' + clock(e.at) : '')) + '">' + icon('repeat') + 'Restore this copy</button></span></li>';
+    };
+    return head + '<p class="muted">' + esc(last ? 'Last copy: ' + fmtDate(last.day) + ', ' + clock(last.at) + '.' : 'No copy has been made yet.') +
+      ' A whole copy of your data is kept once a day (the last 7), away from your live data. Restoring one replaces what you have now on every device, and saves your current data first so you can undo it.</p>' +
+      (showFlag ? '<p class="tip">' + icon('info') + '<span>No copy was made on ' + esc(fmtDate(flag.day)) + ' because your data looked much smaller than your last copy. Your older copies are untouched. If it’s smaller on purpose, you can save one anyway.</span></p>' +
+        '<div><button type="button" class="btn" style="min-height:44px" data-safety-now>' + icon('download') + 'Save a copy now</button></div>' : '') + '</div>' +
+      (copies.length ? '<ul class="rows rows--tight" data-safety-list>' + copies.map(row).join('') + '</ul>' : '');
+  }
+  /* Draws the list now, and reads it afresh when it hasn't been read for a minute. */
+  function showSafety(root) {
+    const el = (root || document).querySelector('[data-safety]');
+    if (!el) return;
+    const html = safetyHTML();
+    if (el.dataset.drawn !== html) { // redrawn only when it says something different, so a focused button isn't taken away
+      el.innerHTML = html;
+      el.dataset.drawn = html;
+    }
+    const B = GU.sync.backups;
+    if (B.available() && (!B.cached() || Date.now() - copiesAt > 60000)) {
+      copiesAt = Date.now();
+      B.list().catch(() => {
+        const again = document.querySelector('[data-safety]');
+        if (again && !B.cached()) again.innerHTML = '<div class="panel__body" style="border-top:1px solid var(--line)"><b>Safety copies</b><p class="muted">Couldn’t look for your safety copies just now.</p></div>';
+      });
+    }
+  }
+  GU.sync.backups.onChange(() => showSafety());
+  GU.sync.onStatus(() => showSafety());
+  async function restoreCopy(id) {
+    const entry = (GU.sync.backups.cached() || []).find((x) => x.id === id);
+    const when = entry ? fmtDate(entry.day, { short: true }) : 'that day';
+    const ok = await confirmBox({ title: 'Restore this copy?', message: 'This replaces everything on every device with the copy from ' + esc(when) + '. Your current data is saved first so you can undo this.', confirmLabel: 'Restore this copy', danger: true });
+    if (!ok) return;
+    toast('Restoring the copy from ' + when + '…');
+    try {
+      const r = await GU.sync.backups.restore(id);
+      if (GU.assistant) GU.assistant.clear();
+      toast('Restored the copy from ' + when + '.' + (r.before ? ' What you had just before is in the list, if you want it back.' : ''), { timeout: 12000 });
+    } catch (err) {
+      toast(err && err.message ? err.message : 'That copy couldn’t be restored. Nothing was changed.', { timeout: 12000 });
+    }
+    copiesAt = 0;
+    showSafety();
+  }
+
   /* The same account imported twice under two names: fold one into the other. */
   function mergeAccount(fromId) {
     const s = store.state;
@@ -329,7 +400,8 @@
       '<section class="panel"><header class="panel__head"><h2>Backup and restore</h2><span class="muted" data-usage></span></header><div class="panel__body stack">' +
       '<p class="tip">' + icon('lock') + '<span>Your data lives only in this browser on this device. Nothing is sent to a server. Export a backup regularly (it includes your uploaded files) and keep it somewhere safe, so you can restore it on another device or if this browser is cleared.</span></p>' +
       '<div class="field--row"><button type="button" class="btn btn--primary" data-export>' + icon('download') + 'Export backup</button>' +
-      '<label class="btn">' + icon('upload') + 'Restore from backup<input type="file" accept=".json,application/json" hidden data-import></label></div></div></section>' +
+      '<label class="btn">' + icon('upload') + 'Restore from backup<input type="file" accept=".json,application/json" hidden data-import></label></div></div>' +
+      '<div data-safety></div></section>' +
 
       '<section class="panel"><header class="panel__head"><h2>Example data</h2></header><div class="panel__body field--row">' +
       '<button type="button" class="btn" data-load-demo>Load example data</button><button type="button" class="btn" data-clear-demo>Clear example data</button>' +
@@ -338,6 +410,7 @@
 
     if (GU.lock) GU.lock.wirePanel(root);
     if (GU.calendar) GU.calendar.wirePanel(root);
+    showSafety(root);
     GU.brain.mode().then((m) => {
       const el = root.querySelector('[data-mode]');
       modeText = 'Now using: ' + GU.brain.modeLabel(m);
@@ -416,6 +489,14 @@
       }
       const rs = b('[data-restore]');
       if (rs) return GU.trash.restore(rs.dataset.restore);
+      const sr = b('[data-safety-restore]');
+      if (sr) return restoreCopy(sr.dataset.safetyRestore);
+      if (b('[data-safety-now]')) {
+        const r = await GU.sync.backups.makeNow({ anyway: true });
+        copiesAt = 0;
+        showSafety();
+        return toast(r.written ? 'Saved a copy of your data.' : r.skipped === 'blank' ? 'There’s nothing of yours to copy yet.' : 'Couldn’t save a copy just now. Your data is safe, and I’ll try again later.');
+      }
       const ma = b('[data-merge-account]');
       if (ma) return mergeAccount(ma.dataset.mergeAccount);
       const da = b('[data-delete-account]');
