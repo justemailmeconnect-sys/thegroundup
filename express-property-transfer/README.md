@@ -18,7 +18,7 @@ A house with a short-eaved roof whose right wall becomes a fountain pen: copper 
 Typeface: Plus Jakarta Sans (Google Fonts, free). ExtraBold for headings, SemiBold for small caps labels, Regular for body. The wordmark itself is artwork, not live text: always use the files, never retype it.
 
 ## Folders
-- **01-logo** The masters. `horizontal`, `stacked` and `mark` each in five colourways (green on light, white on dark, green mono, white mono, black mono) as SVG, EPS, PDF (vector) and PNG (transparent at 1x, 2x, 4x, plus one on its background colour). `icon` has the app tile in green, cream and copper.
+- **01-logo** The masters. `horizontal`, `stacked` and `mark` each in five colourways (green on light, white on dark, green mono, white mono, black mono) as SVG, EPS, PDF (vector) and PNG (transparent at 1x, 2x, 4x, plus one on its background colour). `icon` has the app tile in green, cream and copper. Each of `horizontal` and `stacked` also has a `small-use` folder: the same lockup with a plain p (no nib) for anything narrower than about 160px, such as email signatures and mobile headers, where the nib would read as a speck.
 - **02-website** Header logo (340px), footer stacked logo, favicon set with `favicon.ico`, `site.webmanifest` and a `head-snippet.html` to paste in, share images (Open Graph 1200x630, Twitter card), hero banners, and the website mock-up.
 - **03-social** Profile pictures (1024 and 400, circle-safe) in three colours; covers and posts sized for Facebook, LinkedIn (company and personal), X, YouTube, Instagram (post and story), each light and dark.
 - **04-messaging** WhatsApp Business profile (640, circle-safe), Telegram profile, WhatsApp sticker (transparent).
@@ -29,7 +29,7 @@ Typeface: Plus Jakarta Sans (Google Fonts, free). ExtraBold for headings, SemiBo
 
 ## Rules
 - Clear space around the logo: at least the height of the door on all sides.
-- Minimum sizes: horizontal logo 120px wide on screen or 30 mm in print; mark alone 24px or 8 mm. Below that use the icon tile.
+- Minimum sizes: horizontal logo 120px wide on screen or 30 mm in print; mark alone 24px or 8 mm. Below that use the icon tile. Under about 160px wide, use the `small-use` wordmark (plain p).
 - Use green on cream or white. Use white on green or any dark photo. Never place the green logo on a mid-tone photo without a cream panel behind it.
 - Never stretch, rotate, outline, add a shadow or change the colours. The mono versions exist for single-colour print, engraving and embroidery.
 - The tick and nib detail disappear below about 48px. That is expected.
