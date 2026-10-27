@@ -3,7 +3,7 @@
 Everything in this pack is generated from one master drawing, so every file matches.
 
 ## The logo
-A house in one even stroke whose right wall becomes a fountain pen: copper band, long nib, tip resting on a dotted "sign here" line. The door is a copper arch with a small tick as its handle. Wordmark: Poppins Bold "Express" with "PROPERTY TRANSFER" letterspaced to the same width.
+A house with a short-eaved roof whose right wall becomes a fountain pen: copper band, long nib, tip resting on a dotted "sign here" line. The door is a copper arch with a small tick as its handle. Wordmark: Plus Jakarta Sans. "Express" is customised: the x is built from two bars at the roof angle, and the p ends in a copper nib. "PROPERTY TRANSFER" is letterspaced to the same width.
 
 ## Colours
 | Role | Hex | CMYK (approx.) |
@@ -15,7 +15,7 @@ A house in one even stroke whose right wall becomes a fountain pen: copper band,
 | Cream: light background | `#F3F1EA` | 0 / 1 / 4 / 5 |
 | Deep green: dark background | `#132E22` | 59 / 0 / 26 / 82 |
 
-Typeface: Poppins (Google Fonts, free). Bold for headings, Medium for small caps labels, Regular for body.
+Typeface: Plus Jakarta Sans (Google Fonts, free). ExtraBold for headings, SemiBold for small caps labels, Regular for body. The wordmark itself is artwork, not live text: always use the files, never retype it.
 
 ## Folders
 - **01-logo** The masters. `horizontal`, `stacked` and `mark` each in five colourways (green on light, white on dark, green mono, white mono, black mono) as SVG, EPS, PDF (vector) and PNG (transparent at 1x, 2x, 4x, plus one on its background colour). `icon` has the app tile in green, cream and copper.
