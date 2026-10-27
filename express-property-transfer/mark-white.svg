@@ -4,8 +4,9 @@
  <path d="M256 129L268 141L256 153L244 141Z" fill="#ffffff"/>
  <path d="M238 392V346a18 18 0 0 1 36 0v46z" fill="#B06A3B"/>
  <path d="M254 367l5 5 10-11" fill="none" stroke="#132E22" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
- <path d="M351 223L373 245V334H351Z" fill="#ffffff"/>
- <rect x="350.5" y="334" width="23" height="5" fill="#B06A3B"/>
- <path d="M351 339H373Q372 372 362 392Q352 372 351 339Z" fill="#ffffff"/>
- <circle cx="362" cy="353" r="3" fill="#132E22"/>
- <rect x="361.1" y="353" width="1.8" height="31" fill="#132E22"/></g></svg>
+
+ <path d="M351 223L373 245V318H351Z" fill="#ffffff"/>
+ <rect x="350.5" y="318" width="23" height="8" fill="#B06A3B"/>
+ <path d="M351 326H373Q372.5 366 362 392Q351.5 366 351 326Z" fill="#ffffff"/>
+ <circle cx="362" cy="344" r="3.6" fill="#132E22"/>
+ <rect x="361" y="344" width="2" height="40" fill="#132E22"/></g></svg>

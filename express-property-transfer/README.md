@@ -1,18 +1,19 @@
 # Express Property Transfer: logo
 
-**The mark.** A house drawn in one even stroke. The right wall runs straight into a fountain pen: a copper band, then the nib, its tip resting on the ground beside a dotted "sign here" line. The door is a copper arch with a small tick as its handle. One idea: a property, signed off.
+**The mark.** A house drawn in one even stroke. The right wall runs straight into a fountain pen: a copper band, then a long nib, its tip resting on the ground beside a dotted "sign here" line. The door is a copper arch with a small tick as its handle. One idea: a property, signed off.
 
-**The wordmark.** Poppins Bold "Express" with "PROPERTY TRANSFER" in Poppins Medium, letterspaced to the same width, in copper.
+**The wordmark.** Poppins Bold "Express" with "PROPERTY TRANSFER" in Poppins Medium, letterspaced to the same width, in the text copper (darker on light backgrounds, lighter on dark, both above 4.5:1 contrast).
 
 ## Colours
 
 | Role | Hex |
 |---|---|
 | Racing green (mark, wordmark) | `#1C4432` |
-| Copper (door, band, line, subtitle) | `#B06A3B` |
+| Copper (door, band, ground line) | `#B06A3B` |
+| Copper for text on light backgrounds (subtitle, labels) | `#8F5429` |
 | Cream (light background) | `#F3F1EA` |
 | Deep green (dark background) | `#132E22` |
-| Copper on dark (subtitle) | `#D08A5A` |
+| Copper for text on dark backgrounds (subtitle, labels) | `#D08A5A` |
 
 ## Files
 
