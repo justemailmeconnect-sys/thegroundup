@@ -3,7 +3,7 @@
 Everything in this pack is generated from one master drawing, so every file matches.
 
 ## The logo
-A house with a short-eaved roof whose right wall becomes a fountain pen: copper band, long nib, tip resting on a dotted "sign here" line. The door is a plain copper arch. Wordmark: Plus Jakarta Sans. "Express" is customised: the x is built from two bars at the roof angle, and the p ends in a copper nib. "PROPERTY TRANSFER" is letterspaced to the same width.
+A house with a short-eaved roof whose right wall becomes a fountain pen: copper band, long nib, tip resting on a dotted "sign here" line. The door is a copper rectangle with a folded corner and two short lines, so it is also the deed. Wordmark: Plus Jakarta Sans. "Express" is customised: the x is built from two bars at the roof angle, and the p ends in a copper nib. "PROPERTY TRANSFER" is letterspaced to the same width.
 
 ## Colours
 | Role | Hex | CMYK (approx.) |
