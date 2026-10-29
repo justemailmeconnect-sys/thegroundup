@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+ <defs>
+  <linearGradient id="mg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D8A64A"/><stop offset="1" stop-color="#B8862F"/></linearGradient>
+  <linearGradient id="mg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0E3B2E"/><stop offset="1" stop-color="#1F5A45"/></linearGradient>
+  <clipPath id="mc"><circle cx="256" cy="256" r="236"/></clipPath>
+ </defs>
+ <circle cx="256" cy="256" r="236" fill="url(#mg2)"/>
+ 
+ <g clip-path="url(#mc)">
+  <circle cx="330" cy="150" r="62" fill="url(#mg1)"/>
+  <path d="M54 396V342L150 246L246 342V396" fill="none" stroke="#9CC5AC" stroke-width="26" stroke-linejoin="miter" stroke-linecap="butt"/>
+  <path d="M156 396V306L256 206L356 306V396" fill="none" stroke="#3E8C6A" stroke-width="26" stroke-linejoin="miter" stroke-linecap="butt"/>
+  <path d="M258 396V270L362 166L466 270V396" fill="none" stroke="#DCEFE3" stroke-width="26" stroke-linejoin="miter" stroke-linecap="butt"/>
+  <path d="M60 408H452" stroke="#D8A64A" stroke-width="5" stroke-linecap="round" stroke-dasharray="0.01 14" opacity=".9"/>
+ </g></svg>
