@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 800 600" width="800" height="600"><defs><linearGradient id="goldS" gradientUnits="userSpaceOnUse" x1="150" y1="140" x2="850" y2="700"><stop offset="0" stop-color="#F3D98A"/><stop offset=".5" stop-color="#C99A3E"/><stop offset="1" stop-color="#F1D27A"/></linearGradient></defs>
+ <path d="M150 440L500 140L850 440" stroke="url(#goldS)" stroke-width="22" stroke-linecap="square" stroke-linejoin="miter" fill="none"/>
+ <path d="M250 352V660M250 400H372M250 530H352M250 660H372" stroke="url(#goldS)" stroke-width="22" stroke-linecap="square" stroke-linejoin="miter" fill="none"/>
+ <path d="M470 660V400H548a62 62 0 0 1 0 124H470" stroke="url(#goldS)" stroke-width="22" stroke-linecap="square" stroke-linejoin="miter" fill="none"/>
+ <path d="M654 400H800M750 352V660" stroke="url(#goldS)" stroke-width="22" stroke-linecap="square" stroke-linejoin="miter" fill="none"/>
+ <g fill="url(#goldS)"><rect x="562" y="236" width="22" height="22"/><rect x="590" y="236" width="22" height="22"/><rect x="562" y="264" width="22" height="22"/><rect x="590" y="264" width="22" height="22"/></g></svg>
