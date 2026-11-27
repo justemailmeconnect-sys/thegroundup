@@ -75,8 +75,17 @@
      when the caller knows; otherwise the part you're in decides. Resolves with what happened:
      {label, logId} when a note was filed straight away, {waiting: n} when things wait to be read, or {} otherwise. */
   async function add(input) {
-    const files = input.files || [];
+    let files = input.files || [];
     const note = (input.note || '').trim();
+    // A zip of invoices from the pharmacy (js/owp-import.js) goes to its own import, wherever it's dropped
+    if (files.length && GU.owpImport) {
+      const { mine, rest } = await GU.owpImport.split(files);
+      if (mine.length) {
+        GU.owpImport.open(mine);
+        if (!rest.length && !note) return { imported: 'owp' };
+        files = rest;
+      }
+    }
     if (!files.length && !note) return {};
     const ctx = input.ctx === 'home' || input.ctx === 'work' ? input.ctx : null;
     const scope = scopeFor(input);

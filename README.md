@@ -313,6 +313,19 @@ Each one has **Keep**, **Not a bill** (removed and never suggested again), and u
 
 It only knows what you've imported, so it's no better than your statements. A double charge more than about two months old is quietly forgotten unless you'd already dealt with it.
 
+## Invoices from Oswaldtwistle Pharmacy
+
+The pharmacy's dashboard (**Owner › Invoices › Export for AH**, on the owner's account only) makes a zip of the invoices you paid for the business yourself (Paid by: Abdul Haleem; nobody else's are ever in it). Bring them in with **Work › Orders & claims › Get paid back › Import from the pharmacy**, or drop the zip on any drop area or the Sorting hub.
+
+- **Where each goes:** paid but not reimbursed → **Not sent yet**; not paid yet → **Pay these first**; reimbursed → **Paid back**, on the day it was reimbursed. Each is a work invoice (your money, get it back) with its total, date and a note of its VAT.
+- **Its file** comes with it, exactly as it was at the pharmacy (checked against the SHA-256 in the zip), named as the pharmacy's Download names it ("Example Wholesale, October stock.pdf").
+- **You see it first:** a list of each invoice, where it goes and whether it's new, and nothing changes until **Import**. One Undo takes the whole import back.
+- **Never twice:** each one is kept by its id at the pharmacy (`p-owp-<id>`), so importing the same zip again, or a newer one, updates it: a new label (and its file's name), total, date or VAT, paid or reimbursed since. Whatever you changed here yourself stays as you made it.
+- **One you already had:** a work receipt or invoice of the same amount within 3 days is offered to put it with (chosen for you when it's the same day): it gets the file and the pharmacy's status, and isn't added again.
+- **The business:** if you haven't set who you work for (or only the example business is there), it offers to set KTK Health Care Ltd (Oswaldtwistle Pharmacy).
+- **In parts:** the pharmacy's tablet app sends a big export as several zips ("part 1 of 3"). Import them together or one at a time.
+- The zip's list is `groundup-import.json` (`format` `owp-invoices-for-the-ground-up`, `version` 1). A newer version than this app knows is refused with a message to reload. The code is `js/owp-import.js`; the pharmacy's side is `netlify/functions/lib/owner-invoices.mjs` in its repository.
+
 ## Uploading folders
 
 Every page that holds files has a drop area with **Choose files** and **Choose a folder**: Receipts, Documents, Bills, Bank, each of your own categories and every Work page. On Get paid back, files dropped are always things you paid for; on the business's own page, they're always its money. Files uploaded there stay on that page; the assistant only reads them to fill in the details. Subfolders are kept as groups.
@@ -388,6 +401,7 @@ js/forecast.js        money ahead: income, bills, debts and instalments from tod
 js/costs.js           cost forecast for Home › Plans: when your own ideas fit, given money ahead and everyday spending
 js/parts.js           Home and Work: the menu for each, which records belong where, the doors, the Add menus, the help guide
 js/workmoney.js       work money: the employer, whose money paid, Get paid back, bank matching, the claim pack
+js/owp-import.js      invoices from Oswaldtwistle Pharmacy's export: reading the zip, the preview, filing into Get paid back
 js/refile.js          the one-off Home/Work re-sort, its questions and its undo
 js/assistant.js       Ask Claude
 js/sample.js          example data (`GU.sample.extra`: where other features add their own examples)
