@@ -307,6 +307,7 @@
       text: esc('Things you paid for ' + e.label + ' with your own money. Send them to ' + e.label + ' in one go and I’ll spot the money when it comes back.') + ' ' + mine,
       actions: '<button type="button" class="btn' + (d.toSend.length ? '' : ' btn--primary') + '" data-add-receipt>' + icon('camera') + 'Add a receipt</button>' +
         '<button type="button" class="btn" data-from-bank>' + icon('bank') + 'From my bank</button>' +
+        (GU.owpImport ? '<button type="button" class="btn" data-owp-import>' + icon('download') + 'Import from the pharmacy</button>' : '') +
         (d.toSend.length ? '<button type="button" class="btn btn--primary" data-send' + (on.length ? '' : ' disabled') + '>' + icon('send') + '<span data-send-label>' + esc(sendLabel(e, on)) + '</span></button>' : ''),
     }) + who + tally +
       GU.ui.dropbar('Drop receipts for things you paid for', 'Photos and PDFs. I’ll read each one and add it here as your money to get back.') +
@@ -379,6 +380,10 @@
         }
         to.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
+      return;
+    }
+    if (b('[data-owp-import]')) {
+      GU.owpImport.choose();
       return;
     }
     if (b('[data-tick-all]')) {
