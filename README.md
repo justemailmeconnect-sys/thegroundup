@@ -315,7 +315,7 @@ It only knows what you've imported, so it's no better than your statements. A do
 
 ## Invoices from Oswaldtwistle Pharmacy
 
-The pharmacy's dashboard (**Owner › Invoices › Download for The Ground Up**) makes a zip of the invoices you paid for the business yourself (Paid by: Abdul Haleem; nobody else's are ever in it). Bring them in with **Work › Orders & claims › Get paid back › Import from the pharmacy**, or drop the zip on any drop area or the Sorting hub.
+The pharmacy's dashboard (**Owner › Invoices › Export for AH**, on the owner's account only) makes a zip of the invoices you paid for the business yourself (Paid by: Abdul Haleem; nobody else's are ever in it). Bring them in with **Work › Orders & claims › Get paid back › Import from the pharmacy**, or drop the zip on any drop area or the Sorting hub.
 
 - **Where each goes:** paid but not reimbursed → **Not sent yet**; not paid yet → **Pay these first**; reimbursed → **Paid back**, on the day it was reimbursed. Each is a work invoice (your money, get it back) with its total, date and a note of its VAT.
 - **Its file** comes with it, exactly as it was at the pharmacy (checked against the SHA-256 in the zip), named as the pharmacy's Download names it ("Example Wholesale, October stock.pdf").

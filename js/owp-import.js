@@ -1,5 +1,5 @@
 /* The Ground Up: invoices from Oswaldtwistle Pharmacy (GU.owpImport).
-   The pharmacy's dashboard (Owner → Invoices → Export for The Ground Up) makes a zip of the invoices the owner paid
+   The pharmacy's dashboard (Owner → Invoices → Export for AH, on the owner's account) makes a zip of the invoices the owner paid
    himself (Paid by: Abdul Haleem): each file as it downloads there, and groundup-import.json, the list. This reads that
    zip and puts each invoice in Work › Orders & claims › Get paid back, with its file, named as it was there:
      not paid yet            → Pay these first (an invoice you still have to pay)
@@ -179,7 +179,7 @@
       else found.push(p);
     }
     if (!found.length) {
-      GU.ui.toast(bad.length ? 'That isn’t an export from the pharmacy. In its dashboard: Owner › Invoices › Export for The Ground Up.' : 'Choose the zip from the pharmacy.', { timeout: 9000 });
+      GU.ui.toast(bad.length ? 'That isn’t an export from the pharmacy. In its dashboard: Owner › Invoices › Export for AH.' : 'Choose the zip from the pharmacy.', { timeout: 9000 });
       return null;
     }
     const W = GU.workMoney;
